@@ -5,13 +5,22 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    # Pinned rather than ubuntu-latest, which migrates to Ubuntu 26.04 from
+    # 19 October 2026. A build that changes under you is a build you cannot
+    # bisect.
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      # Majors checked against the actions repositories on 2026-10-06.
+      # checkout@v4 and setup-go@v5 target Node.js 20, which runners now
+      # force onto Node.js 24 and warn about.
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
           # Dependencies are vendored, so there is nothing to cache and
@@ -20,4 +29,7 @@ jobs:
 
       # Every check lives in a script, so CI and a developer machine run the
       # same thing. Adding a check here instead of there is how the two drift.
+      #
+      # scripts/test-postgres.sh is not called: it needs a container runtime,
+      # and ci.sh has to stay runnable offline on any machine.
       - run: ./scripts/ci.sh

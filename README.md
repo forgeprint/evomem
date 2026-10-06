@@ -56,3 +56,19 @@ Archiving holds back anything not yet synced. See [docs/sync.md](docs/sync.md).
 
 Go 1.26 or newer. Nothing else: dependencies are vendored, so a build needs no
 network and no module cache.
+
+## Contributing
+
+Commits are signed off under the [DCO](DCO); `./scripts/ci.sh` is every check
+CI runs. See [CONTRIBUTING.md](CONTRIBUTING.md), and
+[SECURITY.md](SECURITY.md) for the threat model and how to report a
+vulnerability privately.
+
+Decisions live in [docs/adr](docs/adr). The ones worth knowing before reading
+the code: [ADR-0002](docs/adr/0002-no-new-dependencies.md) on dependencies,
+[ADR-0009](docs/adr/0009-tainted-content.md) on third-party content reaching a
+model, and [ADR-0012](docs/adr/0012-one-way-sync.md) on why sync goes one way.
+
+## License
+
+[Apache License 2.0](LICENSE).

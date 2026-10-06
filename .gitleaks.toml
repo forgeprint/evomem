@@ -1,0 +1,19 @@
+# Secret scanning for the Evomem repository.
+
+title = "evomem"
+
+[extend]
+# Start from the upstream ruleset rather than maintaining our own copy.
+useDefault = true
+
+[[allowlists]]
+description = """
+Vendored third-party code. SQLite's amalgamation, translated to Go, contains
+generated string constants that match the generic key heuristic, and pgx
+carries test fixtures of its own. Scanning this tree produces noise at a rate
+that makes the signal useless, and it is not where the scan earns its keep:
+the point is what we write. The supply chain is controlled by pinned versions,
+go.sum and the vendored tree being reviewable, not by this rule.
+"""
+paths = ['''^vendor/''']
+

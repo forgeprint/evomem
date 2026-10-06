@@ -447,3 +447,84 @@ Phase 5'ten yeni:
   doğrulandı; `sslmode=require` ile uzak bir sunucuda denenmedi.
 - **`evomem sync` için servis tanımı yok** (launchd/systemd). Şimdilik elle
   çalıştırılıyor.
+
+---
+
+## 2026-10-06 — Repo hijyeni (ilk push sonrası)
+
+Repo public olduktan sonra kapatılan dört açık madde.
+
+### Lisans: Apache-2.0
+
+Organizasyondaki iki repo farklı lisans kullanıyor:
+
+- **forgelore** (Go ikilisi) → Apache-2.0
+- **forgeprint** (katalog monorepo) → source-available, **OSI open source
+  değil**
+
+Evomem bir Go ikilisi ve README'si "open-source" diyor, yani forgelore ile
+aynı sınıfta → Apache-2.0, forgelore'un `LICENSE` dosyası birebir alındı.
+Eğer niyet source-available ise bunu değiştirmek gerekir — söyle.
+
+### DCO
+
+`DCO` dosyası (Linux Foundation metni, değiştirilmeden) eklendi.
+`CONTRIBUTING.md` `git commit -s` zorunluluğunu yazıyor. CLA yok.
+
+**Not:** GitHub'daki DCO uygulaması ve branch koruması kurulmadı — repo
+ayarlarından sen açacaksın. CI imzayı kontrol etmiyor, forgelore'da da
+etmiyor.
+
+### Sır taraması
+
+`scripts/gitleaks.sh` forgelore'dan alındı: resmi Action yerine sabitlenmiş
+sürüm (8.30.1) + sha256 doğrulamalı ikili indirme. Sebebi forgelore'un kendi
+yorumunda yazıyor — Action organizasyon hesaplarında `GITLEAKS_LICENSE`
+istiyor, indirilen ikili ise burada ve CI'da aynı davranıyor. Çalıştırıldı:
+checksum doğru, sızıntı yok.
+
+`ci.sh` artık `test → crosscheck → gitleaks` çağırıyor. İlk gitleaks koşusu
+ağ istiyor (ikiliyi `.tools/`'a indiriyor), sonrası çevrimdışı — `ci.sh`'ın
+başındaki yorum bunu söylüyor, önceki "her şey çevrimdışı" iddiası
+düzeltildi.
+
+`.gitleaks.toml`: upstream kural seti + sadece `vendor/` allowlist'i.
+Başlangıçta `docs/api.md` ve `docs/sync.md` için de bir allowlist yazmıştım
+(içlerinde token ve DSN şeklinde örnekler var); **kaldırdım çünkü test ettim
+ve gereksizdi** — gitleaks yer tutucuları işaretlemiyor. Gereksiz bir
+allowlist taramayı zayıflatır.
+
+### Workflow uyarıları
+
+İlk CI koşusu yeşil geçti (2m18s) ama iki uyarı verdi:
+
+- `actions/checkout@v4` ve `actions/setup-go@v5` Node.js 20'yi hedefliyor,
+  runner zorla Node 24'e alıyor → `@v7` / `@v7` (sürümler actions
+  repolarından doğrulandı, hafızadan yazılmadı)
+- `ubuntu-latest` 19 Ekim 2026'da Ubuntu 26.04'e geçiyor → `ubuntu-24.04`
+  sabitlendi. Altından değişen bir build bisect edilemez.
+
+Ayrıca `permissions: contents: read` eklendi.
+
+### SECURITY.md ve CONTRIBUTING.md
+
+forgelore'un yapısı alındı ama içerik Evomem'e göre yazıldı. Tehdit modeli
+dört başlık: kalıcı prompt injection (tainted işareti), ingestion
+endpoint'leri (bilinen boşluklar dahil — Jira imzasında replay penceresi yok,
+paylaşılan sırrın ötesinde gönderen kimliği yok), komut satırındaki sırlar
+(hepsi ortamdan, flag `ps`'te görünür), makineden ne çıkıyor (sync
+yapılandırılmadıkça hiçbir şey).
+
+`CONTRIBUTING.md`'de iki madde kod gözden geçirme maddesi olarak yazıldı:
+dış API detayını hafızadan yazmama (sessiz başarısızlık gerekçesiyle) ve her
+yeni adaptörün `MarkTainted` çağırması.
+
+### Açık kalanlar — [SEN]
+
+- **DCO app + branch koruması** GitHub repo ayarlarından açılacak.
+- **Lisans niyeti**: Apache-2.0 doğru mu, yoksa forgeprint gibi
+  source-available mı?
+- Phase 3 hâlâ bloke (Flutter kurulu değil).
+- Phase 4/5'ten devredenler değişmedi: Telegram çoklu proje yönlendirmesi,
+  tünel, gerçek bot/webhook denemesi, MCP yazma tool'u kararı, pull/restore,
+  gerçek bulut Postgres'i, launchd/systemd servis tanımı.
