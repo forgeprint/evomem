@@ -278,6 +278,10 @@ type ArchiveResult struct {
 	NotesRemoved      int `json:"notes_removed"`
 	TombstonesRemoved int `json:"tombstones_removed"`
 
+	// ProposalsRemoved is how many decided proposals were cleared. A
+	// pending one is never touched: nobody has looked at it yet.
+	ProposalsRemoved int `json:"proposals_removed"`
+
 	// Skipped is how many notes matched the age but were left because
 	// they had not been synced and IncludeUnsynced was off. It is the
 	// number that explains an archive run that seemed to do nothing.
@@ -319,6 +323,9 @@ func (d *DB) Archive(ctx context.Context, opts ArchiveOptions) (ArchiveResult, e
 	// has no note cursor yet still has tombstones worth clearing, and an
 	// early return above would have left them to grow forever.
 	if err := d.archiveTombstones(ctx, tx, cutoff, &result); err != nil {
+		return result, err
+	}
+	if err := d.archiveProposals(ctx, tx, cutoff, &result); err != nil {
 		return result, err
 	}
 
@@ -414,6 +421,24 @@ func archiveWhere(cutoff, projectID string) (string, []any) {
 		args = append(args, projectID)
 	}
 	return where, args
+}
+
+// archiveProposals clears proposals a person decided on before the cutoff.
+//
+// A pending proposal is never removed, whatever its age and whatever
+// IncludeUnsynced says. Nobody has looked at it, and a review queue that
+// quietly drops its oldest entries is worse than one that is long.
+func (d *DB) archiveProposals(ctx context.Context, tx *sql.Tx, cutoff string, result *ArchiveResult) error {
+	res, err := tx.ExecContext(ctx,
+		`DELETE FROM proposals WHERE status != ? AND decided_at IS NOT NULL AND decided_at < ?`,
+		ProposalPending, cutoff)
+	if err != nil {
+		return fmt.Errorf("database: archiving proposals: %w", err)
+	}
+	if n, err := res.RowsAffected(); err == nil {
+		result.ProposalsRemoved = int(n)
+	}
+	return nil
 }
 
 // vacuum rewrites the file, which is what returns the space a delete only

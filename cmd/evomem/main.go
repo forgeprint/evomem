@@ -40,6 +40,7 @@ usage:
   evomem list   [-project <id>] [-limit <n>]
   evomem delete <id>
   evomem projects
+  evomem review [-accept <id> | -reject <id>] [-status <s>]
   evomem mcp    [-quiet]
   evomem serve  [-addr <host:port>]
   evomem sync   [-once] [-init-remote] [-interval <d>]
@@ -47,7 +48,9 @@ usage:
   evomem archive [-months <n>] [-project <id>] [-vacuum] [-dry-run]
 
 The mcp command speaks the Model Context Protocol on stdin and stdout; it is
-what a coding agent starts, not something to run by hand.
+what a coding agent starts, not something to run by hand. An agent can propose
+a note through it, and review is where a person accepts or turns one down:
+nothing an agent proposes is in memory until then.
 
 The store is $EVOMEM_DB, or ~/.evomem/evomem.db.
 
@@ -92,8 +95,10 @@ func run(args []string, out io.Writer, in io.Reader) error {
 		return cmdProjects(out)
 	case "delete":
 		return cmdDelete(rest, out)
+	case "review":
+		return cmdReview(rest, out)
 	case "mcp":
-		return cmdMCP(rest, out)
+		return cmdMCP(rest, out, in)
 	case "serve":
 		return cmdServe(rest, out)
 	case "archive":

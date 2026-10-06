@@ -10,7 +10,9 @@ It implements both protocol eras: `2026-07-28` (stateless, per-request `_meta`,
 
 ## Tools
 
-All four are read-only ([ADR-0008](adr/0008-read-only-tools.md)).
+Four read, one proposes. Nothing writes to memory
+([ADR-0008](adr/0008-read-only-tools.md),
+[ADR-0013](adr/0013-proposals-need-a-person.md)).
 
 | Tool | Arguments | Returns |
 | - | - | - |
@@ -18,6 +20,7 @@ All four are read-only ([ADR-0008](adr/0008-read-only-tools.md)).
 | `get_note` | `id` | one note in full, uncut |
 | `get_project_context` | `project_id`, and optionally `source_type`, `limit`, `offset` | the project's notes, newest first, with `total` and the next `offset` |
 | `list_projects` | none | every project with notes, a count, and when the newest was written |
+| `propose_note` | `project_id`, `content`, and optionally `reason`, `tainted` | a proposal id, and `"remembered": false` |
 
 `query` is not a query language: operators and punctuation are stripped and
 every word has to appear. All results are bounded, and a note cut at 2000
@@ -78,8 +81,37 @@ printf '%s\n' \
 `-quiet` suppresses the one line on stderr that names the store. stdout carries
 nothing but protocol messages either way.
 
+## Proposing
+
+`propose_note` is the only tool that writes, and what it writes is not memory.
+A proposal goes into its own table: it cannot be searched, cannot be read back
+by `get_note`, does not appear in `get_project_context`, and is never pushed to
+the PostgreSQL mirror. The only path into `notes` is a person running:
+
+```sh
+evomem review                    # what is waiting
+evomem review -accept <id>       # store it as a note
+evomem review -reject <id>       # turn it down
+```
+
+The queue holds at most 200 pending proposals; going over is a tool error that
+tells the agent to stop rather than to rephrase. An identical proposal that is
+still pending returns the one already waiting rather than a second.
+
+`tainted` is the agent's own declaration that the content came from outside the
+project — a web page, a chat message, someone else's document. It is
+self-declared because the agent is the only party that knows, and
+`evomem review` prints it where the person deciding will read it.
+
+An accepted note is **not** marked tainted even if the proposal was: a person
+read it and said yes. The claim is kept as `proposed_tainted` in the note's
+metadata, next to `proposed_by` and `proposal_id`.
+
 ## What it does not do
 
 No resources, no prompts, no sampling: `capabilities` says `tools` and nothing
 else, and `listChanged` is `false` because the set is fixed at build time.
-There is no write tool; see ADR-0008.
+
+No tool writes to memory, and there is no accept-with-edit: accept a proposal
+as it stands, or reject it and write your own with `evomem add`. See
+[ADR-0013](adr/0013-proposals-need-a-person.md).

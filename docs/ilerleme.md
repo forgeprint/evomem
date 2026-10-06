@@ -526,3 +526,96 @@ yeni adaptörün `MarkTainted` çağırması.
 - Phase 4/5'ten devredenler değişmedi: Telegram çoklu proje yönlendirmesi,
   tünel, gerçek bot/webhook denemesi, MCP yazma tool'u kararı, pull/restore,
   gerçek bulut Postgres'i, launchd/systemd servis tanımı.
+
+---
+
+## 2026-10-06 — MCP yazma kararı: insan onaylı öneri
+
+ADR-0008 bu kararı Phase 4'e bırakmıştı, Phase 4 bitti ama karar açık
+kalmıştı. Kullanıcı **insan onaylı öneri**yi seçti → ADR-0013 (ADR-0008'i
+kısmen geçersiz kılıyor, o dosyaya da not düşüldü).
+
+### Neden doğrudan yazma değil
+
+Doğrudan yazma, mağaza içeriğini kimsenin seçmediği bir şey yapardı: yanlış
+olan ya da bir web sayfasından okuduğunu tekrar eden bir model yine yazar —
+MCP tool'larının sonra bağlam olarak geri okuduğu aynı mağazaya. ADR-0009
+zaten üçüncü taraf metninin modele ulaşmasının tehlikeli olduğu için var;
+doğrudan yazma tool'u mağazanın kendisini o kanala çevirirdi.
+
+### Yapılanlar
+
+**Şema v3**: `proposals` tablosu. `notes` üzerinde bir kolon değil ayrı tablo
+— bayraklı bir öneri `notes` içinde yaşasa, bir unutulmuş `WHERE` cümlesi
+uzaklıkta aranır, senkronize edilir ve bir insan kabul etmiş gibi modele geri
+okunurdu. Buradan `notes`'a tek yol `Accept`.
+
+**`shared/database/proposals.go`**: `Propose`, `Proposals`, `GetProposal`,
+`AcceptProposal`, `RejectProposal`, `PendingProposals`.
+
+**MCP `propose_note`** — tek yazan tool, ve yazdığı şey hafıza değil. İki
+yerde söylüyor: `structuredContent`'te `"remembered": false`, ve metinde,
+çünkü hafızaya yazdığına inanan bir model kullanıcıya öyle söyler.
+
+**`evomem review`** — listele / `-accept <id>` / `-reject <id>` /
+`-status pending|accepted|rejected|all`. Soru sormuyor, çünkü bu komut ssh
+üzerinden ve script içinde de çalışıyor.
+
+**Kuyruk 200 bekleyende sınırlı.** Döngüye girmiş bir ajan sınırsız öneri
+yapabilir; on bin kayıtlı bir inceleme kuyruğu inceleme kuyruğu değildir.
+Aşmak tool hatası, ve mesaj modele "dur" diyor, "başka kelimelerle dene"
+demiyor.
+
+**Bekleyen aynı içerik tekrar önerilirse** var olan öneri dönüyor; başarısız
+bir çağrının tekrarı kuyruğu uzatmıyor. Karara bağlandıktan sonra aynı şey
+yeniden önerilebilir — red kalıcı yasak değil.
+
+**Kabul edilen not tainted işaretlenmiyor**, öneri işaretli olsa bile: bir
+insan okuyup evet dedi, ve işaretin yokluğunun anlamı tam olarak bu. Ajanın
+iddiası `proposed_tainted` olarak, `proposed_by` ve `proposal_id` ile birlikte
+saklanıyor — yani köken karardan sonra da duruyor, ama canlı işaretle
+karıştırılamıyor.
+
+**Accept-with-edit yok.** Olduğu gibi kabul et, ya da reddet ve `evomem add`
+ile kendi cümlenizi yazın. Kabulde düzenleme, mağazadaki sözlerin kime ait
+olduğunu bulanıklaştırır ve köken metadata'sı yanlış bir şey iddia ederdi.
+
+**Arşivleme** karara bağlanmış önerileri temizliyor; **bekleyen** öneri yaşı ne
+olursa olsun hiç silinmiyor — kimse ona bakmadı, ve en eskilerini sessizce
+düşüren bir kuyruk uzun bir kuyruktan kötüdür.
+
+### Yan düzeltme
+
+`cmdMCP` protokolü doğrudan `os.Stdout`'a yazıyordu, bu yüzden komut `run`
+üzerinden test edilemiyordu. Akışları parametre olarak alıyor artık; `main`
+`os.Stdin`/`os.Stdout` geçiyor, mağaza satırı hâlâ stderr'e gidiyor. Bu
+sayede inceleme akışının CLI testleri öneriyi gerçekten MCP üzerinden
+yapıyor, kütüphaneyi kısa devre etmiyor.
+
+### Doğrulama
+
+```
+./scripts/ci.sh   → geçti (gofmt, vet, test, 5 hedef, gitleaks)
+```
+
+Derlenmiş ikiliyle, ajanın gözünden ve insanın gözünden:
+
+- Ajan iki şey önerdi; biri `tainted: true` ile (bir blog yazısından)
+- Ajan `search_notes` ile kendi önerisini aradı → `Nothing in memory matches`
+- `evomem review` ikisini de gösterdi, kimin önerdiğini (`by claude-code
+  2.1.0`), `why:` satırını ve blog olanı için `[the agent says this came from
+  outside the project]`
+- Gerçek bulgu kabul edildi, blog iddiası reddedildi
+- Kabul edilen not artık aranabiliyor, `untrusted` etiketi **yok** (doğru:
+  insan onayladı), metadata'da `proposed_by` + `proposal_id`
+- Reddedilen kayıt duruyor (`[rejected ...]`), ama not olmadı
+- Aynı öneriyi ikinci kez kabul: `already accepted`, exit 1
+
+### Açık kalanlar — [SEN]
+
+Bu karar kapandı. Kalanlar değişmedi:
+
+- **DCO app + branch koruması** GitHub ayarlarından
+- **Phase 3 bloke** (Flutter kurulu değil)
+- Telegram çoklu proje yönlendirmesi, tünel, gerçek bot/webhook denemesi
+- Pull/restore, gerçek bulut Postgres'i, launchd/systemd servis tanımı

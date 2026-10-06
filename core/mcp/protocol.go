@@ -52,6 +52,7 @@ const (
 // Meta keys the specification reserves for per-request protocol fields.
 const (
 	metaProtocolVersion    = "io.modelcontextprotocol/protocolVersion"
+	metaClientInfo         = "io.modelcontextprotocol/clientInfo"
 	metaClientCapabilities = "io.modelcontextprotocol/clientCapabilities"
 	metaServerInfo         = "io.modelcontextprotocol/serverInfo"
 )

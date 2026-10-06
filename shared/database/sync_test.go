@@ -16,8 +16,8 @@ func TestSchemaVersionIsRecorded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != 2 {
-		t.Errorf("schema version is %d, want 2", got)
+	if got != schemaVersion {
+		t.Errorf("schema version is %d, want %d", got, schemaVersion)
 	}
 }
 
@@ -42,6 +42,7 @@ func TestUpgradeFromSchemaOne(t *testing.T) {
 	// added, gone, and the version number with them.
 	for _, stmt := range []string{
 		`DROP TABLE deletions`, `DROP TABLE sync_state`, `DROP INDEX idx_notes_updated`,
+		`DROP TABLE proposals`,
 		`UPDATE meta SET value = 1 WHERE key = 'schema_version'`,
 	} {
 		if _, err := db.write.ExecContext(ctx, stmt); err != nil {

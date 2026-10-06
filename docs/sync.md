@@ -86,8 +86,10 @@ kept 2 note(s) that are old enough but have not been synced;
 Archiving leaves **no** tombstones. A tombstone would tell the far end to
 delete the cloud copy — the copy archiving relies on.
 
-Synced tombstones older than the cutoff are cleared too. Otherwise the
-deletions table is the one thing in the store that only ever grows.
+Synced tombstones older than the cutoff are cleared too, and so are proposals
+a person decided on before it. Otherwise those two tables are the only things
+in the store that just grow. A **pending** proposal is never archived, whatever
+its age: nobody has looked at it yet.
 
 `-vacuum` rewrites the file, which is what actually returns the space; a
 delete alone leaves free pages inside it. This is where the explicit

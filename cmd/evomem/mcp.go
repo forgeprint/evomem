@@ -10,14 +10,18 @@ import (
 	"github.com/forgeprint/evomem/core/mcp"
 )
 
-// cmdMCP serves the Model Context Protocol on stdin and stdout.
+// cmdMCP serves the Model Context Protocol on the streams it is given, which
+// in main are stdin and stdout.
 //
-// out is not where the protocol goes. A coding agent starts this as a
-// subprocess and reads its stdout as the message stream, so stdout belongs to
-// the protocol alone and everything else — including the one line saying the
-// server started — goes to stderr. `run` is given a writer for ordinary
-// command output, and using it here would corrupt the stream.
-func cmdMCP(args []string, _ io.Writer) error {
+// For this one command the streams are the protocol. A coding agent starts it
+// as a subprocess and reads its stdout as the message stream, so nothing but
+// protocol messages may go there — the line saying which store is being served
+// goes to stderr, and so would anything else this command wanted to say.
+//
+// Taking the streams as arguments rather than reaching for os.Stdout is what
+// makes the server testable from the command's own entry point: a test can
+// feed it a request and read the reply.
+func cmdMCP(args []string, out io.Writer, in io.Reader) error {
 	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
 	quiet := fs.Bool("quiet", false, "do not announce the store on stderr")
 	if err := fs.Parse(args); err != nil {
@@ -35,5 +39,5 @@ func cmdMCP(args []string, _ io.Writer) error {
 	}
 
 	server := mcp.New(context.Background(), db, version)
-	return server.Serve(os.Stdin, os.Stdout)
+	return server.Serve(in, out)
 }

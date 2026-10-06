@@ -20,8 +20,16 @@ docs                    the plan and the decision records
 claude mcp add evomem -- /absolute/path/to/evomem mcp
 ```
 
-Four read-only tools: `search_notes`, `get_note`, `get_project_context`,
-`list_projects`. See [docs/mcp.md](docs/mcp.md).
+Four tools read — `search_notes`, `get_note`, `get_project_context`,
+`list_projects` — and `propose_note` suggests one. Nothing an agent proposes is
+remembered until a person accepts it:
+
+```sh
+evomem review                 # what an agent suggested
+evomem review -accept <id>    # store it as a note
+```
+
+See [docs/mcp.md](docs/mcp.md).
 
 ## Ingesting from elsewhere
 

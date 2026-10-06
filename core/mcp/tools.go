@@ -34,11 +34,12 @@ const (
 	toolCacheTTLMillis = 300000
 )
 
-// The tool set is read-only on purpose. Giving a model a write tool here
-// would let it put things into the user's memory unreviewed, and what that
-// should look like — a proposal a person accepts, or a direct write — is a
-// decision Phase 4 has to make alongside the ingestion adapters. Until then
-// writing is `evomem add` and the HTTP entrypoint.
+// Four tools read, and one proposes. Nothing here writes to memory.
+//
+// propose_note puts a suggestion in a queue that only `evomem review` reads;
+// a person accepting it is what creates the note. The alternative — letting a
+// model write directly — would mean a store whose contents a person never
+// chose, feeding a store a person is asked to trust. See ADR-0013.
 //
 // Descriptions lead with what the tool does, because a client is free to
 // truncate them and the first clause is the part that always survives.
@@ -91,6 +92,17 @@ func (s *Server) listTools() map[string]any {
 				}, "project_id"),
 			},
 			{
+				"name":        "propose_note",
+				"title":       "Propose something worth remembering",
+				"description": "Propose a note for review. Nothing is remembered until a person accepts it with `evomem review`, and nothing you propose can be searched or read back before then. Propose what turned out to be true and would save the next session the work, in one or two sentences that state the answer rather than the question.",
+				"inputSchema": object(map[string]any{
+					"project_id": str("The project this belongs to. `list_projects` says what exists."),
+					"content":    str("The note. State the finding, not the story of finding it."),
+					"reason":     str("Why this is worth keeping. Shown to the person reviewing, and not stored in the note."),
+					"tainted":    map[string]any{"type": "boolean", "description": "True when the content came from outside this project — a web page, a chat message, a third party's document. Say so: you are the only party that knows."},
+				}, "project_id", "content"),
+			},
+			{
 				"name":        "list_projects",
 				"title":       "List projects",
 				"description": "List every project that has notes, with how many and when the newest was written. Call this first when the project id is not already known.",
@@ -115,6 +127,9 @@ func (s *Server) callTool(raw json.RawMessage) (map[string]any, *rpcError) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return nil, errf(codeInvalidParams, "params is not a tools/call request")
 	}
+	// Who is asking, as they name themselves. A label for the person
+	// reviewing a proposal, never a credential.
+	s.client = clientNameFrom(raw)
 
 	var (
 		text       string
@@ -128,6 +143,8 @@ func (s *Server) callTool(raw json.RawMessage) (map[string]any, *rpcError) {
 		text, structured, err = s.toolGetNote(p.Arguments)
 	case "get_project_context":
 		text, structured, err = s.toolGetProjectContext(p.Arguments)
+	case "propose_note":
+		text, structured, err = s.toolProposeNote(p.Arguments)
 	case "list_projects":
 		text, structured, err = s.toolListProjects()
 	default:
@@ -376,6 +393,84 @@ func (s *Server) toolGetProjectContext(raw json.RawMessage) (string, any, error)
 		}
 	}
 	return b.String(), structured, nil
+}
+
+type proposeArgs struct {
+	ProjectID string `json:"project_id"`
+	Content   string `json:"content"`
+	Reason    string `json:"reason"`
+	Tainted   bool   `json:"tainted"`
+}
+
+// toolProposeNote is the only tool that writes, and what it writes is not
+// memory: a proposal waits for a person. See ADR-0013.
+func (s *Server) toolProposeNote(raw json.RawMessage) (string, any, error) {
+	var args proposeArgs
+	_ = json.Unmarshal(raw, &args)
+
+	if strings.TrimSpace(args.ProjectID) == "" {
+		return "", nil, errors.New("propose_note needs a project_id; list_projects says what exists")
+	}
+	if strings.TrimSpace(args.Content) == "" {
+		return "", nil, errors.New("propose_note needs content: the note you are proposing")
+	}
+
+	p := &database.Proposal{
+		ProjectID:  strings.TrimSpace(args.ProjectID),
+		Content:    strings.TrimSpace(args.Content),
+		SourceType: models.SourceMCP,
+		Reason:     strings.TrimSpace(args.Reason),
+		ProposedBy: s.client,
+	}
+	if args.Tainted {
+		p.Metadata = map[string]any{models.MetaTainted: true}
+	}
+
+	if err := s.db.Propose(s.ctx, p); err != nil {
+		// The queue being full is something the model can act on: it
+		// should stop proposing, not try different words.
+		return "", nil, err
+	}
+
+	structured := map[string]any{
+		"proposal_id": p.ID,
+		"project_id":  p.ProjectID,
+		"status":      p.Status,
+		"remembered":  false,
+	}
+
+	// Said twice, because a model that believes it has written to memory
+	// will tell the user so.
+	text := fmt.Sprintf(
+		"Proposed as %s, waiting for review. It is not in memory: it cannot be searched or read back, "+
+			"and nothing will see it until a person accepts it with `evomem review`.",
+		p.ID)
+	return text, structured, nil
+}
+
+// clientNameFrom reads the client's own name out of a request's _meta.
+//
+// Only a label: a client says what it likes, and nothing is decided by it.
+// It is there so a person reviewing a queue can tell which agent asked.
+func clientNameFrom(raw json.RawMessage) string {
+	var p struct {
+		Meta map[string]json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return ""
+	}
+	info, ok := p.Meta[metaClientInfo]
+	if !ok {
+		return ""
+	}
+	var client Implementation
+	if err := json.Unmarshal(info, &client); err != nil {
+		return ""
+	}
+	if client.Version != "" {
+		return client.Name + " " + client.Version
+	}
+	return client.Name
 }
 
 func (s *Server) toolListProjects() (string, any, error) {

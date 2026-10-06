@@ -1,6 +1,6 @@
 # ADR-0008: The MCP tool set is read-only, for now
 
-**Status:** accepted · **Date:** 2026-10-06
+**Status:** accepted, amended by [ADR-0013](0013-proposals-need-a-person.md) · **Date:** 2026-10-06
 
 ## Context
 
@@ -27,6 +27,11 @@ nineteen hits, which leaves no way to read the rest — that is `get_note`.
 said what projects exist — that is `list_projects`.
 
 Writing stays out. It is `evomem add` and, from Phase 4, the HTTP entrypoint.
+
+> **Amended 2026-10-06.** ADR-0013 adds a fifth tool, `propose_note`. The tool
+> set is no longer read-only, but memory still is: a proposal goes into its own
+> table and only a person accepting it with `evomem review` creates a note.
+> Everything below about bounded results and tool errors still holds.
 
 ## Consequences
 

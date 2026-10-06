@@ -132,6 +132,9 @@ func cmdSyncStatus(_ []string, out io.Writer) error {
 	if noteCursor.IsZero() {
 		fmt.Fprintln(out, "\nnothing has been synced, so evomem archive will not remove anything")
 	}
+	if line := reviewReminder(ctx, db); line != "" {
+		fmt.Fprintf(out, "\n%s\n", line)
+	}
 	return nil
 }
 

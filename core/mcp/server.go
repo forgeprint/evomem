@@ -16,6 +16,11 @@ type Server struct {
 	// scope of its own, so the process's context is the only one there is.
 	ctx context.Context
 
+	// client is how the last request's sender named itself, used as a
+	// label on a proposal. A client says what it likes; nothing is
+	// decided by it.
+	client string
+
 	// legacy records that this process has been opened with an initialize
 	// handshake. It is the one piece of connection state the server keeps,
 	// and only the legacy era is entitled to it: the modern protocol

@@ -11,7 +11,7 @@ import (
 // Unlike a derived index, this file is the only copy of the user's notes: a
 // version it does not recognise is an error the caller has to see, never a
 // reason to start again.
-const schemaVersion = 2
+const schemaVersion = 3
 
 // The schema. Two things in it are worth explaining.
 //
@@ -96,6 +96,33 @@ CREATE TABLE IF NOT EXISTS sync_state (
 	key   TEXT PRIMARY KEY,
 	value TEXT NOT NULL
 );
+
+-- Schema 3: what an agent proposed, which is not yet memory.
+--
+-- A separate table, not a column on notes. A proposal that lived in notes
+-- with a flag would be one forgotten WHERE clause away from being searched,
+-- synced and read back to a model as though a person had accepted it. Here
+-- the only way into notes is Accept.
+CREATE TABLE IF NOT EXISTS proposals (
+	id          TEXT PRIMARY KEY,
+	project_id  TEXT NOT NULL,
+	content     TEXT NOT NULL,
+	source_type TEXT NOT NULL,
+	metadata    TEXT NOT NULL DEFAULT '{}',
+	reason      TEXT NOT NULL DEFAULT '',
+	proposed_by TEXT NOT NULL DEFAULT '',
+	proposed_at DATETIME NOT NULL,
+
+	-- pending until a person decides. A decided row is kept so that the
+	-- same thing is not proposed again the next day, and so there is a
+	-- record of what was turned down; archiving clears the old ones.
+	status     TEXT NOT NULL DEFAULT 'pending',
+	decided_at DATETIME,
+	note_id    TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_proposals_pending
+	ON proposals(status, proposed_at DESC);
 `
 
 // migrate creates the schema if it is absent, brings an older file forward,
@@ -137,12 +164,13 @@ func (d *DB) migrate(ctx context.Context) error {
 // a file from version i+1 to version i+2; a nil entry means the declarative
 // schema above was the whole change.
 //
-// Schema 1 to 2 added three tables and an index and nothing else, so there is
-// nothing to do here for it. The slot exists so that the next version has an
-// obvious place, and so that the version number and the steps cannot drift
+// Schemas 2 and 3 each added tables and indexes and nothing else, so there is
+// nothing to do here for either. The slots exist so that the next version has
+// an obvious place, and so that the version number and the steps cannot drift
 // apart silently.
 var migrations = []func(context.Context, *sql.Tx) error{
 	nil, // 1 -> 2
+	nil, // 2 -> 3
 }
 
 // upgrade runs every migration from the file's version up to this build's,

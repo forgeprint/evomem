@@ -269,3 +269,144 @@ func TestDeleteArguments(t *testing.T) {
 		}
 	}
 }
+
+// --- the review flow ---
+
+// addProposal puts something in the queue the way an agent would, through the
+// MCP server, so this exercises the path a person actually faces.
+func proposeThroughMCP(t *testing.T, project, content, extra string) string {
+	t.Helper()
+	meta := `"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28",` +
+		`"io.modelcontextprotocol/clientCapabilities":{},` +
+		`"io.modelcontextprotocol/clientInfo":{"name":"test-agent","version":"1.0"}}`
+	args := `{"project_id":"` + project + `","content":"` + content + `"` + extra + `}`
+	line := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + meta +
+		`,"name":"propose_note","arguments":` + args + `}}`
+
+	var out bytes.Buffer
+	if err := run([]string{"mcp", "-quiet"}, &out, strings.NewReader(line+"\n")); err != nil {
+		t.Fatal(err)
+	}
+	var reply struct {
+		Result struct {
+			Structured struct {
+				ProposalID string `json:"proposal_id"`
+			} `json:"structuredContent"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &reply); err != nil {
+		t.Fatalf("%v: %s", err, out.String())
+	}
+	if reply.Result.Structured.ProposalID == "" {
+		t.Fatalf("no proposal id came back: %s", out.String())
+	}
+	return reply.Result.Structured.ProposalID
+}
+
+func TestReviewListsWhatIsWaiting(t *testing.T) {
+	withStore(t)
+
+	if got := exec(t, "", "review"); !strings.Contains(got, "nothing pending") {
+		t.Errorf("an empty queue says %q", got)
+	}
+
+	id := proposeThroughMCP(t, "evomem", "the tunnel has to be running first", "")
+
+	out := exec(t, "", "review")
+	if !strings.Contains(out, id) {
+		t.Errorf("the proposal is not listed: %s", out)
+	}
+	if !strings.Contains(out, "the tunnel has to be running first") {
+		t.Errorf("the content is not shown: %s", out)
+	}
+	// Who asked, so a person can tell which agent it was.
+	if !strings.Contains(out, "test-agent 1.0") {
+		t.Errorf("the proposer is not shown: %s", out)
+	}
+	// And the command to accept it, spelled out.
+	if !strings.Contains(out, "-accept "+id) {
+		t.Errorf("the accept command is not shown: %s", out)
+	}
+}
+
+// Nothing an agent proposes is in memory until a person says so.
+func TestReviewAccept(t *testing.T) {
+	withStore(t)
+
+	id := proposeThroughMCP(t, "evomem", "vacuum needs the explicit rowid", "")
+
+	if strings.Contains(exec(t, "", "list"), "vacuum") {
+		t.Fatal("a proposal is listed as a note before review")
+	}
+
+	out := exec(t, "", "review", "-accept", id)
+	if !strings.Contains(out, "stored as note") {
+		t.Errorf("got %q", out)
+	}
+	if !strings.Contains(exec(t, "", "list"), "vacuum") {
+		t.Error("the accepted proposal is not a note")
+	}
+	if !strings.Contains(exec(t, "", "review", "-status", "accepted"), id) {
+		t.Error("the accepted proposal is not in the accepted listing")
+	}
+	if !strings.Contains(exec(t, "", "review"), "nothing pending") {
+		t.Error("the proposal is still pending after being accepted")
+	}
+}
+
+func TestReviewReject(t *testing.T) {
+	withStore(t)
+
+	id := proposeThroughMCP(t, "evomem", "something not worth keeping", "")
+	exec(t, "", "review", "-reject", id)
+
+	if strings.Contains(exec(t, "", "list"), "not worth keeping") {
+		t.Error("a rejected proposal became a note")
+	}
+	// The record of what was refused is kept.
+	if !strings.Contains(exec(t, "", "review", "-status", "rejected"), id) {
+		t.Error("the rejected proposal is not in the rejected listing")
+	}
+}
+
+// The agent's own declaration goes where the person deciding will read it.
+func TestReviewShowsTheTaintedClaim(t *testing.T) {
+	withStore(t)
+
+	proposeThroughMCP(t, "evomem", "copied from a blog post", `,"tainted":true`)
+
+	out := exec(t, "", "review")
+	if !strings.Contains(out, "came from outside") {
+		t.Errorf("the claim is not shown to the reviewer: %s", out)
+	}
+}
+
+func TestReviewArguments(t *testing.T) {
+	withStore(t)
+	id := proposeThroughMCP(t, "evomem", "something", "")
+
+	for _, args := range [][]string{
+		{"review", "-accept", id, "-reject", id},
+		{"review", "-accept", "not-a-ulid"},
+		{"review", "-reject", "not-a-ulid"},
+	} {
+		var out bytes.Buffer
+		if err := run(args, &out, strings.NewReader("")); err == nil {
+			t.Errorf("%v was accepted", args)
+		}
+	}
+}
+
+// A queue nobody is told about is a queue nobody reads.
+func TestSyncStatusMentionsTheQueue(t *testing.T) {
+	withStore(t)
+
+	if strings.Contains(exec(t, "", "sync-status"), "waiting for review") {
+		t.Error("an empty queue was announced")
+	}
+
+	proposeThroughMCP(t, "evomem", "something to review", "")
+	if !strings.Contains(exec(t, "", "sync-status"), "1 proposal waiting for review") {
+		t.Errorf("got %s", exec(t, "", "sync-status"))
+	}
+}

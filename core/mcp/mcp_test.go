@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -404,7 +405,7 @@ func TestListTools(t *testing.T) {
 	}
 
 	want := map[string]bool{
-		"search_notes": false, "get_note": false,
+		"search_notes": false, "get_note": false, "propose_note": false,
 		"get_project_context": false, "list_projects": false,
 	}
 	for _, raw := range tools {
@@ -455,6 +456,7 @@ func TestToolRequiredArguments(t *testing.T) {
 		"search_notes":        "query",
 		"get_note":            "id",
 		"get_project_context": "project_id",
+		"propose_note":        "project_id",
 	}
 	for _, raw := range d.Result["tools"].([]any) {
 		tool := raw.(map[string]any)
@@ -812,7 +814,8 @@ func TestListProjects(t *testing.T) {
 func TestToolsSurviveEmptyArguments(t *testing.T) {
 	s, _ := newTestServer(t)
 
-	for _, name := range []string{"search_notes", "get_note", "get_project_context", "list_projects"} {
+	for _, name := range []string{"search_notes", "get_note", "propose_note",
+		"get_project_context", "list_projects"} {
 		result, _ := callTool(t, s, name, `{}`)
 		if result == nil {
 			t.Errorf("%s with no arguments returned nothing", name)
@@ -900,5 +903,212 @@ func TestTaintedIsInStructuredContent(t *testing.T) {
 	}
 	if hit["origin"] != "jira" {
 		t.Errorf("origin is %v, want jira", hit["origin"])
+	}
+}
+
+// --- proposing ---
+
+// The only tool that writes, and what it writes is not memory.
+func TestProposeNoteIsNotMemory(t *testing.T) {
+	s, db := newTestServer(t)
+
+	result, isError := callTool(t, s, "propose_note",
+		`{"project_id":"evomem","content":"the gateway needs a longer timeout","reason":"cost us an hour"}`)
+	if isError {
+		t.Fatalf("propose_note failed: %s", toolText(t, result))
+	}
+
+	structured := result["structuredContent"].(map[string]any)
+	if structured["remembered"] != false {
+		t.Errorf("remembered is %v, want false", structured["remembered"])
+	}
+	if structured["status"] != "pending" {
+		t.Errorf("status is %v, want pending", structured["status"])
+	}
+
+	// Said in the text too, because a model that believes it has written
+	// to memory will tell the user so.
+	text := toolText(t, result)
+	if !strings.Contains(text, "not in memory") {
+		t.Errorf("the text does not say it is not remembered: %s", text)
+	}
+	if !strings.Contains(text, "evomem review") {
+		t.Errorf("the text does not say who accepts it: %s", text)
+	}
+
+	// And nothing the read tools do can see it.
+	result, _ = callTool(t, s, "search_notes", `{"query":"timeout"}`)
+	if hits, _ := result["structuredContent"].([]any); len(hits) != 0 {
+		t.Errorf("a proposal is searchable through the tools: %d hits", len(hits))
+	}
+	result, _ = callTool(t, s, "get_project_context", `{"project_id":"evomem"}`)
+	notes := result["structuredContent"].(map[string]any)["notes"].([]any)
+	if len(notes) != 0 {
+		t.Errorf("a proposal shows up as project context: %d notes", len(notes))
+	}
+
+	pending, err := db.PendingProposals(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending != 1 {
+		t.Errorf("%d proposals are pending, want 1", pending)
+	}
+}
+
+// Once a person accepts it, it is a note like any other.
+func TestProposeThenAccept(t *testing.T) {
+	s, db := newTestServer(t)
+	ctx := context.Background()
+
+	result, _ := callTool(t, s, "propose_note",
+		`{"project_id":"evomem","content":"vacuum needs the explicit rowid"}`)
+	id := result["structuredContent"].(map[string]any)["proposal_id"].(string)
+
+	if _, err := db.AcceptProposal(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _ = callTool(t, s, "search_notes", `{"query":"vacuum"}`)
+	hits, _ := result["structuredContent"].([]any)
+	if len(hits) != 1 {
+		t.Fatalf("the accepted note is not searchable: %d hits", len(hits))
+	}
+	// Not labelled untrusted, which is the point: a person read it and
+	// said yes, and that is the endorsement the mark exists to be absent
+	// for.
+	if strings.Contains(toolText(t, result), "untrusted") {
+		t.Errorf("a note a person accepted is labelled untrusted: %s", toolText(t, result))
+	}
+}
+
+func TestProposeNoteValidates(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	for _, args := range []string{
+		`{}`,
+		`{"content":"no project"}`,
+		`{"project_id":"evomem"}`,
+		`{"project_id":"evomem","content":"   "}`,
+		`{"project_id":"  ","content":"x"}`,
+	} {
+		result, isError := callTool(t, s, "propose_note", args)
+		if !isError {
+			t.Errorf("propose_note(%s) was accepted", args)
+		}
+		if result == nil {
+			t.Errorf("propose_note(%s) returned nothing", args)
+		}
+	}
+}
+
+// An agent is the only party that knows it read a web page, so the
+// declaration is its own and travels to the person reviewing.
+func TestProposeNoteCarriesTheTaintedClaim(t *testing.T) {
+	s, db := newTestServer(t)
+
+	result, _ := callTool(t, s, "propose_note",
+		`{"project_id":"evomem","content":"copied from a blog post","tainted":true}`)
+	id := result["structuredContent"].(map[string]any)["proposal_id"].(string)
+
+	p, err := db.GetProposal(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.Tainted() {
+		t.Error("the claim did not reach the proposal")
+	}
+}
+
+// The client names itself in _meta, which is a label for the person
+// reviewing, never a credential.
+func TestProposeNoteRecordsWhoAsked(t *testing.T) {
+	s, db := newTestServer(t)
+
+	line := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` +
+		`"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28",` +
+		`"io.modelcontextprotocol/clientCapabilities":{},` +
+		`"io.modelcontextprotocol/clientInfo":{"name":"claude-code","version":"2.1.0"}},` +
+		`"name":"propose_note","arguments":{"project_id":"evomem","content":"who asked"}}}`
+	d := send(t, s, line)
+	if d.Error != nil {
+		t.Fatalf("%+v", d.Error)
+	}
+
+	proposals, err := db.Proposals(context.Background(), database.ProposalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(proposals) != 1 {
+		t.Fatalf("%d proposals", len(proposals))
+	}
+	if proposals[0].ProposedBy != "claude-code 2.1.0" {
+		t.Errorf("proposed_by is %q", proposals[0].ProposedBy)
+	}
+}
+
+// A client that says nothing about itself is still allowed to propose: the
+// name is a label, not a gate.
+func TestProposeNoteWithoutClientInfo(t *testing.T) {
+	s, db := newTestServer(t)
+
+	if _, isError := callTool(t, s, "propose_note",
+		`{"project_id":"evomem","content":"anonymous"}`); isError {
+		t.Fatal("a client with no clientInfo could not propose")
+	}
+	proposals, err := db.Proposals(context.Background(), database.ProposalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proposals[0].ProposedBy != "" {
+		t.Errorf("proposed_by is %q, want empty", proposals[0].ProposedBy)
+	}
+}
+
+// A full queue is something the model can act on: it should stop proposing,
+// not try different words.
+func TestProposeNoteQueueFull(t *testing.T) {
+	s, db := newTestServer(t)
+	ctx := context.Background()
+
+	for i := 0; i < 200; i++ {
+		if err := db.Propose(ctx, &database.Proposal{
+			ProjectID: "evomem", Content: fmt.Sprintf("filler %d", i),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	result, isError := callTool(t, s, "propose_note",
+		`{"project_id":"evomem","content":"one too many"}`)
+	if !isError {
+		t.Fatal("the queue limit was not enforced through the tool")
+	}
+	if !strings.Contains(toolText(t, result), "evomem review") {
+		t.Errorf("the error does not say what to do: %s", toolText(t, result))
+	}
+}
+
+// propose_note is in the list, and the read tools still are.
+func TestToolSetWithPropose(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	d := modern(t, s, 1, "tools/list", "")
+	var names []string
+	for _, raw := range d.Result["tools"].([]any) {
+		names = append(names, raw.(map[string]any)["name"].(string))
+	}
+	if len(names) != 5 {
+		t.Errorf("%d tools, want 5: %v", len(names), names)
+	}
+
+	found := false
+	for _, name := range names {
+		if name == "propose_note" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("propose_note is missing: %v", names)
 	}
 }
