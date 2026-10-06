@@ -464,7 +464,7 @@ Organizasyondaki iki repo farklı lisans kullanıyor:
 
 Evomem bir Go ikilisi ve README'si "open-source" diyor, yani forgelore ile
 aynı sınıfta → Apache-2.0, forgelore'un `LICENSE` dosyası birebir alındı.
-Eğer niyet source-available ise bunu değiştirmek gerekir — söyle.
+**Kullanıcı 2026-10-06'da onayladı: Apache-2.0 doğru.** Karar kapandı.
 
 ### DCO
 
@@ -522,8 +522,6 @@ yeni adaptörün `MarkTainted` çağırması.
 ### Açık kalanlar — [SEN]
 
 - **DCO app + branch koruması** GitHub repo ayarlarından açılacak.
-- **Lisans niyeti**: Apache-2.0 doğru mu, yoksa forgeprint gibi
-  source-available mı?
 - Phase 3 hâlâ bloke (Flutter kurulu değil).
 - Phase 4/5'ten devredenler değişmedi: Telegram çoklu proje yönlendirmesi,
   tünel, gerçek bot/webhook denemesi, MCP yazma tool'u kararı, pull/restore,
