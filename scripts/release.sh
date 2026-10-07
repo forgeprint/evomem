@@ -35,8 +35,27 @@ echo "==> checks"
 ./scripts/ci.sh > /dev/null
 
 rm -rf dist
+mkdir -p dist
 echo "==> building $version"
-EVOMEM_VERSION="$version" ./scripts/crosscheck.sh > /dev/null
+
+targets=(
+	"darwin/arm64"
+	"darwin/amd64"
+	"linux/amd64"
+	"linux/arm64"
+	"windows/amd64"
+)
+
+for target in "${targets[@]}"; do
+	os="${target%/*}"
+	arch="${target#*/}"
+	echo "==> ${os}/${arch}"
+	out="dist/evomem-${version}-${os}-${arch}"
+	if [ "$os" = "windows" ]; then
+		out="${out}.exe"
+	fi
+	CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -ldflags="-s -w -X main.version=${version}" -o "${out}" ./cmd/evomem
+done
 
 cd dist
 # Sorted, so two builds of the same commit produce the same file.
