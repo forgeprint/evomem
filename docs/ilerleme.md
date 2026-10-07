@@ -619,3 +619,35 @@ Bu karar kapandı. Kalanlar değişmedi:
 - **Phase 3 bloke** (Flutter kurulu değil)
 - Telegram çoklu proje yönlendirmesi, tünel, gerçek bot/webhook denemesi
 - Pull/restore, gerçek bulut Postgres'i, launchd/systemd servis tanımı
+
+---
+
+## 2026-10-07 — Oturum devri
+
+Kod değişikliği yok; bu oturum devir teslim için.
+
+Çalışma alanı temizdi ve remote ile eşitti: 1–5 fazlarının işi `1532fb9`,
+repo hijyeni `cc55af3`, lisans onayı `e687b5b`, öneri/inceleme akışı
+`914c61b` ile atılmış ve push edilmişti. Atılacak yeni bir şey yoktu.
+
+Eksik olan şey bir oturumun hızlıca yerini bulması: bu dosya kronolojik ve
+uzadı, yeni bir oturum en alta kadar okumak zorunda kalıyordu. İki ekleme:
+
+- **`docs/durum.md`** — her oturum sonunda üzerine yazılan anlık görüntü:
+  fazların durumu, ne var, komutlar, neyin doğrulandığı ve neyin
+  doğrulanmadığı, sıradaki işler ([SEN] ve kod ayrı), bilinen sınırlar, yeni
+  oturumun okuma sırası.
+- **`CLAUDE.md`'ye bölüm 0** — okuma sırası: `durum.md` → `CLAUDE.md` →
+  `plan.md` → `ilerleme.md`'nin son bölümü → ilgili `adr/`. Ayrıca güncelleme
+  kuralı iki dosyayı kapsayacak şekilde yazıldı: `ilerleme.md` eklenir,
+  `durum.md` üzerine yazılır.
+
+### Not: evomem kendi kendini kullanıyor
+
+Bu oturumda `evomem` MCP sunucusu Claude Code'a bağlı geldi — `search_notes`,
+`get_project_context`, `list_projects`, `get_note`, `propose_note` tool'ları
+hazır. Yani ürün kendi geliştirmesinde kullanılabilir durumda. Varsayılan
+store `~/.evomem/evomem.db` ve içinde önceki oturumdan üç not var.
+
+Bu oturumda hiçbir şey önerilmedi; istenirse oturumun bulguları
+`propose_note` ile kuyruğa atılıp `evomem review` ile süzülebilir.

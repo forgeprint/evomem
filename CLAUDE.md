@@ -2,6 +2,18 @@
 
 This file defines the strict architectural constraints, coding standards, and build/test commands for the Evomem Monorepo. Claude Code must read and adhere to these guidelines during all development tasks.
 
+## 0. Read these first, in this order
+
+1. **`docs/durum.md`** — where the work stands right now and what is next.
+   Overwritten every session; start here. Turkish.
+2. **This file** — the architectural constraints and the working rules.
+3. **`docs/plan.md`** — the phase plan, with the boxes ticked and the
+   deviations noted. Turkish.
+4. **`docs/ilerleme.md`** — the chronological notebook. Read its last section
+   for what the previous session did. Turkish.
+5. **`docs/adr/`** — one record per decision, with the costs named. Read the
+   relevant one before touching anything it covers. English.
+
 ## 1. Project Overview & Boundaries
 * **Project Name:** Evomem (Open-source AI-Ready Memory Infrastructure)
 * **Organization:** forgeprint
@@ -36,5 +48,5 @@ This file defines the strict architectural constraints, coding standards, and bu
 * **Go Style Rules:** Write idiomatic, clean Go code using explicit error handling. Avoid embedding complex external third-party routing or frameworks for the internal core unless requested.
 * **Never write an external API or protocol detail from memory.** Before writing code against any third-party payload shape, header name, field name, error code or protocol revision — a webhook body, a bot API, MCP, an OAuth flow — check that system's current official documentation, cite the page and the date in the code or the report, and mark anything unverifiable as unverified. A field name guessed wrong fails silently: an absent field decodes as a zero value, not an error, so the mistake surfaces as missing data weeks later rather than as a failed build.
 * **Do not guess at an ambiguity.** Ask. Do not bury the question in a code comment.
-* **Update `docs/ilerleme.md` at the end of every step:** what was done, what was decided, what is still open. It is the notebook between sessions, and a session that does not update it has lost the work for the next one. Internal notes (`docs/ilerleme.md`, `docs/plan.md`) are Turkish; public documents, code and comments are English.
+* **Update `docs/ilerleme.md` and `docs/durum.md` at the end of every step.** `ilerleme.md` is appended to: what was done, what was decided, what is still open. `durum.md` is overwritten: where things stand now and what is next. They are the notebook between sessions, and a session that does not update them has lost the work for the next one. Internal notes (`durum.md`, `ilerleme.md`, `plan.md`) are Turkish; public documents, code and comments are English.
 * **Decisions are recorded, not re-argued.** Anything architectural goes in `docs/adr/` with the costs named. If a recorded decision looks unworkable, say why and wait for an answer rather than changing it.
