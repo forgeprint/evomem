@@ -9,7 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  ci:
+  # Go backend CI (existing)
+  go:
     # Pinned rather than ubuntu-latest, which migrates to Ubuntu 26.04 from
     # 19 October 2026. A build that changes under you is a build you cannot
     # bisect.
@@ -33,3 +34,66 @@ jobs:
       # scripts/test-postgres.sh is not called: it needs a container runtime,
       # and ci.sh has to stay runnable offline on any machine.
       - run: ./scripts/ci.sh
+
+  # Flutter mobile app CI
+  flutter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Flutter version pinned to match analysis_options.yaml (very_good_analysis 11.0.0)
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      # The generated localisations are committed, so CI regenerates them and
+      # fails if the result differs from what is in the repository.
+      - name: Generate localisations
+        run: flutter gen-l10n
+      - name: Check localisations
+        run: git diff --exit-code lib/l10n
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      # No --no-fatal-infos: most lints report at info level, and passing that
+      # flag would turn the whole lint set into decoration.
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      # The build proof. It needs no device, no emulator and no account.
+      - name: Build web (release)
+        run: flutter build web --release
+
+  # Optional: Cross-platform build check (Go only)
+  crosscheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - run: ./scripts/crosscheck.sh
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true

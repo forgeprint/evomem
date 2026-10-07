@@ -1,0 +1,44 @@
+# Flutter
+.dart_tool/
+.pub-cache/
+build/
+*.lock
+*.log
+*.packages
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated files
+lib/l10n/app_localizations.dart
+lib/generated_plugin_registrant.dart
+
+# Android
+android/.gradle/
+android/local.properties
+android/app/build/
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral/
+
+# Web
+web/build/
+
+# macOS
+macos/Pods/
+macos/.symlinks/
+
+# Linux
+linux/build/
+
+# Windows
+windows/build/

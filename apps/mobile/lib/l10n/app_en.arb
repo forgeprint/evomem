@@ -1,0 +1,122 @@
+{
+  "@@locale": "en",
+  "appTitle": "Evomem",
+  "@appTitle": {
+    "description": "The application name, shown in the app bar and the task switcher."
+  },
+  "homeScreenTitle": "Memory",
+  "@homeScreenTitle": {
+    "description": "Title of the home screen showing notes list."
+  },
+  "searchHint": "Search notes...",
+  "@searchHint": {
+    "description": "Placeholder text for the search field."
+  },
+  "addNote": "Add Note",
+  "@addNote": {
+    "description": "Label of the button that adds a new note."
+  },
+  "noteContentLabel": "Note content",
+  "@noteContentLabel": {
+    "description": "Label of the text field a new note content is typed into."
+  },
+  "saveNote": "Save",
+  "@saveNote": {
+    "description": "Label of the button that saves the note."
+  },
+  "cancel": "Cancel",
+  "@cancel": {
+    "description": "Label of the cancel button."
+  },
+  "noteSaved": "Note saved",
+  "@noteSaved": {
+    "description": "Toast message when a note is saved successfully."
+  },
+  "noteDeleted": "Note deleted",
+  "@noteDeleted": {
+    "description": "Toast message when a note is deleted."
+  },
+  "deleteNote": "Delete note",
+  "@deleteNote": {
+    "description": "Confirmation dialog title for deleting a note."
+  },
+  "deleteConfirm": "Are you sure you want to delete this note?",
+  "@deleteConfirm": {
+    "description": "Confirmation message for deleting a note."
+  },
+  "projectLabel": "Project",
+  "@projectLabel": {
+    "description": "Label for project selection."
+  },
+  "sourceTypeLabel": "Source",
+  "@sourceTypeLabel": {
+    "description": "Label for source type selection."
+  },
+  "settings": "Settings",
+  "@settings": {
+    "description": "Label for settings menu item."
+  },
+  "syncStatus": "Sync Status",
+  "@syncStatus": {
+    "description": "Label for sync status screen."
+  },
+  "lastSynced": "Last synced: {time}",
+  "@lastSynced": {
+    "description": "Shows when the last sync occurred.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "syncNow": "Sync Now",
+  "@syncNow": {
+    "description": "Button to trigger manual sync."
+  },
+  "syncing": "Syncing...",
+  "@syncing": {
+    "description": "Text shown during sync operation."
+  },
+  "syncFailed": "Sync failed: {error}",
+  "@syncFailed": {
+    "description": "Error message when sync fails.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noNotes": "No notes yet. Tap + to add one.",
+  "@noNotes": {
+    "description": "Empty state message when there are no notes."
+  },
+  "noteTooLong": "Note is too long (max {max} characters).",
+  "@noteTooLong": {
+    "description": "Error when note exceeds max length.",
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "noteBlank": "Note cannot be empty.",
+  "@noteBlank": {
+    "description": "Error when note content is empty."
+  },
+  "openNote": "Open note",
+  "@openNote": {
+    "description": "Tooltip for opening a note detail."
+  },
+  "backToList": "Back to list",
+  "@backToList": {
+    "description": "Label of the button that returns to the notes list."
+  },
+  "noteNotFound": "Note not found.",
+  "@noteNotFound": {
+    "description": "Shown when a note ID is not found."
+  },
+  "pageMissing": "That page does not exist.",
+  "@pageMissing": {
+    "description": "Shown when a link names a location the router cannot match."
+  }
+}

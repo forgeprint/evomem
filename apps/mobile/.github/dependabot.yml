@@ -1,0 +1,14 @@
+# Every version in this project is pinned, so nothing moves on its own.
+# Dependabot is the other half of that decision: it proposes each update as a
+# pull request CI has to pass, including security fixes. It reads
+# pubspec.yaml and the action commits in the workflow.
+version: 2
+updates:
+  - package-ecosystem: pub
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

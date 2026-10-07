@@ -13,7 +13,7 @@ Son güncelleme: 2026-10-07 · Son commit: `914c61b` · CI: yeşil
 | - | - |
 | 1 Monorepo + SQLite deposu | tamam |
 | 2 MCP sunucusu | tamam |
-| 3 Flutter mobil uygulama | **bloke** — Flutter SDK kurulu değil |
+| 3 Flutter mobil uygulama | **devam ediyor** — iskelet hazır, Flutter SDK bekleniyor |
 | 4 Telegram + Jira + HTTP girişi | tamam |
 | 5 Sync + arşivleme | tamam |
 
@@ -33,6 +33,8 @@ core/mcp           stdio JSON-RPC, spec'e göre yazılmış, iki protokol dönem
 core/api           POST /ingest + Telegram ve Jira webhook'ları
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
 cmd/evomem         13 alt komut
+apps/mobile        Flutter 3.47 iskeleti (Riverpod 3, go_router, sqflite, 
+                   very_good_analysis, l10n, 36+ test planı)
 ```
 
 Şema sürümü **3**. Bağımlılıklar: `modernc.org/sqlite`, `jackc/pgx/v5`,
@@ -70,7 +72,7 @@ evomem archive -dry-run               # ne temizlenecek
 
 - Gerçek bir Telegram botu veya gerçek bir Jira instance'ı
 - Gerçek bir bulut PostgreSQL'i (`sslmode=require` ile uzak sunucu)
-- Flutter tarafı (hiç yazılmadı)
+- Flutter tarafı (iskelet hazır, `flutter pub get` ve `flutter test` bekleniyor)
 
 ---
 
@@ -79,7 +81,7 @@ evomem archive -dry-run               # ne temizlenecek
 Bunlar bende değil, sende:
 
 1. **Flutter SDK kur** → Phase 3'ün kilidi.
-   `brew install --cask flutter`, sonra `flutter doctor`.
+   `flutter` resmi sitesinden veya `brew install --cask flutter`, sonra `flutter doctor`.
 2. **DCO app + branch koruması** GitHub repo ayarlarından. İmzalar atılıyor
    (`git commit -s`) ama kontrol eden bir şey yok.
 3. **Tünel kur** (cloudflared veya ngrok) → Telegram ve Jira webhook'larının
@@ -93,7 +95,7 @@ Bunlar bende değil, sende:
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
 1. **Phase 3: Flutter uygulaması** (Flutter kurulunca). `plan.md` Phase 3:
-   `apps/mobile`, Go şemasıyla eşleşen yerel depo (`sqflite` veya `drift`),
+   `apps/mobile`, Go şemasıyla eşleşen yerel depo (`sqflite`),
    hızlı metin yakalama arayüzü, arka planda ses kaydı → yerel dosya +
    veritabanında referans. **Karar gerekecek:** mobil taraf doğrudan
    PostgreSQL aynasına mı bakacak, yoksa `evomem serve`'e mi yazacak?
@@ -117,8 +119,8 @@ Bunlar bende değil, sende:
 ## Bilinen sınırlar (hata değil, karar)
 
 - **Türkçe aramada `ı` → `i` katlanmıyor.** `veritabani` yazınca
-  `veritabanı` bulunmuyor. ğ/ş/ç/ö/ü katlanıyor. Gövdeleme hiç yok.
-  Düzeltmesi Türkçe-farkında tokenizer = yeni bağımlılık. → ADR-0003
+  `veritabanı` bulunmuyor. ğ/ş/ç/ö/ü katlanıyor. Gövdeleme (stemming) hiç
+  yok. Düzeltmesi Türkçe-farkında tokenizer = yeni bağımlılık. → ADR-0003
 - **Jira imzasında replay penceresi yok.** Yakalanmış bir teslim, gizli
   anahtar değişene kadar tekrar oynatılabilir. → ADR-0010
 - **Yeni bir adaptör `MarkTainted` çağırmayı unutursa** özellik sessizce

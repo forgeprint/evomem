@@ -1,0 +1,12 @@
+# The generated Dart lands next to the ARB files, in the project's own lib
+# folder, and is committed. Flutter's old synthetic package is gone, so
+# generated localisations are ordinary source: analysable, greppable, and
+# visible in a diff when a string changes.
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-dir: lib/l10n
+output-localization-file: app_localizations.dart
+# `AppLocalizations.of(context)` returns non-null, so no screen has to
+# decide what to do when the delegate is missing.
+nullable-getter: false
+format: true

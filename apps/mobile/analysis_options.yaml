@@ -1,0 +1,19 @@
+# very_good_analysis is pinned to the exact version, not `^`: a lint set that
+# moves on its own turns an unrelated dependency update into a red build.
+# It is the stricter of the two common sets — flutter_lints 6.0.0 does not
+# enable prefer_const_constructors, unawaited_futures or discarded_futures,
+# and this one enables all three, plus strict-casts, strict-inference and
+# strict-raw-types.
+include: package:very_good_analysis/analysis_options.11.0.0.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+  errors:
+    # Both are already errors by default; naming them here means a future
+    # change to the included set cannot quietly demote them.
+    missing_required_param: error
+    missing_return: error

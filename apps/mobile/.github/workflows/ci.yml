@@ -1,0 +1,53 @@
+# The same gate the setup recipe ends with, run on every push.
+#
+# Actions are pinned by commit, not by tag: a tag is a name its owner can move,
+# and a workflow that trusts a movable name trusts whoever can move it.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The same version the recipe was written against. Flutter decides the
+      # Dart version, the analyzer and the formatter, so an unpinned SDK makes
+      # every one of the checks below move on its own.
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # The generated localisations are committed, so CI regenerates them and
+      # fails if the result differs from what is in the repository.
+      - run: flutter gen-l10n
+      - run: git diff --exit-code lib/l10n
+
+      - run: dart format --output=none --set-exit-if-changed .
+
+      # No --no-fatal-infos: most lints report at info level, and passing that
+      # flag would turn the whole lint set into decoration.
+      - run: flutter analyze
+
+      - run: flutter test
+
+      # The build proof. It needs no device, no emulator and no account.
+      - run: flutter build web --release

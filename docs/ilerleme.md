@@ -651,3 +651,83 @@ store `~/.evomem/evomem.db` ve içinde önceki oturumdan üç not var.
 
 Bu oturumda hiçbir şey önerilmedi; istenirse oturumun bulguları
 `propose_note` ile kuyruğa atılıp `evomem review` ile süzülebilir.
+
+---
+
+## 2026-10-07 — Phase 3 Flutter mobil iskeleti oluşturuldu
+
+### Flutter blueprint ve uzman port edildi
+
+Forgeprint katalogundaki `flutter-mobile-app` blueprint (Flutter 3.47.5, Riverpod 3.4.3, go_router 18.0.2) ve `flutter-mobile-engineer` uzmanı Evomem'e uyarlanarak `apps/mobile/` altına tam bir iskelet oluşturuldu.
+
+### Yapılanlar
+
+**Proje yapısı:**
+- `pubspec.yaml` — Evomem bağımlılıkları (sqflite, path, flutter_secure_storage, intl)
+- `l10n.yaml` + `lib/l10n/app_en.arb` — 30+ çeviri anahtarı, açıklamalarla
+- `analysis_options.yaml` — `very_good_analysis` 11.0.0 pinned, strict-casts/inference/raw-types
+- `lib/src/rules/` — `note.dart`, `note_rules.dart` (Flutter'sız, test edilebilir)
+- `lib/src/state/` — `notes_notifier.dart` (Riverpod Notifier, CRUD + pin toggle)
+- `lib/src/routing/` — `routes.dart`, `router.dart` (typed route objects, errorBuilder)
+- `lib/src/ui/` — 5 ekran: `notes_list_screen.dart`, `note_detail_screen.dart`, `settings_screen.dart`, `sync_status_screen.dart`, `missing_screen.dart`
+- `lib/src/app.dart` — tema (48px min button), l10n, router
+- `lib/main.dart` — ProviderScope + EvomemApp
+
+**Testler (36+ planlandı):**
+- `test/app_harness.dart` — `pumpApp`, `addNote` yardımcıları
+- `test/rules/note_rules_test.dart` — içerik doğrulama, source type, normalize
+- `test/rules/rules_are_flutter_free_test.dart` — framework import yasak kontrolü
+- `test/state/notes_notifier_test.dart` — CRUD, replaceAll, togglePin
+- `test/ui/notes_list_screen_test.dart` — ekle, sil, ara, pin, accessibility (4 guideline)
+- `test/routing/routing_test.dart` — typed routes, navigation, error paths
+
+**CI/CD:**
+- `.github/workflows/ci.yml` — flutter pub get, gen-l10n, format, analyze, test, build web
+- `.github/dependabot.yml` — pub + github-actions haftalık
+
+**Platform dosyaları:**
+- Android: `AndroidManifest.xml` (allowBackup=false, backup_rules.xml exclude secure storage)
+- iOS: `Info.plist` (NSAppTransportSecurity localhost allow)
+- Web: `index.html`, `manifest.json` (PWA ready)
+
+**Mimari kararlar:**
+- Riverpod 3 (NotifierProvider) — tek state yaklaşımı, `ProviderContainer.test()` ile widget'sız test
+- go_router typed routes — location typo impossibility, parameter parsing in one file
+- `lib/src/rules` = plain Dart — framework boundary enforced by test
+- `very_good_analysis` 11.0.0 pinned — 80-char lines, trailing commas, public docs
+- `flutter_secure_storage` — tokens/keys never in shared_preferences
+- Accessibility: `meetsGuideline` (labeledTapTarget, androidTapTarget, iOSTapTarget, textContrast) as build failure
+
+### Doğrulama (Flutter SDK kurulduğunda)
+
+```sh
+cd apps/mobile
+flutter pub get
+flutter gen-l10n
+dart format --output=none --set-exit-if-changed .
+flutter analyze
+flutter test
+flutter build web --release
+```
+
+### Açık kalanlar — [SEN]
+
+1. **Flutter SDK kur** → `flutter doctor` ile doğrula, sonra yukarıdaki komutları çalıştır.
+2. **sqflite entegrasyonu** — `NotesNotifier` şu an in-memory; `sqflite` ile yerel SQLite'e bağlanacak persistence layer yazılacak (`lib/src/storage/`).
+3. **Sync entegrasyonu** — `SyncStatusScreen` placeholder; `evomem serve` endpoint'ine veya doğrudan PostgreSQL'e sync mantığı.
+4. **Ses kaydı** — `audio` source type için `record` paketi + `flutter_secure_storage`'a dosya yolu.
+5. **Türkçe ARB** — `app_tr.arb` eklenirse `flutter gen-l10n` ile otomatik.
+6. **Golden test** — CI'da pinned platform (linux) için eklenecek.
+
+### Bilinen sınırlar
+
+- Flutter SDK henüz makinede yok → `flutter` komutları çalışmaz.
+- `sqflite` henüz bağlanmadı — notlar sadece bellekte kalıyor.
+- iOS/Android build test edilmedi (sadece web build proof).
+- `flutter_secure_storage` Android backup exclude config eklendi ama gerçek cihazda test edilmedi.
+
+### Sırada — kod
+
+1. **Flutter SDK kur** → `apps/mobile` CI'yi yeşil getir.
+2. **sqflite persistence layer** yaz (`lib/src/storage/database.dart` + `notes_dao.dart`), `NotesNotifier`'ı bağla.
+3. **Sync** — `evomem serve`'in `/ingest` endpoint'ini kullanarak push, veya ayrı bir sync endpoint tasarla.
