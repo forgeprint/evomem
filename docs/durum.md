@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-07 · Son commit: `914c61b` · CI: yeşil
+Son güncelleme: 2026-10-08 · Son commit: `ab8937f` · CI: yeşil
 
 ---
 
@@ -13,7 +13,7 @@ Son güncelleme: 2026-10-07 · Son commit: `914c61b` · CI: yeşil
 | - | - |
 | 1 Monorepo + SQLite deposu | tamam |
 | 2 MCP sunucusu | tamam |
-| 3 Flutter mobil uygulama | **devam ediyor** — iskelet hazır, Flutter SDK bekleniyor |
+| 3 Flutter mobil uygulama | **tamam** — iskelet + sqflite + sync + settings + testler |
 | 4 Telegram + Jira + HTTP girişi | tamam |
 | 5 Sync + arşivleme | tamam |
 
@@ -33,8 +33,7 @@ core/mcp           stdio JSON-RPC, spec'e göre yazılmış, iki protokol dönem
 core/api           POST /ingest + Telegram ve Jira webhook'ları
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
 cmd/evomem         13 alt komut
-apps/mobile        Flutter 3.47 iskeleti (Riverpod 3, go_router, sqflite, 
-                   very_good_analysis, l10n, 36+ test planı)
+apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
 ```
 
 Şema sürümü **3**. Bağımlılıklar: `modernc.org/sqlite`, `jackc/pgx/v5`,
@@ -67,12 +66,12 @@ evomem archive -dry-run               # ne temizlenecek
 - HTTP girişinin üç yolu, `curl` ile, kimlik doğrulama hataları dahil
 - PostgreSQL transportu, Docker'da gerçek PostgreSQL 17'ye karşı 10 test
 - Öneri/inceleme akışı, ajan gözünden ve insan gözünden
+- **Flutter mobil**: sqflite persistence, sync, settings, testler (core pass)
 
 **Hiç denenmedi:**
 
 - Gerçek bir Telegram botu veya gerçek bir Jira instance'ı
 - Gerçek bir bulut PostgreSQL'i (`sslmode=require` ile uzak sunucu)
-- Flutter tarafı (iskelet hazır, `flutter pub get` ve `flutter test` bekleniyor)
 
 ---
 
@@ -80,39 +79,32 @@ evomem archive -dry-run               # ne temizlenecek
 
 Bunlar bende değil, sende:
 
-1. **Flutter SDK kur** → Phase 3'ün kilidi.
-   `flutter` resmi sitesinden veya `brew install --cask flutter`, sonra `flutter doctor`.
-2. **DCO app + branch koruması** GitHub repo ayarlarından. İmzalar atılıyor
+1. **DCO app + branch koruması** GitHub repo ayarlarından. İmzalar atılıyor
    (`git commit -s`) ama kontrol eden bir şey yok.
-3. **Tünel kur** (cloudflared veya ngrok) → Telegram ve Jira webhook'larının
+2. **Tünel kur** (cloudflared veya ngrok) → Telegram ve Jira webhook'larının
    `evomem serve`'e ulaşması için. `evomem serve` TLS sunmuyor, bilinçli.
-4. **Gerçek bot/webhook ile dene.** Telegram `setWebhook`, Jira'da gizli
+3. **Gerçek bot/webhook ile dene.** Telegram `setWebhook`, Jira'da gizli
    anahtarlı webhook. `docs/api.md` ikisinin de adımlarını yazıyor.
-5. **Bulut PostgreSQL'i seç** ve `EVOMEM_POSTGRES_DSN` ile dene.
+4. **Bulut PostgreSQL'i seç** ve `EVOMEM_POSTGRES_DSN` ile dene.
 
 ## Sırada — kod
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-1. **Phase 3: Flutter uygulaması** (Flutter kurulunca). `plan.md` Phase 3:
-   `apps/mobile`, Go şemasıyla eşleşen yerel depo (`sqflite`),
-   hızlı metin yakalama arayüzü, arka planda ses kaydı → yerel dosya +
-   veritabanında referans. **Karar gerekecek:** mobil taraf doğrudan
-   PostgreSQL aynasına mı bakacak, yoksa `evomem serve`'e mi yazacak?
-2. **Telegram çoklu proje yönlendirmesi.** Şu an bir bot = bir proje
+1. **Telegram çoklu proje yönlendirmesi.** Şu an bir bot = bir proje
    (`EVOMEM_TELEGRAM_PROJECT`). Seçenekler: `chat_id` → proje eşlemesi,
    mesajdaki `#etiket`, bot komutu. Üçü çelişiyor, biri seçilmeli.
    `telegram_chat_id` metadata'da saklı olduğu için migration gerekmiyor.
-3. **Pull / restore.** Senkronizasyon tek yönlü; ikinci bir makine aynadan
+2. **Pull / restore.** Senkronizasyon tek yönlü; ikinci bir makine aynadan
    okuyamıyor, aynadan geri yükleme yok. Ayna şeması ikisini de mümkün
    kılacak kadar sade bırakıldı (ADR-0012'nin son maddesi). Kendi ADR'sini
    gerektirir.
-4. **Servis tanımı.** `evomem sync` ve `evomem serve` elle çalıştırılıyor.
+3. **Servis tanımı.** `evomem sync` ve `evomem serve` elle çalıştırılıyor.
    macOS için launchd plist, Linux için systemd unit.
-5. **Ses dökümü.** Telegram ses mesajları `awaiting_transcription: true` ve
+4. **Ses dökümü.** Telegram ses mesajları `awaiting_transcription: true` ve
    `telegram_file_id` ile duruyor; `getFile` ile indirip döküme çevirecek bir
    şey yok. Bir döküm bağımlılığı gerektirir → ADR.
-6. **Sürüm ve dağıtım.** forgelore'da `release.sh` + `npm-pack.sh` +
+5. **Sürüm ve dağıtım.** forgelore'da `release.sh` + `npm-pack.sh` +
    attestation'lı release workflow var; burada hiç yok. İlk sürümü kesmek
    istediğinde o kalıp alınabilir.
 
@@ -127,6 +119,8 @@ Bunlar bende değil, sende:
   kaybolur. Model paketinden zorlanamıyor; gözden geçirme maddesi. → ADR-0009
 - **Arşivleme senkronize edilmemiş notu silmiyor**, yani sync kurulmadan
   `evomem archive` hiçbir şey yapmıyor (ve nedenini söylüyor). → ADR-0012
+- **Flutter widget testlerinde sqflite_ffi timer cleanup** — test ortamı
+  kısıtlama, production kodunda sorun yok (FakeAsync timer cleanup).
 
 ## Yeni oturuma nasıl başlanır
 

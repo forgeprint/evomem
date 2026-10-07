@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.forgeprint.evomem-sync</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/evomem</string>
+        <string>sync</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>EVOMEM_STORE_PATH</key>
+        <string>/Users/USERNAME/.evomem/evomem.db</string>
+        <key>EVOMEM_POSTGRES_DSN</key>
+        <string>/Users/USERNAME/.evomem/pg_dsn</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>300</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/USERNAME/.evomem/evomem-sync.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/USERNAME/.evomem/evomem-sync.error.log</string>
+</dict>
+</plist>

@@ -1,0 +1,18 @@
+[Unit]
+Description=Evomem Sync Worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+Environment=EVOMEM_STORE_PATH=/home/%i/.evomem/evomem.db
+Environment=EVOMEM_POSTGRES_DSN=%h/.evomem/pg_dsn
+ExecStart=/usr/local/bin/evomem sync
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

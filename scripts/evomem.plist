@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.forgeprint.evomem</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/evomem</string>
+        <string>serve</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>EVOMEM_STORE_PATH</key>
+        <string>/Users/USERNAME/.evomem/evomem.db</string>
+        <key>EVOMEM_TELEGRAM_SECRET</key>
+        <string>/Users/USERNAME/.evomem/telegram_secret</string>
+        <key>EVOMEM_TELEGRAM_PROJECT</key>
+        <string>default</string>
+        <key>EVOMEM_JIRA_SECRET</key>
+        <string>/Users/USERNAME/.evomem/jira_secret</string>
+        <key>EVOMEM_JIRA_PROJECT</key>
+        <string></string>
+        <key>EVOMEM_INGEST_TOKEN</key>
+        <string>/Users/USERNAME/.evomem/ingest_token</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/USERNAME/.evomem/evomem.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/USERNAME/.evomem/evomem.error.log</string>
+</dict>
+</plist>

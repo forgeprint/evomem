@@ -1,0 +1,22 @@
+[Unit]
+Description=Evomem Memory Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+Environment=EVOMEM_STORE_PATH=/home/%i/.evomem/evomem.db
+Environment=EVOMEM_TELEGRAM_SECRET=%h/.evomem/telegram_secret
+Environment=EVOMEM_TELEGRAM_PROJECT=default
+Environment=EVOMEM_JIRA_SECRET=%h/.evomem/jira_secret
+Environment=EVOMEM_JIRA_PROJECT=
+Environment=EVOMEM_INGEST_TOKEN=%h/.evomem/ingest_token
+ExecStart=/usr/local/bin/evomem serve
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
