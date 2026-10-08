@@ -3,7 +3,8 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-08 (üçüncü oturum) · Son commit: `52c87ff` sonrası · CI: yeşil (doğrulandı)
+Son güncelleme: 2026-10-08 (dördüncü oturum) · Son commit: `a3fe900` · Sürüm: **v0.1.1 yayında**
+CI: Go tarafı yeşil, **Flutter işi kırmızı**
 
 ---
 
@@ -88,33 +89,33 @@ Bunlar bende değil, sende:
 3. **Gerçek bot/webhook ile dene.** Telegram `setWebhook`, Jira'da gizli
    anahtarlı webhook. `docs/api.md` ikisinin de adımlarını yazıyor.
 4. **Bulut PostgreSQL'i seç** ve `EVOMEM_POSTGRES_DSN` ile dene.
-5. **İlk sürümü kes.** Workflow hazır, hiç çalışmadı:
-
-   ```sh
-   git push origin main          # workflow GitHub'da olmalı, yoksa tag boşa gider
-   git tag -s v0.1.0 -m "v0.1.0"
-   git push origin v0.1.0
-   ```
-
-   Sonra GitHub'da taslağı oku ve yayınla. `gh run watch` ile izlenebilir.
+5. ~~İlk sürümü kes.~~ **v0.1.1 yayında.** Sonraki sürüm için tek iş:
+   `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`, sonra taslağı
+   oku ve yayınla.
 
 ## Sırada — kod
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-1. **Ses dökümü.** Telegram ses mesajları `awaiting_transcription: true` ve
+1. **Flutter işini yeşile çek.** `dart format` düzeltildi, ama
+   `flutter analyze` 124 uyarı veriyor (109'u `lib/`; `ci.yml` bilinçli
+   olarak `--no-fatal-infos` kullanmadığı için hepsi işi düşürüyor) ve 3
+   widget testi düşüyor. Mekanik olmayanlar: `use_build_context_synchronously`
+   (2), `avoid_catches_without_on_clauses` (5) ve yukarıdaki `SizedBox`
+   hatası.
+2. **Ses dökümü.** Telegram ses mesajları `awaiting_transcription: true` ve
    `telegram_file_id` ile duruyor; `getFile` ile indirip döküme çevirecek
    hiçbir şey yok. ADR-0016 kararı verilmiş (**proposed**, self-hosted
    faster-whisper + yerel Whisper.cpp yedeği) ama tek satır kod yazılmadı.
    `core/api/adapters/transcription` paketi yok.
-2. **Flutter tarafı ses kaydı → döküm zinciri.** Mobilde kayıt var, dökümü
+3. **Flutter tarafı ses kaydı → döküm zinciri.** Mobilde kayıt var, dökümü
    tetikleyen bir şey yok; (1) bitmeden anlamı yok.
 
 **Sürüm ve dağıtım tamam** (ADR-0017): `.github/workflows/release.yml` `v*`
 tag'inde `scripts/release.sh`'i temiz runner'da çalıştırır, `dist/`'in her
-dosyasını — `SHA256SUMS` dahil — attest eder ve release'i **taslak** olarak
-açar. Yayınlamak sende. İlk sürüm henüz kesilmedi ve workflow gerçek bir
-tag'le hiç çalışmadı; ilk tag aynı zamanda ilk denemesi olacak.
+dosyasını — `SHA256SUMS` dahil — attest eder ve release'i taslak açar.
+**v0.1.1 kesildi, notları yazıldı ve yayınlandı**; workflow ilk denemede
+geçti. İndirilen ikili `gh attestation verify` ile doğrulandı.
 
 Plan'daki (`plan.md`) beş fazın bütün kutuları işaretli. Kalan iş plan dışı:
 döküm, dağıtım ve gerçek dünya denemeleri.
@@ -130,8 +131,11 @@ döküm, dağıtım ve gerçek dünya denemeleri.
   kaybolur. Model paketinden zorlanamıyor; gözden geçirme maddesi. → ADR-0009
 - **Arşivleme senkronize edilmemiş notu silmiyor**, yani sync kurulmadan
   `evomem archive` hiçbir şey yapmıyor (ve nedenini söylüyor). → ADR-0012
-- **Flutter widget testlerinde sqflite_ffi timer cleanup** — test ortamı
-  kısıtlama, production kodunda sorun yok (FakeAsync timer cleanup).
+- ~~**Flutter widget testlerinde sqflite_ffi timer cleanup** — test ortamı
+  kısıtlaması~~ **Bu teşhis yanlıştı.** Düşen üç test gerçek bir layout
+  hatasından: `lib/src/ui/settings_screen.dart:194` sınırsız genişlikte bir
+  `SizedBox` veriyor, `BoxConstraints forces an infinite width`. Production
+  kodunda.
 - **`evomem mcp -quiet` yalnızca stderr'i susturur**, protokol çıktısını
   değil. stdout protokolün; sunucunun kendisi hakkında söylediği her şey
   stderr'e gider.

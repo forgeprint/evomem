@@ -70,5 +70,7 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 - [x] Tag ile tetiklenen release workflow'u (`.github/workflows/release.yml`):
       `scripts/release.sh` temiz runner'da çalışır, `dist/*` attest edilir,
       release **taslak** olarak açılır — yayınlama insanın işi. → ADR-0017
-- [ ] İlk sürümün kesilmesi (`git tag -s v0.1.0` → push → taslağı oku → yayınla)
+- [x] İlk sürüm kesildi ve yayınlandı: **v0.1.1**. (`v0.1.0` tag'i workflow'dan
+      önce atılmıştı, release'i hiç olmadı; oynatılmadı, yenisi kesildi.)
+      `gpg` kurulu olmadığı için tag `-s` değil `-a` ile atıldı.
 - [ ] Ses dökümü (`core/api/adapters/transcription`) → ADR-0016 hâlâ *proposed*

@@ -916,3 +916,50 @@ PostgreSQL'i).
 Workflow **hiç tetiklenmedi** — GitHub'da ne tag var ne release. İlk tag aynı
 zamanda workflow'un ilk denemesi olacak. Commit'ler de henüz push edilmedi;
 workflow uzakta olmadan atılan bir tag boşa gider.
+
+---
+
+## 2026-10-08 (beşinci oturum) — v0.1.1 yayınlandı
+
+### Tag sorunu
+
+`v0.1.0` zaten vardı, hem yerelde hem uzakta, ama `b0a8d11`'i — workflow'dan
+önceki bir commit'i — gösteriyordu ve release'i hiç olmamıştı. Oynatılmadı:
+ADR-0017'nin kendi gerekçesi "oynatılmış tag, oynatılmış release" diyor.
+Yenisi kesildi.
+
+**`gpg` bu makinede kurulu değil**, yani `git tag -s` çalışamazdı. `v0.1.0` da
+imzasız (annotated) olduğu için `-a` ile atıldı. Tag imzalamak istenirse önce
+`gpg` kurulumu gerekir; `scripts/release.sh` iki seçeneği de yazıyor.
+
+### Yapılanlar
+
+- `v0.1.1` tag'i `a3fe900`'de atıldı ve push edildi
+- **Release workflow'u ilk denemede geçti** (2m48s): beş hedef derlendi,
+  `dist/*` attest edildi, taslak açıldı
+- Taslağın notları `--generate-notes` ile yalnızca bir compare linkiydi — her
+  şey doğrudan main'e push edildiği için PR yok. Notlar elle yazıldı: ne
+  içerdiği, bilinen sınırlar (ADR referanslarıyla), doğrulama komutu ve
+  Flutter uygulamasının bu artefaktların parçası **olmadığı**
+- Release yayınlandı: https://github.com/forgeprint/evomem/releases/tag/v0.1.1
+- `dart format` apps/mobile'da koşuldu (22 dosya) — Flutter işi bunda düşüyordu
+
+### Doğrulama (indirilen artefakt üzerinde, yereldeki değil)
+
+```
+gh attestation verify evomem-v0.1.1-darwin-arm64 --repo forgeprint/evomem → exit 0
+  workflow: .../release.yml@refs/tags/v0.1.1
+  commit:   a3fe90052a6f9bf51a771dec4facbf0dc8ed13a4
+SHA256SUMS ↔ shasum -a 256  → eşleşti
+./evomem-v0.1.1-darwin-arm64 version → v0.1.1
+```
+
+### Flutter'da yanlış kaydedilmiş bir şey bulundu
+
+`durum.md` düşen widget testlerini "sqflite_ffi timer cleanup, test ortamı
+kısıtlaması, production'da sorun yok" diye kaydetmişti. **Doğru değil.**
+`settings_screen.dart:194` sınırsız genişlikte bir `SizedBox` veriyor ve
+layout `BoxConstraints forces an infinite width` ile patlıyor — production
+kodunda bir hata. Üç test bu yüzden düşüyor. Ayrıca `flutter analyze` 124
+uyarı veriyor ve `ci.yml` `--no-fatal-infos` kullanmadığı için Flutter işi
+kırmızı kalıyor. Sıradaki iş bu.
