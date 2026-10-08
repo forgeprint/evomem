@@ -1463,3 +1463,55 @@ kadar yalnızca web için derlenmiş (CI'ın yaptığı da o). Dolayısıyla:
 kaydını düşürüyor (dev_dependency olduğu için). Bu kez `RecordPlugin`'in
 eklenmesi gerekiyordu, o yüzden dosya geri alınmadı; ikisi elle birlikte
 tutuldu.
+
+---
+
+## 2026-10-08 (on üçüncü oturum) — Forgeprint yetenekleri kuruldu
+
+Kodla ilgili değil; ajan tarafı.
+
+### Zaten kuruluymuş
+
+`forgeprint` marketplace'i ekliymiş, `forgelore` plugin'i kuruluymuş (v0.1.0)
+ve `forgelore` ikilisi PATH'teymiş (v0.1.10) — **ama plugin devre dışıydı**,
+yani hiçbir şey yapmıyordu.
+
+### Kurulanlar
+
+- **forgeprint MCP sunucusu**, kullanıcı kapsamında:
+  `claude mcp add forgeprint -s user -- npx -y forgeprint-mcp`. On araç:
+  `resolve`, `recommend_experts`, `get_expert`, `get_crew`, `get_integration`,
+  `search_blueprints`, `get_blueprint`, `compare_blueprints`,
+  `validate_blueprint`, `request_blueprint`.
+- **Beş expert**, `.claude/skills/` altına (her biri SKILL.md + altı checklist
+  + overview + references, toplam 284K): `go-backend-engineer`,
+  `go-senior-architect`, `flutter-mobile-engineer`, `dart-senior-architect`,
+  `security-reviewer`. Katalogdaki `write_to` alanının söylediği yere.
+- **forgelore etkinleştirildi** ve bu depoda `forgelore init` ile başlatıldı.
+  Dört hook (SessionStart, PostToolUseFailure, PostToolUse, SessionEnd), hepsi
+  harness tarafında, modele her oturumda eklenen maliyeti ~0 token.
+
+### Durum notları
+
+- `forgelore doctor`: store `.forgelore`, 0 kayıt, gitleaks bulunmuş,
+  claude-code eşlemesi 2.1.290'a karşı doğrulanmış, bizdeki 2.1.293.
+- `.forgelore/records` commit'lenmek üzere, `cache/`, `local/` ve `ledger/`
+  kendi `.gitignore`'u ile dışarıda.
+- **Kayıtlar sır taşımamalı.** `forgelore check` ayrı bir adım olarak
+  eklenmedi, çünkü `scripts/ci.sh` gitleaks'i çalışma ağacının tamamında
+  çalıştırıyor ve `.forgelore/records` o ağacın içinde.
+- forgelore `init` çıktısı AGENTS.md'ye bir satır eklenmesini öneriyor;
+  evomem'de AGENTS.md yok, rehber `CLAUDE.md`. Eklenmedi.
+
+### İki bulgu
+
+1. **npm'deki sürüm geride.** Depo ve yerel checkout `0.5.0`
+   (`packages/mcp-server/package.json`), npm'de yayınlanmış olan `0.4.5`.
+   `npx` 0.4.5 çekiyor, yani sunucu deponun son halini değil yayınlanmış
+   halini çalıştırıyor.
+2. **Resolver bu proje için yanlış cevap verdi.** Go+Flutter monorepo
+   tarifine `mobile-app-crew` önerdi; o crew React Native/Expo için ve kendi
+   `not_for` alanı "A Flutter or native Android app, backend work" diyor.
+   Katalogdaki 17 crew içinde Flutter olan yok. Expert'ler tek tek doğru
+   (`flutter-mobile-engineer`, `dart-senior-architect` mevcut); eksik olan
+   onları bir araya getiren crew. Forgeprint kataloğunda bir boşluk.

@@ -1,0 +1,8 @@
+# Derived. Rebuilt from the records whenever it is missing (K9).
+cache/
+
+# Personal. Records in this scope are yours and are not shared (K10).
+local/
+
+# Measurements. Local, and never leaves the machine (K12).
+ledger/
