@@ -14,7 +14,7 @@ CI: **tamamı yeşil** (go, crosscheck, flutter)
 | - | - |
 | 1 Monorepo + SQLite deposu | tamam |
 | 2 MCP sunucusu | tamam |
-| 3 Flutter mobil uygulama | **tamam** — iskelet + sqflite + sync + settings + testler |
+| 3 Flutter mobil uygulama | kısmen — iskelet + sqflite + sync + settings + testler; **ses kaydı yok** |
 | 4 Telegram + Jira + HTTP girişi | tamam |
 | 5 Sync + arşivleme | tamam |
 
@@ -71,7 +71,7 @@ evomem transcribe                     # kuyruğu işle (servis yoksa kapalı)
 - HTTP girişinin üç yolu, `curl` ile, kimlik doğrulama hataları dahil
 - PostgreSQL transportu, Docker'da gerçek PostgreSQL 17'ye karşı 10 test
 - Öneri/inceleme akışı, ajan gözünden ve insan gözünden
-- **Ses dökümü**: sahte bir OpenAI-uyumlu servis ve sahte bir Bot API ile
+- **Ses dökümü (yalnızca Telegram yolu)**: sahte bir OpenAI-uyumlu servis ve sahte bir Bot API ile
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
@@ -104,11 +104,20 @@ Bunlar bende değil, sende:
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-1. **Mobildeki kayıtların dökümü.** Flutter tarafında kayıt var; dosyalar
-   telefonda duruyor ve sunucuya taşıyacak bir yol yok. ADR-0016 bunu
-   bilinçli olarak kapsam dışı bıraktı — bir yükleme yolu ve kendi ADR'si
-   gerekiyor.
-2. **Dökümü onaylama akışı.** `tainted` ve `transcribed` işaretlerini
+1. **Mobilde ses kaydı — yolu kararlaştırıldı, hiçbiri yazılmadı.**
+   ADR-0018: telefon sesi `POST /ingest/audio?note=<id>` ile yükler, dosya
+   veritabanının yanında durur, `evomem transcribe` onu `Fetcher` dikişinden
+   işler. Dört parça iş: (a) mobilde kaydın kendisi — paket, izinler, arayüz
+   (ADR-0018 kapsam dışı bıraktı), (b) endpoint ve yerel dosya `Fetcher`'ı,
+   (c) telefonun `/ingest`'ten dönen id'yi saklaması, (d) not silinince ses
+   dosyasının da silinmesi.
+
+   **Mobilde ses kaydı diye bir şey yok.** `plan.md`'de o kutu yanlış
+   işaretliymiş; ADR-0016 de bu yanlışı tekrarlamış. İkisi de düzeltildi.
+2. **Push idempotent değil.** Telefon `/ingest`'in döndürdüğü id'yi atıyor ve
+   `/ingest` her çağrıda yeni not yaratıyor; yarıda kalan bir batch sonraki
+   koşuda notları ikinci kez yazar. (c) ile aynı düzeltme kapatıyor.
+3. **Dökümü onaylama akışı.** `tainted` ve `transcribed` işaretlerini
    temizleyen hiçbir şey yok; bir insanın dökümü okuyup onayladığını
    söyleyebileceği bir komut yok. ADR-0016 bunu ayrı bir karar olarak
    bıraktı.

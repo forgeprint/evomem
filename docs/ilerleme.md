@@ -1168,3 +1168,66 @@ bırakıldı.
 **Gerçek bir whisper sunucusu.** Sahte servis dokümantasyondaki sözleşmeyi
 taklit ediyor; faster-whisper'ın gerçekten bu sözleşmeyi aynı şekilde
 uyguladığı denenmedi.
+
+---
+
+## 2026-10-08 (dokuzuncu oturum) — ADR-0018: mobildeki kayıtlar
+
+### Yazmadan önce bulunan iki yanlış kayıt
+
+`plan.md`'de Phase 3 altında şu kutu **işaretliydi**:
+
+> - [x] Implement background-ready audio recording module saving raw files
+>   locally to native storage directories and appending references to the
+>   local DB.
+
+**Mobilde ses kaydı diye bir şey yok.** `pubspec.yaml`'da kayıt paketi yok,
+iki platformun manifest'inde mikrofon izni yok, yakalama arayüzü yok, dosya
+işi yok. `apps/mobile/lib` içinde "audio" kelimesinin tek geçtiği yer, kaynak
+tiplerini sayan bir yorum satırı.
+
+Dahası, **ADR-0016'da bu yanlışı ben tekrarlamışım**: "Phase 3 saves audio
+files locally with references in the Flutter database" diye yazmış ve
+dayanağı o işaretli kutuymuş. Kutu da, ADR-0016'nın o maddesi de düzeltildi.
+
+### Kararı şekillendiren asıl bulgu
+
+`/ingest` not kimliğini **istemciden almıyor** — sunucuda ULID üretip
+döndürüyor. Telefon ise (`_pushNotesBatch`) yalnızca 201'e bakıp o id'yi
+**atıyor**. İki sonucu var:
+
+- Bir ses dosyası hiçbir nota eklenemez; telefon sunucudaki notun adını
+  bilmiyor.
+- **Push idempotent değil.** Yarıda kalan bir batch, sonraki koşuda kabul
+  edilmiş notları yeniden gönderir ve sunucu onları yeni id'lerle yeniden
+  yazar. Bu sesten bağımsız, önceden var olan bir hata.
+
+İkincisi ADR'ye bu yüzden girdi: ses çalışmadan önce birincisinin düzelmesi
+gerekiyor ve aynı düzeltme ikisini de kapatıyor.
+
+### Verilen kararlar (üçü de kullanıcının seçimi)
+
+1. **Taşıma: telefon sesi sunucuya yükler.** Alternatif — telefonun doğrudan
+   whisper'a konuşması — hiçbir şey kazandırmıyordu: döküm servisi zaten
+   PostgreSQL aynasının yanında ve telefonun evomem'e ulaştığı tünelin
+   arkasında, yani telefon ikinci bir kimlik bilgisi ve Dart'ta ikinci bir
+   döküm kod yolu taşıyıp aynı yere varacaktı.
+2. **Saklama: dosya dökümden sonra sunucuda kalır.** Benim önerim silmekti;
+   kullanıcı saklamayı seçti. Maliyetleri ADR'de gizlenmeden yazılı:
+   sınırsız disk büyümesi, ADR-0012'nin arşivlemesinin ses dosyalarını
+   kapsamaması, ve **not silinince dosyanın da silinmesi zorunluluğu** —
+   bu son madde isteğe bağlı değil, çünkü silinmiş içeriğin diskte yaşaması
+   yer kaybından kötü.
+3. **Kapsam: yalnızca taşıma.** Kaydın kendisi — paket, ses formatı, iki
+   platformun izin akışı, arayüz — yazılacağı oturumun işi.
+
+Protokol iki adımlı, çünkü id sunucudan geliyor: `POST /ingest` → dönen
+`id` → `POST /ingest/audio?note=<id>`. Endpoint `EVOMEM_API_TOKEN` yoksa hiç
+kayıtlı değil (ADR-0010) ve 20 MiB ile sınırlı — ADR-0010'un 1 MiB kuralından
+bilinçli sapma, yalnızca bu endpoint için, gerekçesi ADR'de.
+
+### Hiçbir kod yazılmadı
+
+Bu oturumda yalnızca karar kaydedildi. Dört parça iş açık: mobilde kayıt,
+endpoint + yerel dosya `Fetcher`'ı, telefonun `remote_id`'yi saklaması, ve
+silme yolunun dosyayı da silmesi.

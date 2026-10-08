@@ -50,7 +50,11 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 - [x] Initialize clean Flutter environment inside `apps/mobile` utilizing Dart.
 - [x] Configure local embedded storage using a solid local-first package matching the Go schema architecture (e.g., `sqflite` or `drift`).
 - [x] Build minimalist user interfaces for swift text capturing.
-- [x] Implement background-ready audio recording module saving raw files locally to native storage directories and appending references to the local DB.
+- [ ] Implement background-ready audio recording module saving raw files locally to native storage directories and appending references to the local DB.
+      **Bu kutu 2026-10-08'e kadar yanlış olarak işaretliydi.** Mobilde ses
+      kaydı diye bir şey yok: ne paket, ne mikrofon izni, ne arayüz. Sesin
+      sunucuya nasıl ulaşacağı ADR-0018'de kararlaştırıldı; kaydın kendisi
+      henüz yazılmadı.
 
 ## Phase 4: Integration Adaptors & Ingestion Trigger Engines
 - [x] Implement Telegram Ingestion Handler (`core/api/adapters/telegram`): Parse text payloads or voice metadata via Telegram Bot API webhooks and ingest them as records using `source_type: "telegram"`.
@@ -75,5 +79,9 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
       `gpg` kurulu olmadığı için tag `-s` değil `-a` ile atıldı.
 - [x] Ses dökümü (`core/transcribe` + `evomem transcribe`) → ADR-0016;
       OpenAI-uyumlu harici servis, yerel yedek yok, yapılandırılmazsa kapalı
-- [ ] Mobildeki kayıtların sunucuya taşınması (ADR-0016 kapsam dışı bıraktı)
+- [ ] Mobilde ses kaydının kendisi (paket, izinler, arayüz) — ADR-0018 kapsam dışı
+- [ ] `POST /ingest/audio` + yerel dosya `Fetcher`'ı → ADR-0018
+- [ ] Telefonun `/ingest`'ten dönen id'yi saklaması (`remote_id`); bugün atıyor,
+      bu yüzden push idempotent değil → ADR-0018
+- [ ] Not silindiğinde ses dosyasının da silinmesi → ADR-0018
 - [ ] Dökümü onaylayıp işaretleri temizleyen akış (ayrı karar)

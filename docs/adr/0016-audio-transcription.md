@@ -151,10 +151,15 @@ where nobody can tell what happened to it.
 
 ### Explicitly not decided here
 
-- **The mobile app's own recordings.** Phase 3 saves audio files locally with
-  references in the Flutter database. Those files are not on the server and
-  there is no path that would carry them there. Reaching them needs an upload
-  route that does not exist, and that is its own ADR.
+- **The mobile app's own recordings.** Decided since, in
+  [ADR-0018](0018-mobile-recordings.md): the phone uploads them to evomem and
+  `evomem transcribe` handles them through the `Fetcher` seam, like any other
+  source.
+
+  This entry claimed Phase 3 "saves audio files locally with references in the
+  Flutter database". **That was wrong** — it repeated a ticked box in
+  `plan.md`, and there is no recording in the mobile app at all. ADR-0018 has
+  the correction.
 - **Which speech implementation.** Including whether it runs on CPU or a GPU.
   The draft's claim that faster-whisper is "fast enough on CPU" was never
   measured and is not repeated here.
