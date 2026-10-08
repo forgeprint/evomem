@@ -871,3 +871,48 @@ Beş fazın bütün kutuları işaretli. Plan dışı kalan: ses dökümü (ADR-
 kararı var, kod yok), release workflow'u (`release.sh` var, GitHub tarafı
 yok), ve `durum.md`'deki [SEN] maddeleri (DCO, tünel, gerçek bot, bulut
 PostgreSQL'i).
+
+---
+
+## 2026-10-08 (dördüncü oturum) — Release workflow'u
+
+### Yapılanlar
+
+- **`.github/workflows/release.yml`** — `v*` tag'inde tetiklenir, dalda asla.
+  Üç adım: `scripts/release.sh "${GITHUB_REF_NAME}"`, `dist/*`'ın
+  attestation'ı, sonra `gh release create --draft`. Yayınlama insanın işi.
+- **`docs/adr/0017-release-provenance.md`** — kararın kaydı, maliyetleriyle:
+  tek workflow'da üç izin, SHA pinlerinin sessizce eskimesi, sürüm başına iki
+  derleme, unutulabilen taslak.
+- **`scripts/release.sh`** — var olmayan bir install script'ine atıf yapıyordu;
+  yerine `gh attestation verify` yazıldı.
+
+### Kararlar
+
+- **Attestation yüklemeden *önce*.** Orada bir hata işi düşürür ve düzeltilecek
+  yayınlanmış bir release olmaz. Konusu `dist/*`, yani `SHA256SUMS` de dahil:
+  kimseye atfedilemeyen bir checksum dosyası hiçbir şey kanıtlamaz.
+- **Action'lar burada tag değil commit SHA'sına pinli** (`ci.yml`'de `@v7`
+  kalıyor). Bu, depoda bir şey yazabilen tek workflow; oynatılmış bir tag
+  oynatılmış bir release demek olurdu.
+- **Taslak, otomatik yayın değil.** Yanlış yazılmış bir tag beklemede kalır,
+  yayında kalmaz.
+
+### Doğrulama
+
+- Action sürümleri ve SHA'ları hafızadan yazılmadı: `gh api` ile
+  `actions/checkout` v7.0.1 (`3d3c42e…`), `actions/setup-go` v7.0.0
+  (`b7ad1da…`), `actions/attest-build-provenance` v4.2.2 (`4d10147…`)
+  çözüldü; `subject-path` ve `go-version-file` girdileri action.yml'lerinden
+  okundu (2026-10-08).
+- Workflow YAML'i parse edildi; tetikleyici, izinler ve beş adım doğrulandı.
+- `./scripts/release.sh v0.1.0` baştan sona çalıştı: ci.sh yeşil, beş hedef
+  derlendi, SHA256SUMS kendi yazdığı bayta karşı doğrulandı.
+- `./dist/evomem-v0.1.0-darwin-arm64 version` → `v0.1.0`, yani tag ikiliye
+  gerçekten damgalanıyor.
+
+### Açık kalan
+
+Workflow **hiç tetiklenmedi** — GitHub'da ne tag var ne release. İlk tag aynı
+zamanda workflow'un ilk denemesi olacak. Commit'ler de henüz push edilmedi;
+workflow uzakta olmadan atılan bir tag boşa gider.

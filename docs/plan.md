@@ -65,3 +65,10 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 - [x] Implement archiving rules filtering records older than 6 months to thin down the active local SQLite database footprint on demand.
 - [x] Implement `evomem pull` (delta sync from remote) and `evomem restore` (full restore from remote) CLI commands.
 - [x] Add `PullNotes` and `PullAll` methods to PostgreSQL transport for Remote interface.
+
+## Plan dışı: dağıtım
+- [x] Tag ile tetiklenen release workflow'u (`.github/workflows/release.yml`):
+      `scripts/release.sh` temiz runner'da çalışır, `dist/*` attest edilir,
+      release **taslak** olarak açılır — yayınlama insanın işi. → ADR-0017
+- [ ] İlk sürümün kesilmesi (`git tag -s v0.1.0` → push → taslağı oku → yayınla)
+- [ ] Ses dökümü (`core/api/adapters/transcription`) → ADR-0016 hâlâ *proposed*

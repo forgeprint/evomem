@@ -88,6 +88,15 @@ Bunlar bende değil, sende:
 3. **Gerçek bot/webhook ile dene.** Telegram `setWebhook`, Jira'da gizli
    anahtarlı webhook. `docs/api.md` ikisinin de adımlarını yazıyor.
 4. **Bulut PostgreSQL'i seç** ve `EVOMEM_POSTGRES_DSN` ile dene.
+5. **İlk sürümü kes.** Workflow hazır, hiç çalışmadı:
+
+   ```sh
+   git push origin main          # workflow GitHub'da olmalı, yoksa tag boşa gider
+   git tag -s v0.1.0 -m "v0.1.0"
+   git push origin v0.1.0
+   ```
+
+   Sonra GitHub'da taslağı oku ve yayınla. `gh run watch` ile izlenebilir.
 
 ## Sırada — kod
 
@@ -98,12 +107,14 @@ Bunlar bende değil, sende:
    hiçbir şey yok. ADR-0016 kararı verilmiş (**proposed**, self-hosted
    faster-whisper + yerel Whisper.cpp yedeği) ama tek satır kod yazılmadı.
    `core/api/adapters/transcription` paketi yok.
-2. **Sürüm ve dağıtım.** `scripts/release.sh` var ve `dist/` içinde v0.1.0
-   ikilileri duruyor, ama GitHub'da release workflow'u yok — `.github/workflows`
-   altında yalnızca `ci.yml`. forgelore'daki attestation'lı workflow kalıbı
-   alınabilir. İlk sürüm henüz kesilmedi.
-3. **Flutter tarafı ses kaydı → döküm zinciri.** Mobilde kayıt var, dökümü
+2. **Flutter tarafı ses kaydı → döküm zinciri.** Mobilde kayıt var, dökümü
    tetikleyen bir şey yok; (1) bitmeden anlamı yok.
+
+**Sürüm ve dağıtım tamam** (ADR-0017): `.github/workflows/release.yml` `v*`
+tag'inde `scripts/release.sh`'i temiz runner'da çalıştırır, `dist/`'in her
+dosyasını — `SHA256SUMS` dahil — attest eder ve release'i **taslak** olarak
+açar. Yayınlamak sende. İlk sürüm henüz kesilmedi ve workflow gerçek bir
+tag'le hiç çalışmadı; ilk tag aynı zamanda ilk denemesi olacak.
 
 Plan'daki (`plan.md`) beş fazın bütün kutuları işaretli. Kalan iş plan dışı:
 döküm, dağıtım ve gerçek dünya denemeleri.

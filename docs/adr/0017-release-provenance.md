@@ -38,7 +38,7 @@ artifacts at all.
 Three things follow from building on the runner rather than a laptop:
 
 - **The version comes from the tag.** The workflow has no other input, so the
-  string in `evomem -version` is the ref it was built from. This is why the
+  string in `evomem version` is the ref it was built from. This is why the
   trigger is tags and not branches: a branch build would stamp something that
   cannot be pointed at later.
 - **`actions/attest-build-provenance` can attest the artifacts**, because
