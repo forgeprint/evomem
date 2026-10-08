@@ -79,7 +79,11 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
       `gpg` kurulu olmadığı için tag `-s` değil `-a` ile atıldı.
 - [x] Ses dökümü (`core/transcribe` + `evomem transcribe`) → ADR-0016;
       OpenAI-uyumlu harici servis, yerel yedek yok, yapılandırılmazsa kapalı
-- [ ] Mobilde ses kaydının kendisi (paket, izinler, arayüz) — ADR-0018 kapsam dışı
+- [x] Mobilde ses kaydı: `record` 7.1.1, mono/16 kHz m4a, izinler, kayıt düğmesi,
+      ve kabul edilen notun dosyasının `/ingest/audio`'ya yüklenmesi
+- [ ] Android/iOS derleme dosyaları (`build.gradle`, `Podfile`, Xcode projesi);
+      minSdk 23 / iOS 12 oraya yazılacak. Bunlar olmadan kayıt gerçek bir
+      cihazda hiç denenemez.
 - [x] `POST /ingest/audio` + `shared/audio` deposu + yerel dosya `Fetcher`'ı → ADR-0018
 - [x] Telefonun `/ingest`'ten dönen id'yi saklaması (`remote_id`, mobil şema v4);
       push artık idempotent → ADR-0018

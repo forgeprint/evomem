@@ -1392,3 +1392,74 @@ Süit üst üste iki kez yeşil koştu.
   korundu, kolon eklendi, `remote_id` boş geldi, `schema_version` 4 oldu.
 - `pub get`/build'in yeniden ürettiği iki dosya yine geri alındı
   (`.gitignore`, `GeneratedPluginRegistrant.java`) — geçen oturumda olduğu gibi
+
+---
+
+## 2026-10-08 (on ikinci oturum) — Mobilde ses kaydı
+
+ADR-0018 zincirinin son halkası. Flutter testleri 53 → **67**.
+
+### Paket seçimi (ADR-0018 bunu kapsam dışı bırakmıştı)
+
+**`record` 7.1.1** ve **`path_provider` 2.1.6**, pub.dev'den 2026-10-08'de
+doğrulandı. API hafızadan yazılmadı: `AudioRecorder` ile `hasPermission`,
+`start(RecordConfig, path:)`, `stop()`, `cancel()`, `dispose()`;
+`RecordConfig`'in varsayılan encoder'ı `AudioEncoder.aacLc`. Kodda adres ve
+tarihle duruyor.
+
+Kayıt ayarları paketin varsayılanlarından sapıyor: **mono, 16 kHz, 32 kbit/s**
+(varsayılan stereo/44.1 kHz/128 kbit/s). Üç gerekçe aynı yöne bakıyor: döküm
+modeli her şeyden önce 16 kHz mono'ya indiriyor, yani fazlası varışta atılıyor;
+yükleme 20 MiB ile sınırlı ve varsayılanlar bunu ~20 dakikada, bu ayarlar
+~90 dakikada dolduruyor; ve tünelin arkasındaki telefon zincirin en yavaş yeri.
+
+### Yazılanlar
+
+- `lib/src/audio/voice_recorder.dart` — `VoiceRecorder` arayüzü ve paket
+  üzerindeki uygulaması. Arayüz testler için: mikrofonu hiçbir test
+  konuşturamaz, ama üstündeki her şey (izin reddi, boş kayıt, yazılmamış
+  dosya, iptal) taklitle test edilebilir.
+- `lib/src/audio/recording_controller.dart` — başlat/durdur/iptal ve kaydı
+  nota çevirme. Not içeriği kaydı **tarif ediyor** (`Voice note, 0:07`),
+  yer tutucu değil: döküm hiç çalışmazsa arama indeksinde duran metin bu.
+  `awaiting_transcription`, süre ve yerel dosya yolu metadata'da.
+- `notes_list_screen` — "Add Note"un yanına kayıt düğmesi; uzun basış iptal.
+- `sync_service` — not kabul edilip `remote_id` geldikten sonra dosyayı
+  `POST /ingest/audio?note=<id>`'ye `audio/m4a` olarak yüklüyor. **Yükleme
+  hatası push'u düşürmüyor**: not saklanmış ve gönderilmiş durumda, dosya
+  sonraki koşuya kalıyor.
+- İzinler: Android `RECORD_AUDIO`, iOS `NSMicrophoneUsageDescription`.
+- Yedi yeni l10n dizesi — komşu düğme l10n kullanırken bunları sabit
+  bırakmak tutarsız olurdu.
+
+### Doğrulama
+
+- 67 Flutter testi, üç koşu üst üste; `analyze`, `format`, l10n, web release
+  build hepsi temiz
+- **Gerçek sunucuya karşı uçtan uca**: uygulamanın yazdığı gövdeyle `/ingest`
+  → id, `.m4a` yükleme → 204, dosya `audio/<id>.m4a` olarak diskte,
+  `evomem transcribe` dökümü yazdı, döküm servisi dosyayı `.m4a` adıyla
+  gördü, notun içeriği değişti ve `transcription_replaced` eski tarifi
+  tuttu.
+
+### Doğrulanamayan — ve nedeni
+
+**Gerçek bir mikrofon denenmedi, denenemez de:** `android/` ve `ios/`
+ağaçlarında **derleme dosyaları yok** — ne `build.gradle`, ne
+`settings.gradle`, ne `Podfile`, ne `Runner.xcodeproj`. Bu uygulama bugüne
+kadar yalnızca web için derlenmiş (CI'ın yaptığı da o). Dolayısıyla:
+
+- `record` 7.1.1'in istediği **minSdk 23** ve **iOS 12** hiçbir yere
+  yazılamadı; ikisi de manifest/Info.plist içine yorum olarak düşüldü ve
+  Android/iOS derleme dosyaları yaratıldığında ayarlanmaları gerekiyor.
+- Mikrofon izni akışı, gerçek kayıt, ve `record`'un bu ayarlarla ürettiği
+  m4a'nın whisper tarafından çözülmesi **hiç denenmedi**. Yüklenen bayt
+  dizisinin taşındığı doğrulandı; o baytların gerçek sesli m4a olduğu
+  doğrulanmadı.
+
+### Yan not
+
+`GeneratedPluginRegistrant` yeniden üretildiğinde `IntegrationTestPlugin`
+kaydını düşürüyor (dev_dependency olduğu için). Bu kez `RecordPlugin`'in
+eklenmesi gerekiyordu, o yüzden dosya geri alınmadı; ikisi elle birlikte
+tutuldu.

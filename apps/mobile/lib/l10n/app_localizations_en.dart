@@ -92,4 +92,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pageMissing => 'That page does not exist.';
+
+  @override
+  String get recordVoiceNote => 'Record';
+
+  @override
+  String get stopRecording => 'Stop';
+
+  @override
+  String get recordVoiceNoteTooltip => 'Record a voice note';
+
+  @override
+  String get stopRecordingTooltip => 'Stop recording';
+
+  @override
+  String get recordingNeedsMicrophone =>
+      'Evomem needs the microphone to record a voice note.';
+
+  @override
+  String get recordingFailed => 'The recording could not be started.';
+
+  @override
+  String get recordingWasEmpty => 'That recording was empty.';
 }

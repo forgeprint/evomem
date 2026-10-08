@@ -8,7 +8,6 @@ import 'package:evomem_mobile/src/sync/sync_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
-import 'package:sqflite/sqflite.dart';
 
 import '../sqflite_test_setup.dart' as sqflite_setup;
 
@@ -20,8 +19,22 @@ class FakeIngest {
   new(this._server, this.replies) {
     _server.listen((request) async {
       paths.add(request.uri.path);
-      bodies.add(await utf8.decoder.bind(request).join());
+      queries.add(request.uri.query);
+      contentTypes.add(request.headers.contentType?.mimeType ?? '');
       authorizations.add(request.headers.value('authorization') ?? '');
+
+      if (request.uri.path == '/ingest/audio') {
+        // The body is the recording itself, so it is read as bytes.
+        final chunks = <int>[];
+        await request.forEach(chunks.addAll);
+        audioBodies.add(chunks);
+        bodies.add('');
+        request.response.statusCode = audioStatus;
+        await request.response.close();
+        return;
+      }
+
+      bodies.add(await utf8.decoder.bind(request).join());
 
       final reply = replies.isEmpty
           ? _created('01M4D3H3HNMFM69N4MHNAYBZ1X')
@@ -40,8 +53,14 @@ class FakeIngest {
   final HttpServer _server;
   final List<Reply> replies;
   final List<String> paths = [];
+  final List<String> queries = [];
   final List<String> bodies = [];
+  final List<String> contentTypes = [];
   final List<String> authorizations = [];
+  final List<List<int>> audioBodies = [];
+
+  /// What `/ingest/audio` answers.
+  int audioStatus = 204;
 
   String get url => 'http://127.0.0.1:${_server.port}';
   int get requests => paths.length;
@@ -63,22 +82,6 @@ void main() {
 
   late NotesDao dao;
   late DatabaseHelper helper;
-
-  setUpAll(() async {
-    // A file of its own: `flutter test` runs test files in parallel against
-    // one temporary directory, so sharing the default name means sharing a
-    // store with whatever else is running.
-    DatabaseHelper.databasePathOverride = path.join(
-      await getDatabasesPath(),
-      'remote_id_sync.db',
-    );
-    DatabaseHelper.instance.forgetConnection();
-  });
-
-  tearDownAll(() {
-    DatabaseHelper.databasePathOverride = null;
-    DatabaseHelper.instance.forgetConnection();
-  });
 
   setUp(() async {
     helper = DatabaseHelper.instance;
@@ -221,5 +224,105 @@ void main() {
       final db = await helper.database;
       await db.delete('sync_state');
     }
+  });
+
+  test('a recording is uploaded against the id the note was given', () async {
+    final recording = File(
+      path.join(Directory.systemTemp.createTempSync('evomem-up').path, 'a.m4a'),
+    )..writeAsStringSync('aac-pretend');
+    addTearDown(() => recording.parent.deleteSync(recursive: true));
+
+    await dao.insert(
+      Note(
+        id: 'local-1',
+        projectId: 'evomem',
+        content: 'Voice note, 0:03',
+        sourceType: 'audio',
+        createdAt: DateTime.utc(2026, 10, 8),
+        updatedAt: DateTime.utc(2026, 10, 8),
+        metadata: {
+          'awaiting_transcription': true,
+          'local_audio_path': recording.path,
+        },
+      ),
+    );
+
+    final server = await FakeIngest.start();
+    addTearDown(server.close);
+    final result = await pushWith(server);
+
+    expect(result.success, isTrue);
+    // The note first, then the recording against the id that came back.
+    expect(server.paths, ['/ingest', '/ingest/audio']);
+    expect(server.queries.last, 'note=01M4D3H3HNMFM69N4MHNAYBZ1X');
+    expect(server.contentTypes.last, 'audio/m4a');
+    expect(utf8.decode(server.audioBodies.single), 'aac-pretend');
+  });
+
+  test('a note with no recording uploads nothing', () async {
+    await storeNote('local-1', 'typed, not spoken');
+    final server = await FakeIngest.start();
+    addTearDown(server.close);
+
+    await pushWith(server);
+    expect(server.paths, ['/ingest']);
+    expect(server.audioBodies, isEmpty);
+  });
+
+  test('a recording whose file is gone uploads nothing', () async {
+    await dao.insert(
+      Note(
+        id: 'local-1',
+        projectId: 'evomem',
+        content: 'Voice note, 0:03',
+        sourceType: 'audio',
+        createdAt: DateTime.utc(2026, 10, 8),
+        updatedAt: DateTime.utc(2026, 10, 8),
+        metadata: {
+          'awaiting_transcription': true,
+          'local_audio_path': '/nowhere/gone.m4a',
+        },
+      ),
+    );
+
+    final server = await FakeIngest.start();
+    addTearDown(server.close);
+    final result = await pushWith(server);
+
+    // The note still goes; only the recording is missing.
+    expect(result.success, isTrue);
+    expect(server.paths, ['/ingest']);
+  });
+
+  test('an upload that failed does not fail the push', () async {
+    final recording = File(
+      path.join(Directory.systemTemp.createTempSync('evomem-up').path, 'a.m4a'),
+    )..writeAsStringSync('aac-pretend');
+    addTearDown(() => recording.parent.deleteSync(recursive: true));
+
+    await dao.insert(
+      Note(
+        id: 'local-1',
+        projectId: 'evomem',
+        content: 'Voice note, 0:03',
+        sourceType: 'audio',
+        createdAt: DateTime.utc(2026, 10, 8),
+        updatedAt: DateTime.utc(2026, 10, 8),
+        metadata: {
+          'awaiting_transcription': true,
+          'local_audio_path': recording.path,
+        },
+      ),
+    );
+
+    final server = await FakeIngest.start();
+    addTearDown(server.close);
+    server.audioStatus = 500;
+
+    final result = await pushWith(server);
+    // The note is stored and pushed; the recording is left for another run.
+    expect(result.success, isTrue);
+    expect(result.notesPushed, 1);
+    expect((await dao.getById('local-1'))!.isPushed, isTrue);
   });
 }

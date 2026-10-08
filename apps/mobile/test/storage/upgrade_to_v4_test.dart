@@ -1,7 +1,6 @@
 import 'package:evomem_mobile/src/storage/database.dart';
 import 'package:evomem_mobile/src/storage/notes_dao.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path/path.dart' as path;
 import 'package:sqflite/sqflite.dart';
 
 import '../sqflite_test_setup.dart' as sqflite_setup;
@@ -24,13 +23,15 @@ const _v3Notes = '''
 void main() {
   sqflite_setup.setupSqfliteFfi();
 
-  // This file is its own test process, so the v3 file is in place before
-  // anything opens DatabaseHelper and triggers the upgrade.
+  // The v3 file is written where the helper will look, before anything opens
+  // it: this is the one test whose store has to be at a particular version
+  // when the app's own open path runs.
   test(
     'upgrading an existing store adds remote_id and keeps the notes',
     () async {
-      final dbPath = path.join(await getDatabasesPath(), 'evomem.db');
+      final dbPath = DatabaseHelper.databasePathOverride!;
       await deleteDatabase(dbPath);
+      DatabaseHelper.instance.forgetConnection();
 
       // A store as version 3 left it.
       final old = await openDatabase(

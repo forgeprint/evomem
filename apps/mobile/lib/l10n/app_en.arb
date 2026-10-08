@@ -118,5 +118,33 @@
   "pageMissing": "That page does not exist.",
   "@pageMissing": {
     "description": "Shown when a link names a location the router cannot match."
+  },
+  "recordVoiceNote": "Record",
+  "@recordVoiceNote": {
+    "description": "Label of the button that starts recording a voice note."
+  },
+  "stopRecording": "Stop",
+  "@stopRecording": {
+    "description": "Label of the button that stops a recording in progress."
+  },
+  "recordVoiceNoteTooltip": "Record a voice note",
+  "@recordVoiceNoteTooltip": {
+    "description": "Tooltip of the record button when nothing is being recorded."
+  },
+  "stopRecordingTooltip": "Stop recording",
+  "@stopRecordingTooltip": {
+    "description": "Tooltip of the record button while a recording is running."
+  },
+  "recordingNeedsMicrophone": "Evomem needs the microphone to record a voice note.",
+  "@recordingNeedsMicrophone": {
+    "description": "Shown when the microphone was refused."
+  },
+  "recordingFailed": "The recording could not be started.",
+  "@recordingFailed": {
+    "description": "Shown when the recorder itself failed."
+  },
+  "recordingWasEmpty": "That recording was empty.",
+  "@recordingWasEmpty": {
+    "description": "Shown when a recording captured no audio."
   }
 }

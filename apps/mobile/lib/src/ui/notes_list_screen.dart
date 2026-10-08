@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:evomem_mobile/l10n/app_localizations.dart';
+import 'package:evomem_mobile/src/audio/recording_controller.dart';
 import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/rules/note_rules.dart';
@@ -29,6 +30,18 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     _searchController.dispose();
     _addController.dispose();
     super.dispose();
+  }
+
+  void _showRecordingProblem(RecordingProblem problem) {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
+    final message = switch (problem) {
+      RecordingProblem.noPermission => l10n.recordingNeedsMicrophone,
+      RecordingProblem.recorderFailed => l10n.recordingFailed,
+      RecordingProblem.nothingRecorded => l10n.recordingWasEmpty,
+    };
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _addNote() {
@@ -123,7 +136,18 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                ElevatedButton(onPressed: _addNote, child: Text(l10n.addNote)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _addNote,
+                        child: Text(l10n.addNote),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    _RecordButton(onProblem: _showRecordingProblem),
+                  ],
+                ),
               ],
             ),
           ),
@@ -247,5 +271,42 @@ class _NoteRow extends StatelessWidget {
     final hour = date.hour.toString().padLeft(2, '0');
     final minute = date.minute.toString().padLeft(2, '0');
     return '${date.day}.${date.month}.${date.year} $hour:$minute';
+  }
+}
+
+/// Records a voice note: one tap to start, one to stop.
+///
+/// The note it leaves behind describes the recording and is marked as
+/// awaiting a transcript; nothing here transcribes. A long tap cancels,
+/// which is the only way to throw a recording away before it becomes a note.
+class _RecordButton extends ConsumerWidget {
+  const new({required this.onProblem});
+
+  final void Function(RecordingProblem) onProblem;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final recording = ref.watch(recordingControllerProvider).isRecording;
+    final controller = ref.read(recordingControllerProvider.notifier);
+
+    return Tooltip(
+      message: recording
+          ? l10n.stopRecordingTooltip
+          : l10n.recordVoiceNoteTooltip,
+      child: GestureDetector(
+        onLongPress: recording ? controller.cancel : null,
+        child: FilledButton.tonalIcon(
+          onPressed: () async {
+            final problem = recording
+                ? await controller.stop()
+                : await controller.start();
+            if (problem != null) onProblem(problem);
+          },
+          icon: Icon(recording ? Icons.stop : Icons.mic),
+          label: Text(recording ? l10n.stopRecording : l10n.recordVoiceNote),
+        ),
+      ),
+    );
   }
 }

@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:evomem_mobile/src/audio/recording_controller.dart';
+import 'package:evomem_mobile/src/audio/voice_recorder.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
 import 'package:evomem_mobile/src/storage/notes_dao.dart';
@@ -289,10 +292,55 @@ class SyncService {
         }
         await _notesDao.setRemoteId(note.id, remoteId);
         posted++;
+
+        // The recording, now that there is an identifier to attach it to.
+        // A failure here does not fail the batch: the note is stored and
+        // pushed, and the upload is retried by the next run because the
+        // metadata still points at a file nobody has sent.
+        await _uploadRecording(client, note.withRemoteId(remoteId));
       }
       return posted;
     } finally {
       client.close();
+    }
+  }
+
+  /// Sends a note's recording to `POST /ingest/audio`, if it has one.
+  ///
+  /// Two requests rather than one because the identifier comes from the
+  /// first; see ADR-0018. Nothing is sent for a note with no recording,
+  /// which is almost all of them.
+  Future<void> _uploadRecording(http.Client client, Note note) async {
+    final path = note.metadata[metaLocalPath];
+    if (path is! String || path.isEmpty) return;
+    if (note.metadata[metaAwaitingTranscription] != true) return;
+
+    final file = File(path);
+    if (!file.existsSync()) {
+      // Recorded on this phone and since removed, or restored from a backup
+      // that did not carry the file. Nothing to send and nothing to fix.
+      return;
+    }
+
+    final uri = Uri.parse(
+      '${config.serverUrl}/ingest/audio?note=${Uri.encodeQueryComponent(note.remoteId)}',
+    );
+    final request = http.Request('POST', uri)
+      ..headers.addAll({
+        'Content-Type': recordingMediaType,
+        'Authorization': 'Bearer ${config.apiToken}',
+      })
+      ..bodyBytes = await file.readAsBytes();
+
+    try {
+      final response = await client.send(request).timeout(config.timeout);
+      // Drained, or the connection is held open until it times out.
+      await response.stream.drain<void>();
+    } on Exception {
+      // Left for the next run. Reporting it would fail a push that did
+      // store the note, and the transcription queue on the server already
+      // says this note is waiting for audio.
+      return;
     }
   }
 

@@ -2,8 +2,6 @@ import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
 import 'package:evomem_mobile/src/storage/notes_dao.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path/path.dart' as path;
-import 'package:sqflite/sqflite.dart';
 
 import '../sqflite_test_setup.dart' as sqflite_setup;
 
@@ -12,22 +10,6 @@ void main() {
 
   late NotesDao dao;
   late DatabaseHelper helper;
-
-  setUpAll(() async {
-    // A file of its own: `flutter test` runs test files in parallel against
-    // one temporary directory, so sharing the default name means sharing a
-    // store with whatever else is running.
-    DatabaseHelper.databasePathOverride = path.join(
-      await getDatabasesPath(),
-      'remote_id_column.db',
-    );
-    DatabaseHelper.instance.forgetConnection();
-  });
-
-  tearDownAll(() {
-    DatabaseHelper.databasePathOverride = null;
-    DatabaseHelper.instance.forgetConnection();
-  });
 
   setUp(() async {
     helper = DatabaseHelper.instance;

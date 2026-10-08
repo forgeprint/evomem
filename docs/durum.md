@@ -14,7 +14,7 @@ CI: **tamamı yeşil** (go, crosscheck, flutter)
 | - | - |
 | 1 Monorepo + SQLite deposu | tamam |
 | 2 MCP sunucusu | tamam |
-| 3 Flutter mobil uygulama | kısmen — iskelet + sqflite + sync + settings + testler; **ses kaydı yok** |
+| 3 Flutter mobil uygulama | kısmen — iskelet + sqflite + sync + settings + ses kaydı + testler; **Android/iOS derleme dosyaları yok** |
 | 4 Telegram + Jira + HTTP girişi | tamam |
 | 5 Sync + arşivleme | tamam |
 
@@ -37,6 +37,7 @@ core/sync          Remote arayüzü, worker, PostgreSQL transportu
 cmd/evomem         14 alt komut (mcp, serve, pull, restore, transcribe dahil)
 apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
                    mobil şema v4: notes.remote_id
+                   record 7.1.1 + path_provider 2.1.6 (ses kaydı)
 ```
 
 Şema sürümü **3**. Kayıtlar şemada değil, veritabanının yanındaki `audio/`
@@ -83,7 +84,7 @@ evomem transcribe                     # kuyruğu işle (servis yoksa kapalı)
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings — 53 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı — 67 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **`remote_id`**: yerel bir HTTP sunucusuna karşı; dönen id saklanıyor,
   `updated_at` oynamıyor, ikinci push hiç istek atmıyor, yarıda kalan batch
@@ -116,16 +117,23 @@ Bunlar bende değil, sende:
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-1. **Mobilde ses kaydının kendisi.** Sunucu tarafı hazır (aşağıya bakın) ama
-   telefon hâlâ kayıt yapamıyor: ne paket, ne mikrofon izni, ne arayüz.
-   ADR-0018 bunu bilinçli olarak kapsam dışı bıraktı; paket seçimi için
-   dokümantasyon doğrulaması gerekiyor.
+1. **Android/iOS derleme dosyaları yok.** `android/` ve `ios/` ağaçlarında ne
+   `build.gradle`, ne `settings.gradle`, ne `Podfile`, ne `Runner.xcodeproj`
+   var — uygulama bugüne kadar yalnızca web için derlenmiş. Ses kaydı yazıldı
+   ama **gerçek bir mikrofonla hiç denenmedi ve bu dosyalar olmadan
+   denenemez**. `record` 7.1.1'in istediği minSdk 23 ve iOS 12 de yazılacak
+   bir yer bulamadı (manifest ve Info.plist'e yorum olarak düşüldü).
 2. **Dökümü onaylama akışı.** `tainted` ve `transcribed` işaretlerini
    temizleyen hiçbir şey yok. ADR-0016 ayrı bir karar olarak bıraktı.
 3. **Mobilde düzenlenen not sunucuya gitmiyor.** `/ingest` güncelleme
    yapamıyor ve `remote_id`'si olan not ikinci kez gönderilmiyor, yani uzak
    kopya ilk gönderildiği hali koruyor. Çift kayıt yerine bayat kayıt —
    bilinçli takas, ama bir güncelleme yolu gerekiyor.
+
+**Ses kaydı tamam** (ADR-0018, telefon tarafı): `record` 7.1.1 ile mono/16 kHz
+m4a kaydı, kaydı tarif eden ve `awaiting_transcription` işaretli not, ve not
+kabul edildikten sonra dosyanın `POST /ingest/audio`'ya yüklenmesi. Zincir
+uçtan uca gerçek sunucuya karşı denendi; **gerçek mikrofonla denenmedi**.
 
 **`remote_id` tamam** (ADR-0018): telefon artık `/ingest`'ten dönen id'yi
 `notes.remote_id`'ye yazıyor (mobil şema v4), ve `remote_id`'si olan notu

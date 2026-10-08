@@ -2,6 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!--
+      Shown when the app first asks to record. iOS refuses the microphone
+      outright without this key.
+
+      record 7.1.1 needs iOS 12 or later; there is no Podfile or Xcode
+      project in this tree to set a deployment target in, so that has to be
+      done when the iOS build files are created.
+    -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Evomem records voice notes so you can capture a thought without typing it.</string>
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>

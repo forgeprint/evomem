@@ -5,6 +5,16 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!--
+      Recording a voice note. Asked for at the moment of recording, not at
+      install: the app is usable without it and most notes are typed.
+
+      record 7.1.1 needs minSdk 23. There is no build.gradle in this tree to
+      say so in — this app has only ever been built for the web — so that has
+      to be set when the Android build files are created.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <application
         android:label="Evomem"
         android:name="${applicationName}"
