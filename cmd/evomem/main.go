@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/forgeprint/evomem/core/api"
 	"github.com/forgeprint/evomem/core/sync"
 	"github.com/forgeprint/evomem/shared/database"
 	"github.com/forgeprint/evomem/shared/models"
@@ -406,16 +407,31 @@ func cmdMCP(args []string, out io.Writer, in io.Reader) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	fmt.Fprintln(out, "MCP server not yet implemented")
-	return nil
-}
 
-func cmdServe(args []string, out io.Writer) error {
-	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	addr := fs.String("addr", "", "address to listen on")
-	if err := fs.Parse(args); err != nil {
+	db, err := openStore()
+	if err != nil {
 		return err
 	}
-	fmt.Fprintln(out, "HTTP server not yet implemented")
-	return nil
+	defer db.Close()
+
+	server := mcp.New(context.Background(), db, version)
+
+	var serverOut io.Writer = out
+	if *quiet {
+		serverOut = io.Discard
+	}
+
+	return server.Serve(in, serverOut)
+}
+
+func openStore() (*database.DB, error) {
+	dbPath := os.Getenv("EVOMEM_DB")
+	if dbPath == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		dbPath = filepath.Join(home, ".evomem", "evomem.db")
+	}
+	return database.Open(dbPath)
 }

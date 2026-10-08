@@ -235,3 +235,76 @@ func (p *Postgres) Count(ctx context.Context) (int, error) {
 	}
 	return n, nil
 }
+
+// PullNotes fetches notes from the remote that are newer than the cursor.
+func (p *Postgres) PullNotes(ctx context.Context, cursorUpdatedAt, cursorID string, limit int) ([]*models.Note, string, string, error) {
+	if limit <= 0 {
+		limit = 1000
+	}
+
+	rows, err := p.db.QueryContext(ctx,
+		`SELECT id, project_id, content, source_type, created_at, updated_at, metadata
+		 FROM evomem_notes
+		 WHERE updated_at > $1 OR (updated_at = $1 AND id > $2)
+		 ORDER BY updated_at ASC, id ASC
+		 LIMIT $3`,
+		cursorUpdatedAt, cursorID, limit)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("sync: pulling notes: %w", err)
+	}
+	defer rows.Close()
+
+	var notes []*models.Note
+	var nextUpdatedAt, nextID string
+	for rows.Next() {
+		var n models.Note
+		var metadata string
+		if err := rows.Scan(&n.ID, &n.ProjectID, &n.Content, &n.SourceType, &n.CreatedAt, &n.UpdatedAt, &metadata); err != nil {
+			return nil, "", "", fmt.Errorf("sync: scanning note: %w", err)
+		}
+		if err := n.UnmarshalMetadata(metadata); err != nil {
+			return nil, "", "", fmt.Errorf("sync: unmarshaling metadata: %w", err)
+		}
+		notes = append(notes, &n)
+		nextUpdatedAt = n.UpdatedAt.Format(time.RFC3339Nano)
+		nextID = n.ID
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", "", fmt.Errorf("sync: iterating notes: %w", err)
+	}
+	return notes, nextUpdatedAt, nextID, nil
+}
+
+// PullAll fetches all notes from the remote (for restore).
+func (p *Postgres) PullAll(ctx context.Context, limit int, offset int) ([]*models.Note, error) {
+	if limit <= 0 {
+		limit = 1000
+	}
+	rows, err := p.db.QueryContext(ctx,
+		`SELECT id, project_id, content, source_type, created_at, updated_at, metadata
+		 FROM evomem_notes
+		 ORDER BY updated_at ASC, id ASC
+		 LIMIT $1 OFFSET $2`,
+		limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("sync: pulling all notes: %w", err)
+	}
+	defer rows.Close()
+
+	var notes []*models.Note
+	for rows.Next() {
+		var n models.Note
+		var metadata string
+		if err := rows.Scan(&n.ID, &n.ProjectID, &n.Content, &n.SourceType, &n.CreatedAt, &n.UpdatedAt, &metadata); err != nil {
+			return nil, fmt.Errorf("sync: scanning note: %w", err)
+		}
+		if err := n.UnmarshalMetadata(metadata); err != nil {
+			return nil, fmt.Errorf("sync: unmarshaling metadata: %w", err)
+		}
+		notes = append(notes, &n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sync: iterating notes: %w", err)
+	}
+	return notes, nil
+}

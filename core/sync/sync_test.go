@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -79,6 +80,64 @@ func (f *fakeRemote) nextErr() error {
 }
 
 func (f *fakeRemote) Close() error { return nil }
+
+func (f *fakeRemote) PullNotes(_ context.Context, cursorUpdatedAt, cursorID string, limit int) ([]*models.Note, string, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	var filtered []*models.Note
+	for _, n := range f.notes {
+		if n.UpdatedAt.After(parseTime(cursorUpdatedAt)) || (n.UpdatedAt.Equal(parseTime(cursorUpdatedAt)) && n.ID > cursorID) {
+			filtered = append(filtered, n)
+		}
+	}
+	// Sort by updated_at, id
+	sort.Slice(filtered, func(i, j int) bool {
+		if filtered[i].UpdatedAt.Equal(filtered[j].UpdatedAt) {
+			return filtered[i].ID < filtered[j].ID
+		}
+		return filtered[i].UpdatedAt.Before(filtered[j].UpdatedAt)
+	})
+
+	if len(filtered) > limit {
+		filtered = filtered[:limit]
+	}
+
+	var nextUpdatedAt, nextID string
+	if len(filtered) > 0 {
+		last := filtered[len(filtered)-1]
+		nextUpdatedAt = last.UpdatedAt.Format(time.RFC3339Nano)
+		nextID = last.ID
+	}
+
+	return filtered, nextUpdatedAt, nextID, nil
+}
+
+func (f *fakeRemote) PullAll(_ context.Context, limit int, offset int) ([]*models.Note, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	var all []*models.Note
+	for _, n := range f.notes {
+		all = append(all, n)
+	}
+	// Sort by updated_at, id
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].UpdatedAt.Equal(all[j].UpdatedAt) {
+			return all[i].ID < all[j].ID
+		}
+		return all[i].UpdatedAt.Before(all[j].UpdatedAt)
+	})
+
+	if offset >= len(all) {
+		return []*models.Note{}, nil
+	}
+	end := offset + limit
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[offset:end], nil
+}
 
 func (f *fakeRemote) count() int {
 	f.mu.Lock()
@@ -558,4 +617,12 @@ func TestObserveSeesEveryPass(t *testing.T) {
 	if got.Duration == 0 {
 		t.Error("the pass reported no duration")
 	}
+}
+
+func parseTime(s string) time.Time {
+	if s == "" {
+		return time.Time{}
+	}
+	t, _ := time.Parse(time.RFC3339Nano, s)
+	return t
 }
