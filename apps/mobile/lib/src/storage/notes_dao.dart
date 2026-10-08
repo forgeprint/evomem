@@ -46,19 +46,15 @@ class NotesDao {
   /// Inserts a new note.
   Future<void> insert(Note note) async {
     final db = await _db;
-    await db.insert(
-      'notes',
-      {
-        'id': note.id,
-        'project_id': note.projectId,
-        'content': note.content,
-        'source_type': note.sourceType,
-        'created_at': note.createdAt.toIso8601String(),
-        'updated_at': note.updatedAt.toIso8601String(),
-        'metadata': _encodeMetadata(note.metadata),
-      },
-      conflictAlgorithm: ConflictAlgorithm.fail,
-    );
+    await db.insert('notes', {
+      'id': note.id,
+      'project_id': note.projectId,
+      'content': note.content,
+      'source_type': note.sourceType,
+      'created_at': note.createdAt.toIso8601String(),
+      'updated_at': note.updatedAt.toIso8601String(),
+      'metadata': _encodeMetadata(note.metadata),
+    }, conflictAlgorithm: ConflictAlgorithm.fail);
   }
 
   /// Updates an existing note.
@@ -79,11 +75,7 @@ class NotesDao {
   /// Deletes a note by id.
   Future<void> delete(String id) async {
     final db = await _db;
-    await db.delete(
-      'notes',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await db.delete('notes', where: 'id = ?', whereArgs: [id]);
   }
 
   /// Gets a note by id.
@@ -179,22 +171,22 @@ class NotesDao {
   Future<void> replaceAllForProject(String projectId, List<Note> notes) async {
     final db = await _db;
     await db.transaction((txn) async {
-      await txn.delete('notes', where: 'project_id = ?', whereArgs: [projectId]);
+      await txn.delete(
+        'notes',
+        where: 'project_id = ?',
+        whereArgs: [projectId],
+      );
       for (final note in notes) {
         if (note.projectId != projectId) continue;
-        await txn.insert(
-          'notes',
-          {
-            'id': note.id,
-            'project_id': note.projectId,
-            'content': note.content,
-            'source_type': note.sourceType,
-            'created_at': note.createdAt.toIso8601String(),
-            'updated_at': note.updatedAt.toIso8601String(),
-            'metadata': _encodeMetadata(note.metadata),
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        await txn.insert('notes', {
+          'id': note.id,
+          'project_id': note.projectId,
+          'content': note.content,
+          'source_type': note.sourceType,
+          'created_at': note.createdAt.toIso8601String(),
+          'updated_at': note.updatedAt.toIso8601String(),
+          'metadata': _encodeMetadata(note.metadata),
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     });
   }

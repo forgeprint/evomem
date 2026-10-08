@@ -58,12 +58,14 @@ class NoteDetailScreen extends ConsumerWidget {
                   : Icons.push_pin_outlined,
             ),
             tooltip: 'Toggle pin',
-            onPressed: () => ref.read(notesProvider.notifier).togglePin(note.id),
+            onPressed: () =>
+                ref.read(notesProvider.notifier).togglePin(note.id),
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Delete',
-            onPressed: () => unawaited(_showDeleteDialog(context, ref, note.id)),
+            onPressed: () =>
+                unawaited(_showDeleteDialog(context, ref, note.id)),
           ),
         ],
       ),
@@ -86,23 +88,19 @@ class NoteDetailScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 16),
-            Text(
-              note.content,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
+            Text(note.content, style: Theme.of(context).textTheme.bodyLarge),
             if (note.metadata.isNotEmpty) ...[
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 8),
-              Text(
-                'Metadata',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
+              Text('Metadata', style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 8),
-              ...note.metadata.entries.map((e) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Text('${e.key}: ${e.value}'),
-              )),
+              ...note.metadata.entries.map(
+                (e) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text('${e.key}: ${e.value}'),
+                ),
+              ),
             ],
             const SizedBox(height: 24),
             SizedBox(
@@ -143,12 +141,13 @@ class NoteDetailScreen extends ConsumerWidget {
                   labelText: l10n.noteContentLabel,
                   errorText: problem != null
                       ? (problem == NoteProblem.blank
-                          ? l10n.noteBlank
-                          : l10n.noteTooLong(maxNoteLength))
+                            ? l10n.noteBlank
+                            : l10n.noteTooLong(maxNoteLength))
                       : null,
                   border: const OutlineInputBorder(),
                 ),
-                onChanged: (_) => setState(() => problem = checkNoteContent(controller.text)),
+                onChanged: (_) =>
+                    setState(() => problem = checkNoteContent(controller.text)),
               ),
             ],
           ),
@@ -160,14 +159,13 @@ class NoteDetailScreen extends ConsumerWidget {
             ElevatedButton(
               onPressed: problem == null
                   ? () {
-                      ref.read(notesProvider.notifier).update(
-                        id: note.id,
-                        newContent: controller.text,
-                      );
+                      ref
+                          .read(notesProvider.notifier)
+                          .update(id: note.id, newContent: controller.text);
                       Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(l10n.noteSaved)),
-                      );
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(l10n.noteSaved)));
                     }
                   : null,
               child: Text(l10n.saveNote),
@@ -199,9 +197,8 @@ class NoteDetailScreen extends ConsumerWidget {
               ref.read(notesProvider.notifier).delete(noteId);
               Navigator.of(context).pop();
               context.go(const NotesListRoute().location);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(l10n.noteDeleted)),
-              );
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(l10n.noteDeleted)));
             },
             child: Text('Delete', style: TextStyle(color: Colors.red)),
           ),

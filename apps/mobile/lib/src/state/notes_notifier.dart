@@ -15,10 +15,14 @@ final notesProvider = NotifierProvider<NotesNotifier, List<Note>>(
 final currentProjectProvider = Provider<String>((ref) => 'default');
 
 /// Database helper provider.
-final databaseHelperProvider = Provider<DatabaseHelper>((ref) => DatabaseHelper.instance);
+final databaseHelperProvider = Provider<DatabaseHelper>(
+  (ref) => DatabaseHelper.instance,
+);
 
 /// Notes DAO provider.
-final notesDaoProvider = Provider<NotesDao>((ref) => NotesDao(ref.watch(databaseHelperProvider)));
+final notesDaoProvider = Provider<NotesDao>(
+  (ref) => NotesDao(ref.watch(databaseHelperProvider)),
+);
 
 /// Holds the list. Every decision it makes comes from `lib/src/rules`; this
 /// class applies them and owns the identifiers, nothing else.
@@ -38,7 +42,10 @@ class NotesNotifier extends Notifier<List<Note>> {
   /// Loads notes from database. Call this after build or when needed.
   Future<void> loadNotes() async {
     try {
-      final notes = await _dao.listByProject(projectId: _projectId, limit: 1000);
+      final notes = await _dao.listByProject(
+        projectId: _projectId,
+        limit: 1000,
+      );
       state = notes;
     } catch (_) {
       // If load fails, start with empty list
@@ -75,26 +82,28 @@ class NotesNotifier extends Notifier<List<Note>> {
     state = [...state, note];
 
     // Persist to database
-    Future.microtask(() => _dao.insert(note).catchError((_) {
-      // Rollback on error
-      state = state.where((n) => n.id != note.id).toList();
-    }));
+    Future.microtask(
+      () => _dao.insert(note).catchError((_) {
+        // Rollback on error
+        state = state.where((n) => n.id != note.id).toList();
+      }),
+    );
 
     return null;
   }
 
   /// Updates the note with this [id].
-  NoteProblem? update({
-    required String id,
-    required String newContent,
-  }) {
+  NoteProblem? update({required String id, required String newContent}) {
     final problem = checkNoteContent(newContent);
     if (problem != null) return problem;
 
     final index = state.indexWhere((n) => n.id == id);
     if (index == -1) return null; // Not found, silently ignore
 
-    final updatedNote = state[index].withContent(normalizeNoteContent(newContent), DateTime.now());
+    final updatedNote = state[index].withContent(
+      normalizeNoteContent(newContent),
+      DateTime.now(),
+    );
 
     // Optimistic update
     state = [
@@ -103,10 +112,12 @@ class NotesNotifier extends Notifier<List<Note>> {
     ];
 
     // Persist to database
-    Future.microtask(() => _dao.update(updatedNote).catchError((_) {
-      // Rollback on error
-      loadNotes();
-    }));
+    Future.microtask(
+      () => _dao.update(updatedNote).catchError((_) {
+        // Rollback on error
+        loadNotes();
+      }),
+    );
 
     return null;
   }
@@ -125,12 +136,14 @@ class NotesNotifier extends Notifier<List<Note>> {
     state = state.where((note) => note.id != id).toList();
 
     // Persist to database
-    Future.microtask(() => _dao.delete(id).catchError((_) {
-      // Rollback on error
-      if (deletedNote != null) {
-        state = [...state, deletedNote];
-      }
-    }));
+    Future.microtask(
+      () => _dao.delete(id).catchError((_) {
+        // Rollback on error
+        if (deletedNote != null) {
+          state = [...state, deletedNote];
+        }
+      }),
+    );
   }
 
   /// Toggles a note's metadata 'pinned' flag (example of metadata mutation).
@@ -159,10 +172,12 @@ class NotesNotifier extends Notifier<List<Note>> {
     ];
 
     // Persist to database
-    Future.microtask(() => _dao.update(updatedNote).catchError((_) {
-      // Rollback on error
-      loadNotes();
-    }));
+    Future.microtask(
+      () => _dao.update(updatedNote).catchError((_) {
+        // Rollback on error
+        loadNotes();
+      }),
+    );
   }
 
   /// Replaces the entire list (used when loading from local DB or sync).
@@ -172,7 +187,11 @@ class NotesNotifier extends Notifier<List<Note>> {
   }
 
   /// Searches notes by content.
-  Future<List<Note>> search(String query, {String? sourceType, int? limit}) async {
+  Future<List<Note>> search(
+    String query, {
+    String? sourceType,
+    int? limit,
+  }) async {
     return _dao.search(
       query: query,
       projectId: _projectId,
@@ -184,7 +203,8 @@ class NotesNotifier extends Notifier<List<Note>> {
   String _generateId() {
     // Simple ULID-like generation (not cryptographically secure, but unique enough for local use)
     final now = DateTime.now().millisecondsSinceEpoch.toRadixString(36);
-    final random = (DateTime.now().microsecondsSinceEpoch % 1000000).toRadixString(36);
+    final random = (DateTime.now().microsecondsSinceEpoch % 1000000)
+        .toRadixString(36);
     return '$now$random'.padLeft(26, '0');
   }
 }

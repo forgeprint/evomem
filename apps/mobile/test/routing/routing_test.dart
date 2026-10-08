@@ -55,7 +55,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('sends an unknown location to the missing page', (tester) async {
+    testWidgets('sends an unknown location to the missing page', (
+      tester,
+    ) async {
       await pumpApp(tester, initialLocation: '/nowhere');
 
       expect(find.text('That page does not exist.'), findsOneWidget);

@@ -70,7 +70,8 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
 
     if (!syncService.isInitialized) {
       setState(() {
-        _lastError = 'Sync not configured. Set server URL and API token in Settings.';
+        _lastError =
+            'Sync not configured. Set server URL and API token in Settings.';
       });
       return;
     }
@@ -87,7 +88,10 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
         setState(() {
           _isSyncing = false;
           if (result.success) {
-            _lastSynced = DateTime.now().toString().substring(0, 16).replaceAll('T', ' ');
+            _lastSynced = DateTime.now()
+                .toString()
+                .substring(0, 16)
+                .replaceAll('T', ' ');
             _pendingNotes = 0;
             _pendingDeletions = 0;
             _lastError = null;
@@ -97,7 +101,12 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
           } else {
             _lastError = result.error;
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(AppLocalizations.of(context).syncFailed(result.error ?? 'Unknown error'))),
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context)
+                      .syncFailed(result.error ?? 'Unknown error'),
+                ),
+              ),
             );
           }
         });
@@ -109,7 +118,11 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
           _lastError = e.toString();
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context).syncFailed(e.toString()))),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).syncFailed(e.toString()),
+            ),
+          ),
         );
       }
     }
@@ -154,7 +167,8 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
                     const SizedBox(height: 8),
                     _StatusRow(
                       label: 'Pending Changes',
-                      value: '$_pendingNotes notes, $_pendingDeletions deletions',
+                      value:
+                          '$_pendingNotes notes, $_pendingDeletions deletions',
                     ),
                     const SizedBox(height: 8),
                     _StatusRow(
@@ -163,10 +177,12 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
                           ? l10n.syncing
                           : (_lastError != null ? 'Error' : 'Idle'),
                       valueStyle: _isSyncing
-                          ? TextStyle(color: Theme.of(context).colorScheme.primary)
+                          ? TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                            )
                           : _lastError != null
-                              ? TextStyle(color: Colors.red)
-                              : null,
+                          ? TextStyle(color: Colors.red)
+                          : null,
                     ),
                     if (_lastError != null) ...[
                       const SizedBox(height: 8),
@@ -232,11 +248,7 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
 }
 
 class _StatusRow extends StatelessWidget {
-  const _StatusRow({
-    required this.label,
-    required this.value,
-    this.valueStyle,
-  });
+  const _StatusRow({required this.label, required this.value, this.valueStyle});
 
   final String label;
   final String value;
@@ -248,7 +260,13 @@ class _StatusRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: Theme.of(context).textTheme.bodyMedium),
-        Text(value, style: valueStyle ?? Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
+        Text(
+          value,
+          style:
+              valueStyle ??
+              Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w500),
+        ),
       ],
     );
   }

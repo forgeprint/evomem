@@ -88,8 +88,8 @@ class SyncService {
     required this.config,
     required NotesDao notesDao,
     required DatabaseHelper dbHelper,
-  })  : _notesDao = notesDao,
-        _dbHelper = dbHelper;
+  }) : _notesDao = notesDao,
+       _dbHelper = dbHelper;
 
   final SyncConfig config;
   final NotesDao _notesDao;
@@ -100,7 +100,9 @@ class SyncService {
   /// Pushes local changes to the remote server.
   Future<SyncResult> push() async {
     if (config.serverUrl.isEmpty || config.apiToken.isEmpty) {
-      return SyncResult.failure(error: 'Server URL or API token not configured');
+      return SyncResult.failure(
+        error: 'Server URL or API token not configured',
+      );
     }
 
     int totalNotesPushed = 0;
@@ -128,7 +130,8 @@ class SyncService {
         );
       } else {
         return SyncResult.failure(
-          error: '${notesResult.error ?? ''} ${deletionsResult.error ?? ''}'.trim(),
+          error: '${notesResult.error ?? ''} ${deletionsResult.error ?? ''}'
+              .trim(),
           notesPushed: totalNotesPushed,
           deletionsPushed: totalDeletionsPushed,
         );
@@ -223,7 +226,9 @@ class SyncService {
           ..headers.addAll(headers)
           ..body = body;
 
-        final streamedResponse = await client.send(request).timeout(config.timeout);
+        final streamedResponse = await client
+            .send(request)
+            .timeout(config.timeout);
         final response = await http.Response.fromStream(streamedResponse);
 
         if (response.statusCode != 201) {
@@ -260,28 +265,21 @@ class SyncService {
   /// Saves cursor to sync_state table.
   Future<void> _saveCursor(String key, String value) async {
     final db = await _dbHelper.database;
-    await db.insert(
-      'sync_state',
-      {'key': key, 'value': value},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('sync_state', {
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 }
 
 /// State for the sync service provider.
 class SyncServiceState {
-  const SyncServiceState({
-    this.config,
-    this.isInitialized = false,
-  });
+  const SyncServiceState({this.config, this.isInitialized = false});
 
   final SyncConfig? config;
   final bool isInitialized;
 
-  SyncServiceState copyWith({
-    SyncConfig? config,
-    bool? isInitialized,
-  }) {
+  SyncServiceState copyWith({SyncConfig? config, bool? isInitialized}) {
     return SyncServiceState(
       config: config ?? this.config,
       isInitialized: isInitialized ?? this.isInitialized,
@@ -332,7 +330,9 @@ class SyncServiceNotifier extends Notifier<SyncServiceState> {
   /// Push local changes to the remote server.
   Future<SyncResult> push() async {
     if (_service == null) {
-      return SyncResult.failure(error: 'Sync service not initialized. Configure in Settings.');
+      return SyncResult.failure(
+        error: 'Sync service not initialized. Configure in Settings.',
+      );
     }
     return _service!.push();
   }
@@ -345,6 +345,7 @@ class SyncServiceNotifier extends Notifier<SyncServiceState> {
 }
 
 /// Provider for the sync service state.
-final syncServiceProvider = NotifierProvider<SyncServiceNotifier, SyncServiceState>(
-  SyncServiceNotifier.new,
-);
+final syncServiceProvider =
+    NotifierProvider<SyncServiceNotifier, SyncServiceState>(
+      SyncServiceNotifier.new,
+    );

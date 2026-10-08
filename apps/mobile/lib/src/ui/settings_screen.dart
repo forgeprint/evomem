@@ -42,32 +42,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _saveSettings() async {
-    await _storage.write(key: 'evomem_server_url', value: _serverUrlController.text);
-    await _storage.write(key: 'evomem_api_token', value: _apiTokenController.text);
+    await _storage.write(
+      key: 'evomem_server_url',
+      value: _serverUrlController.text,
+    );
+    await _storage.write(
+      key: 'evomem_api_token',
+      value: _apiTokenController.text,
+    );
     _serverUrl = _serverUrlController.text;
     _apiToken = _apiTokenController.text;
 
     // Initialize sync service with new config
-    if (_serverUrl != null && _serverUrl!.isNotEmpty && _apiToken != null && _apiToken!.isNotEmpty) {
-      ref.read(syncServiceProvider.notifier).initialize(
-        serverUrl: _serverUrl!,
-        apiToken: _apiToken!,
-        notesDao: ref.read(notesDaoProvider),
-        dbHelper: ref.read(databaseHelperProvider),
-      );
+    if (_serverUrl != null &&
+        _serverUrl!.isNotEmpty &&
+        _apiToken != null &&
+        _apiToken!.isNotEmpty) {
+      ref
+          .read(syncServiceProvider.notifier)
+          .initialize(
+            serverUrl: _serverUrl!,
+            apiToken: _apiToken!,
+            notesDao: ref.read(notesDaoProvider),
+            dbHelper: ref.read(databaseHelperProvider),
+          );
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settings saved')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Settings saved')));
     }
   }
 
   Future<void> _testConnection() async {
     if (_serverUrlController.text.isEmpty || _apiTokenController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter server URL and API token first')),
+        const SnackBar(
+          content: Text('Please enter server URL and API token first'),
+        ),
       );
       return;
     }
@@ -79,24 +91,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final uri = Uri.parse('${_serverUrlController.text}/healthz');
       final headers = {'Authorization': 'Bearer ${_apiTokenController.text}'};
 
-      final response = await client.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+      final response = await client
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 10));
       client.close();
 
       if (mounted) {
         if (response.statusCode == 200) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Connection successful!'), backgroundColor: Colors.green),
+            const SnackBar(
+              content: Text('Connection successful!'),
+              backgroundColor: Colors.green,
+            ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Connection failed: ${response.statusCode}'), backgroundColor: Colors.red),
+            SnackBar(
+              content: Text('Connection failed: ${response.statusCode}'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Connection error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Connection error: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -171,15 +194,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: _testingConnection ? null : _testConnection,
+                          onPressed: _testingConnection
+                              ? null
+                              : _testConnection,
                           icon: _testingConnection
                               ? const SizedBox(
                                   width: 18,
                                   height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Icon(Icons.cloud),
-                          label: Text(_testingConnection ? 'Testing...' : 'Test Connection'),
+                          label: Text(
+                            _testingConnection
+                                ? 'Testing...'
+                                : 'Test Connection',
+                          ),
                         ),
                       ),
                     ],
@@ -211,18 +242,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         children: [
                           _ConfigRow(
                             label: 'Status',
-                            value: initialized ? 'Configured' : 'Not configured',
+                            value: initialized
+                                ? 'Configured'
+                                : 'Not configured',
                             valueStyle: initialized
-                                ? TextStyle(color: Colors.green, fontWeight: FontWeight.w600)
-                                : TextStyle(color: Colors.orange, fontWeight: FontWeight.w600),
+                                ? TextStyle(
+                                    color: Colors.green,
+                                    fontWeight: FontWeight.w600,
+                                  )
+                                : TextStyle(
+                                    color: Colors.orange,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                           ),
                           if (initialized && config != null) ...[
                             const SizedBox(height: 8),
-                            _ConfigRow(label: 'Server', value: config.serverUrl),
+                            _ConfigRow(
+                              label: 'Server',
+                              value: config.serverUrl,
+                            ),
                             const SizedBox(height: 8),
-                            _ConfigRow(label: 'Batch Size', value: '${config.batchSize} notes'),
+                            _ConfigRow(
+                              label: 'Batch Size',
+                              value: '${config.batchSize} notes',
+                            ),
                             const SizedBox(height: 8),
-                            _ConfigRow(label: 'Timeout', value: '${config.timeout.inSeconds}s'),
+                            _ConfigRow(
+                              label: 'Timeout',
+                              value: '${config.timeout.inSeconds}s',
+                            ),
                           ],
                         ],
                       );
@@ -252,8 +300,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     onTap: () => unawaited(_showDatabaseInfo()),
                   ),
                   ListTile(
-                    leading: const Icon(Icons.delete_outline, color: Colors.red),
-                    title: const Text('Clear All Local Data', style: TextStyle(color: Colors.red)),
+                    leading: const Icon(
+                      Icons.delete_outline,
+                      color: Colors.red,
+                    ),
+                    title: const Text(
+                      'Clear All Local Data',
+                      style: TextStyle(color: Colors.red),
+                    ),
                     onTap: () => unawaited(_confirmClearData()),
                   ),
                 ],
@@ -267,10 +321,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'About',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
+                  Text('About', style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 16),
                   const ListTile(
                     leading: Icon(Icons.info_outline),
@@ -326,7 +377,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Clear All Data?'),
-        content: const Text('This will delete all local notes and settings. This cannot be undone.'),
+        content: const Text(
+          'This will delete all local notes and settings. This cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -354,11 +407,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 }
 
 class _ConfigRow extends StatelessWidget {
-  const _ConfigRow({
-    required this.label,
-    required this.value,
-    this.valueStyle,
-  });
+  const _ConfigRow({required this.label, required this.value, this.valueStyle});
 
   final String label;
   final String value;
@@ -369,8 +418,18 @@ class _ConfigRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[600])),
-        Text(value, style: valueStyle ?? Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: Colors.grey[600]),
+        ),
+        Text(
+          value,
+          style:
+              valueStyle ??
+              Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w500),
+        ),
       ],
     );
   }

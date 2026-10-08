@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/rules/note_rules.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
+
 import '../sqflite_test_setup.dart' as sqflite_setup;
 
 void main() {
@@ -15,22 +16,23 @@ void main() {
 
   test('adds a note with content trimmed', () {
     final container = ProviderContainer.test();
-    final problem = container.read(notesProvider.notifier).add(
-      rawContent: '  buy milk ',
-      projectId: 'default',
-    );
+    final problem = container
+        .read(notesProvider.notifier)
+        .add(rawContent: '  buy milk ', projectId: 'default');
     expect(problem, isNull);
     expect(container.read(notesProvider).single.content, 'buy milk');
   });
 
   test('adds a note with custom source type and metadata', () {
     final container = ProviderContainer.test();
-    final problem = container.read(notesProvider.notifier).add(
-      rawContent: 'from telegram',
-      projectId: 'telegram-proj',
-      sourceType: 'telegram',
-      metadata: {'telegram_chat_id': '12345'},
-    );
+    final problem = container
+        .read(notesProvider.notifier)
+        .add(
+          rawContent: 'from telegram',
+          projectId: 'telegram-proj',
+          sourceType: 'telegram',
+          metadata: {'telegram_chat_id': '12345'},
+        );
     expect(problem, isNull);
     final note = container.read(notesProvider).single;
     expect(note.content, 'from telegram');
@@ -41,10 +43,9 @@ void main() {
 
   test('refuses a blank content and leaves the list alone', () {
     final container = ProviderContainer.test();
-    final problem = container.read(notesProvider.notifier).add(
-      rawContent: '   ',
-      projectId: 'default',
-    );
+    final problem = container
+        .read(notesProvider.notifier)
+        .add(rawContent: '   ', projectId: 'default');
     expect(problem, NoteProblem.blank);
     expect(container.read(notesProvider), isEmpty);
   });
@@ -52,10 +53,9 @@ void main() {
   test('refuses content past the limit and leaves the list alone', () {
     final container = ProviderContainer.test();
     final long = 'a' * (maxNoteLength + 1);
-    final problem = container.read(notesProvider.notifier).add(
-      rawContent: long,
-      projectId: 'default',
-    );
+    final problem = container
+        .read(notesProvider.notifier)
+        .add(rawContent: long, projectId: 'default');
     expect(problem, NoteProblem.tooLong);
     expect(container.read(notesProvider), isEmpty);
   });
@@ -73,18 +73,16 @@ void main() {
 
   test('update changes content and updatedAt', () {
     final container = ProviderContainer.test();
-    container.read(notesProvider.notifier).add(
-      rawContent: 'original',
-      projectId: 'default',
-    );
+    container
+        .read(notesProvider.notifier)
+        .add(rawContent: 'original', projectId: 'default');
     final originalNote = container.read(notesProvider).single;
     final originalUpdatedAt = originalNote.updatedAt;
 
     // Wait a bit to ensure timestamp difference
-    final problem = container.read(notesProvider.notifier).update(
-      id: originalNote.id,
-      newContent: 'updated',
-    );
+    final problem = container
+        .read(notesProvider.notifier)
+        .update(id: originalNote.id, newContent: 'updated');
     expect(problem, isNull);
 
     final updatedNote = container.read(notesProvider).single;
@@ -96,26 +94,23 @@ void main() {
 
   test('update refuses blank content', () {
     final container = ProviderContainer.test();
-    container.read(notesProvider.notifier).add(
-      rawContent: 'original',
-      projectId: 'default',
-    );
+    container
+        .read(notesProvider.notifier)
+        .add(rawContent: 'original', projectId: 'default');
     final note = container.read(notesProvider).single;
 
-    final problem = container.read(notesProvider.notifier).update(
-      id: note.id,
-      newContent: '   ',
-    );
+    final problem = container
+        .read(notesProvider.notifier)
+        .update(id: note.id, newContent: '   ');
     expect(problem, NoteProblem.blank);
     expect(container.read(notesProvider).single.content, 'original');
   });
 
   test('delete removes the note', () {
     final container = ProviderContainer.test();
-    container.read(notesProvider.notifier).add(
-      rawContent: 'to delete',
-      projectId: 'default',
-    );
+    container
+        .read(notesProvider.notifier)
+        .add(rawContent: 'to delete', projectId: 'default');
     final note = container.read(notesProvider).single;
 
     container.read(notesProvider.notifier).delete(note.id);
@@ -124,10 +119,9 @@ void main() {
 
   test('delete ignores unknown id', () {
     final container = ProviderContainer.test();
-    container.read(notesProvider.notifier).add(
-      rawContent: 'keep',
-      projectId: 'default',
-    );
+    container
+        .read(notesProvider.notifier)
+        .add(rawContent: 'keep', projectId: 'default');
 
     container.read(notesProvider.notifier).delete('unknown-id');
     expect(container.read(notesProvider).length, 1);
@@ -135,10 +129,9 @@ void main() {
 
   test('togglePin flips the pinned metadata flag', () {
     final container = ProviderContainer.test();
-    container.read(notesProvider.notifier).add(
-      rawContent: 'pinnable',
-      projectId: 'default',
-    );
+    container
+        .read(notesProvider.notifier)
+        .add(rawContent: 'pinnable', projectId: 'default');
     final note = container.read(notesProvider).single;
     expect(note.metadata['pinned'], isNull);
 
@@ -151,10 +144,9 @@ void main() {
 
   test('replaceAll replaces the entire list', () {
     final container = ProviderContainer.test();
-    container.read(notesProvider.notifier).add(
-      rawContent: 'old',
-      projectId: 'default',
-    );
+    container
+        .read(notesProvider.notifier)
+        .add(rawContent: 'old', projectId: 'default');
 
     final newNotes = [
       Note(
@@ -177,6 +169,9 @@ void main() {
 
     container.read(notesProvider.notifier).replaceAll(newNotes);
     expect(container.read(notesProvider).length, 2);
-    expect(container.read(notesProvider).map((n) => n.content).toList(), ['new one', 'new two']);
+    expect(container.read(notesProvider).map((n) => n.content).toList(), [
+      'new one',
+      'new two',
+    ]);
   });
 }

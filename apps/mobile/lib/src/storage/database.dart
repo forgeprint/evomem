@@ -116,7 +116,10 @@ class DatabaseHelper {
       )
     ''');
 
-    await db.insert('meta', {'key': 'schema_version', 'value': _databaseVersion.toString()});
+    await db.insert('meta', {
+      'key': 'schema_version',
+      'value': _databaseVersion.toString(),
+    });
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -128,7 +131,9 @@ class DatabaseHelper {
           deleted_at TEXT NOT NULL
         )
       ''');
-      await db.execute('CREATE INDEX idx_deletions_at ON deletions(deleted_at, id)');
+      await db.execute(
+        'CREATE INDEX idx_deletions_at ON deletions(deleted_at, id)',
+      );
 
       await db.execute('''
         CREATE TABLE sync_state (
@@ -154,7 +159,9 @@ class DatabaseHelper {
           note_id TEXT NOT NULL DEFAULT ''
         )
       ''');
-      await db.execute('CREATE INDEX idx_proposals_pending ON proposals(status, proposed_at DESC)');
+      await db.execute(
+        'CREATE INDEX idx_proposals_pending ON proposals(status, proposed_at DESC)',
+      );
     }
 
     await db.update(

@@ -32,10 +32,12 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   }
 
   void _addNote() {
-    final problem = ref.read(notesProvider.notifier).add(
-      rawContent: _addController.text,
-      projectId: ref.read(currentProjectProvider),
-    );
+    final problem = ref
+        .read(notesProvider.notifier)
+        .add(
+          rawContent: _addController.text,
+          projectId: ref.read(currentProjectProvider),
+        );
     setState(() => _problem = problem);
     if (problem == null) {
       _addController.clear();
@@ -137,7 +139,8 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                       return _NoteRow(
                         key: ValueKey(note.id),
                         note: note,
-                        onTap: () => context.go(NoteDetailRoute(note.id).location),
+                        onTap: () =>
+                            context.go(NoteDetailRoute(note.id).location),
                         onDelete: () => unawaited(_showDeleteDialog(note.id)),
                         onTogglePin: () =>
                             ref.read(notesProvider.notifier).togglePin(note.id),
@@ -166,9 +169,8 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             onPressed: () {
               ref.read(notesProvider.notifier).delete(noteId);
               Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(l10n.noteDeleted)),
-              );
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(l10n.noteDeleted)));
             },
             child: Text('Delete', style: TextStyle(color: Colors.red)),
           ),
@@ -213,12 +215,10 @@ class _NoteRow extends StatelessWidget {
         return false; // We handle deletion in the dialog
       },
       child: ListTile(
-        leading: isPinned ? const Icon(Icons.push_pin, color: Colors.amber) : null,
-        title: Text(
-          note.content,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
+        leading: isPinned
+            ? const Icon(Icons.push_pin, color: Colors.amber)
+            : null,
+        title: Text(note.content, maxLines: 2, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           '${note.sourceType} • ${_formatDate(note.updatedAt)}',
           style: Theme.of(context).textTheme.bodySmall,

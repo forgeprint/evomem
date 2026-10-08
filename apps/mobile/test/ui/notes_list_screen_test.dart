@@ -30,11 +30,16 @@ void main() {
     expect(find.text('No notes yet. Tap + to add one.'), findsOneWidget);
   });
 
-  testWidgets('refuses content past the limit and says the limit', (tester) async {
+  testWidgets('refuses content past the limit and says the limit', (
+    tester,
+  ) async {
     await pumpApp(tester);
     await addNote(tester, 'a' * 10001);
 
-    expect(find.text('Note is too long (max 10000 characters).'), findsOneWidget);
+    expect(
+      find.text('Note is too long (max 10000 characters).'),
+      findsOneWidget,
+    );
     expect(find.text('No notes yet. Tap + to add one.'), findsOneWidget);
   });
 
@@ -58,7 +63,9 @@ void main() {
     expect(find.text('to delete'), findsNothing);
   });
 
-  testWidgets('meets the accessibility guidelines a test can check', (tester) async {
+  testWidgets('meets the accessibility guidelines a test can check', (
+    tester,
+  ) async {
     final handle = tester.ensureSemantics();
     await pumpApp(tester);
     await addNote(tester, 'buy milk');

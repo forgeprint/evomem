@@ -32,7 +32,8 @@ const List<String> knownSourceTypes = [
 ];
 
 /// Validates a source type.
-bool isValidSourceType(String sourceType) => knownSourceTypes.contains(sourceType);
+bool isValidSourceType(String sourceType) =>
+    knownSourceTypes.contains(sourceType);
 
 /// Default source type for user-created notes.
 const String defaultSourceType = 'manual';

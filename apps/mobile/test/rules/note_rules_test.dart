@@ -38,7 +38,11 @@ void main() {
   group('isValidSourceType', () {
     test('accepts known source types', () {
       for (final type in knownSourceTypes) {
-        expect(isValidSourceType(type), isTrue, reason: '$type should be valid');
+        expect(
+          isValidSourceType(type),
+          isTrue,
+          reason: '$type should be valid',
+        );
       }
     });
 
@@ -49,24 +53,30 @@ void main() {
   });
 
   group('Note', () {
-    test('withContent creates a new note with updated content and timestamp', () {
-      final original = Note(
-        id: '1',
-        projectId: 'proj',
-        content: 'original',
-        sourceType: 'manual',
-        createdAt: DateTime(2026, 1, 1),
-        updatedAt: DateTime(2026, 1, 1),
-      );
-      final updated = original.withContent('new content', DateTime(2026, 1, 2));
+    test(
+      'withContent creates a new note with updated content and timestamp',
+      () {
+        final original = Note(
+          id: '1',
+          projectId: 'proj',
+          content: 'original',
+          sourceType: 'manual',
+          createdAt: DateTime(2026, 1, 1),
+          updatedAt: DateTime(2026, 1, 1),
+        );
+        final updated = original.withContent(
+          'new content',
+          DateTime(2026, 1, 2),
+        );
 
-      expect(updated.id, original.id);
-      expect(updated.projectId, original.projectId);
-      expect(updated.content, 'new content');
-      expect(updated.sourceType, original.sourceType);
-      expect(updated.createdAt, original.createdAt);
-      expect(updated.updatedAt, DateTime(2026, 1, 2));
-      expect(updated.metadata, original.metadata);
-    });
+        expect(updated.id, original.id);
+        expect(updated.projectId, original.projectId);
+        expect(updated.content, 'new content');
+        expect(updated.sourceType, original.sourceType);
+        expect(updated.createdAt, original.createdAt);
+        expect(updated.updatedAt, DateTime(2026, 1, 2));
+        expect(updated.metadata, original.metadata);
+      },
+    );
   });
 }
