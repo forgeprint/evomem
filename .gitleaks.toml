@@ -17,3 +17,15 @@ go.sum and the vendored tree being reviewable, not by this rule.
 """
 paths = ['''^vendor/''']
 
+[[allowlists]]
+description = """
+Note identifiers. A ULID is 26 characters of Crockford base32 with no
+separators, which is exactly the shape the generic high-entropy heuristic
+looks for, and identifiers appear throughout the tests, the documentation and
+the example payloads. They are not secret: every one of them is printed by
+`evomem add`, returned by `POST /ingest` and carried in MCP results.
+
+Scoped to the ULID alphabet and length rather than allowing high-entropy
+strings generally, so a real key of a different shape is still caught.
+"""
+regexes = ['''\b[0-7][0-9A-HJKMNP-TV-Z]{25}\b''']

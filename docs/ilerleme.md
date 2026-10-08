@@ -1313,3 +1313,21 @@ değil: bağlamayı unutan bir komut bu güvenceyi sessizce bozardı.
 Telefon tarafı: kayıt (paket, izin, arayüz) ve `/ingest`'ten dönen id'nin
 saklanması. İkincisi olmadan telefon yüklediği sesi hiçbir nota bağlayamaz,
 yani sunucu tarafı şimdilik yalnızca `curl` ve Shortcut'lar için kullanılabilir.
+
+### Sonra: CI'da gitleaks düştü, ben kaçırmıştım
+
+`go` işi kırmızı döndü: `leaks found: 1`. Bulgu **yanlış pozitif** — bir
+testteki ULID sabiti (`01M4D3H3HNMFM69N4MHNAYBZ1Z`), entropisi yüzünden
+`generic-api-key` sanılmış. Bir ULID zaten 26 karakter ayraçsız Crockford
+base32, yani o sezgiselliğin aradığı şeklin tam kendisi.
+
+`.gitleaks.toml`'a ULID alfabesi ve uzunluğuna **daraltılmış** bir allowlist
+eklendi — yüksek entropili her şeyi değil. Farklı şekilli gerçek bir anahtarın
+hâlâ yakalandığı denendi: `.go` dosyasına rastgele 32 karakterlik bir sabit
+konuldu, `generic-api-key` onu yakaladı.
+
+**Bunu bir oturum önce kaçırdım.** `ci.sh` çıktısını `grep -E "...|no leaks|..."`
+ile filtreleyip yeşil saymıştım; oysa o koşuda "no leaks found" satırı hiç
+yoktu, yerine "leaks found: 1" vardı ve grep'im onu da göstermiyordu. Yani
+yeşil olduğunu gördüğüm için değil, kırmızı olduğunu göremediğim için yeşil
+sandım. Filtre, aradığı satırın yokluğunu sessizlik olarak okuyordu.
