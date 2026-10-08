@@ -30,7 +30,7 @@ const secret = "a-secret-token"
 func newHandler(t *testing.T) (*Handler, *fakeStore) {
 	t.Helper()
 	store := &fakeStore{}
-	h, err := New(store, secret, "evomem")
+	h, err := New(store, secret, "evomem", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,16 +53,16 @@ func post(t *testing.T, h *Handler, body string, header string) *httptest.Respon
 // to start without a secret is the difference between an ingest endpoint and
 // an open one.
 func TestNewRefusesWithoutSecret(t *testing.T) {
-	if _, err := New(&fakeStore{}, "", "evomem"); err == nil {
+	if _, err := New(&fakeStore{}, "", "evomem", nil); err == nil {
 		t.Error("a handler was built with no secret")
 	}
-	if _, err := New(&fakeStore{}, "   ", "evomem"); err == nil {
+	if _, err := New(&fakeStore{}, "   ", "evomem", nil); err == nil {
 		t.Error("a handler was built with a blank secret")
 	}
-	if _, err := New(&fakeStore{}, secret, ""); err == nil {
+	if _, err := New(&fakeStore{}, secret, "", nil); err == nil {
 		t.Error("a handler was built with no project")
 	}
-	if _, err := New(nil, secret, "evomem"); err == nil {
+	if _, err := New(nil, secret, "evomem", nil); err == nil {
 		t.Error("a handler was built with no store")
 	}
 }
@@ -256,7 +256,7 @@ func TestMalformedBody(t *testing.T) {
 // should ask for one.
 func TestStoreFailureAsksForARetry(t *testing.T) {
 	store := &fakeStore{err: context.DeadlineExceeded}
-	h, err := New(store, secret, "evomem")
+	h, err := New(store, secret, "evomem", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

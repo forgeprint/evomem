@@ -25,6 +25,10 @@ const SecretHeader = "X-Telegram-Bot-Api-Secret-Token"
 // Origin is what a note from here is marked with.
 const Origin = "telegram"
 
+// ChatProjectMap maps chat_id (string form of int64) to project_id.
+// Empty map means all chats go to the default project.
+type ChatProjectMap map[string]string
+
 // Store is the part of the database this adapter needs.
 type Store interface {
 	Create(ctx context.Context, n *models.Note) error
@@ -39,19 +43,19 @@ type Handler struct {
 	// between the store and the open internet.
 	secret string
 
-	// project is the project every note from this bot belongs to.
-	//
-	// One bot, one project, deliberately. Routing by chat, by hashtag or
-	// by command are all defensible and they contradict each other; until
-	// there is a reason to pick one, the chat is recorded in the metadata
-	// so a later version can route on it without a migration.
+	// project is the default project every note from this bot belongs to.
+	// Used when no chat-specific mapping exists.
 	project string
+
+	// chatProjects maps chat_id (string) to project_id.
+	// If empty, all chats use the default project.
+	chatProjects ChatProjectMap
 }
 
 // New returns a handler. It fails rather than start without a secret: an
 // unauthenticated ingest endpoint is a way for anyone to write to the user's
 // memory, and a note once written is read by a model later.
-func New(store Store, secret, project string) (*Handler, error) {
+func New(store Store, secret, project string, chatProjects ChatProjectMap) (*Handler, error) {
 	if store == nil {
 		return nil, errors.New("telegram: no store")
 	}
@@ -61,7 +65,12 @@ func New(store Store, secret, project string) (*Handler, error) {
 	if strings.TrimSpace(project) == "" {
 		return nil, errors.New("telegram: no project to file notes under")
 	}
-	return &Handler{store: store, secret: secret, project: project}, nil
+	return &Handler{
+		store:        store,
+		secret:       secret,
+		project:      project,
+		chatProjects: chatProjects,
+	}, nil
 }
 
 // The payload, as much of it as this adapter reads. Every field is optional in
@@ -180,13 +189,16 @@ func (h *Handler) noteFrom(u *update) (*models.Note, bool) {
 		return nil, false
 	}
 
+	// Determine project from chat_id mapping or hashtag
+	project := h.resolveProject(msg)
+
 	content, meta, ok := describe(msg)
 	if !ok {
 		return nil, false
 	}
 
 	n := &models.Note{
-		ProjectID:  h.project,
+		ProjectID:  project,
 		Content:    content,
 		SourceType: models.SourceTelegram,
 	}
@@ -214,6 +226,35 @@ func (h *Handler) noteFrom(u *update) (*models.Note, bool) {
 		n.SetMeta(k, v)
 	}
 	return n, true
+}
+
+// resolveProject determines the project for a message.
+// Priority: 1) chat_id mapping, 2) hashtag in text (if enabled), 3) default project.
+func (h *Handler) resolveProject(msg *message) string {
+	// 1. chat_id mapping (primary)
+	if msg.Chat != nil && h.chatProjects != nil {
+		chatID := fmt.Sprintf("%d", msg.Chat.ID)
+		if p, ok := h.chatProjects[chatID]; ok && p != "" {
+			return p
+		}
+	}
+
+	// 2. hashtag in text (secondary, opt-in via non-empty text)
+	// Format: #projectname at start of message
+	if text := strings.TrimSpace(msg.Text); text != "" {
+		if strings.HasPrefix(text, "#") {
+			parts := strings.Fields(text)
+			if len(parts) > 0 {
+				tag := strings.TrimPrefix(parts[0], "#")
+				if tag != "" {
+					return tag
+				}
+			}
+		}
+	}
+
+	// 3. default project
+	return h.project
 }
 
 // describe gives the note's content and any extra metadata.

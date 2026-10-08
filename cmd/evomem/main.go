@@ -15,7 +15,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/forgeprint/evomem/core/sync"
 	"github.com/forgeprint/evomem/shared/database"
 	"github.com/forgeprint/evomem/shared/models"
 )
@@ -40,10 +42,12 @@ usage:
   evomem list   [-project <id>] [-limit <n>]
   evomem delete <id>
   evomem projects
-  evomem review [-accept <id> | -reject <id>] [-status <s>]
+  evomem review [-accept <id> | -reject <id>] [-status ]
   evomem mcp    [-quiet]
   evomem serve  [-addr <host:port>]
   evomem sync   [-once] [-init-remote] [-interval <d>]
+  evomem pull
+  evomem restore [-confirm]
   evomem sync-status
   evomem archive [-months <n>] [-project <id>] [-vacuum] [-dry-run]
 
@@ -107,30 +111,98 @@ func run(args []string, out io.Writer, in io.Reader) error {
 		return cmdSyncStatus(rest, out)
 	case "sync":
 		return cmdSync(rest, out)
+	case "pull":
+		return cmdPull(rest, out)
+	case "restore":
+		return cmdRestore(rest, out)
 	default:
 		return fmt.Errorf("unknown command %q; run evomem help", cmd)
 	}
 }
 
-// storePath is where the store lives. One environment variable rather than a
-// global flag, so a shell can point a whole session at a scratch database.
-func storePath() (string, error) {
-	if p := os.Getenv("EVOMEM_DB"); p != "" {
-		return p, nil
+func cmdPull(args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("pull", flag.ContinueOnError)
+	if err := fs.Parse(args); err != nil {
+		return err
 	}
-	home, err := os.UserHomeDir()
+	if fs.NArg() != 0 {
+		return errors.New("pull takes no arguments")
+	}
+
+	if os.Getenv("EVOMEM_POSTGRES_DSN") == "" {
+		return errors.New("EVOMEM_POSTGRES_DSN is not set")
+	}
+
+	ctx := context.Background()
+
+	remote, err := sync.OpenPostgres(ctx, os.Getenv("EVOMEM_POSTGRES_DSN"))
 	if err != nil {
-		return "", fmt.Errorf("finding the home directory: %w", err)
+		return err
 	}
-	return filepath.Join(home, ".evomem", "evomem.db"), nil
+	defer remote.Close()
+
+	db, err := openStore()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	worker, err := sync.New(db, remote, sync.Config{})
+	if err != nil {
+		return err
+	}
+
+	cursor, err := worker.Pull(ctx)
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(out, "pulled: cursor now at %s %s\n", cursor.UpdatedAt.Format(time.RFC3339), cursor.ID)
+	return nil
 }
 
-func openStore() (*database.DB, error) {
-	path, err := storePath()
-	if err != nil {
-		return nil, err
+func cmdRestore(args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("restore", flag.ContinueOnError)
+	confirm := fs.Bool("confirm", false, "confirm this destructive operation")
+	if err := fs.Parse(args); err != nil {
+		return err
 	}
-	return database.Open(path)
+	if fs.NArg() != 0 {
+		return errors.New("restore takes no arguments")
+	}
+	if !*confirm {
+		return errors.New("restore is destructive; pass -confirm to proceed")
+	}
+
+	if os.Getenv("EVOMEM_POSTGRES_DSN") == "" {
+		return errors.New("EVOMEM_POSTGRES_DSN is not set")
+	}
+
+	ctx := context.Background()
+
+	remote, err := sync.OpenPostgres(ctx, os.Getenv("EVOMEM_POSTGRES_DSN"))
+	if err != nil {
+		return err
+	}
+	defer remote.Close()
+
+	db, err := openStore()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	worker, err := sync.New(db, remote, sync.Config{})
+	if err != nil {
+		return err
+	}
+
+	if err := worker.Restore(ctx); err != nil {
+		return err
+	}
+
+	fmt.Fprintln(out, "restored from remote")
+	return nil
 }
 
 func cmdInit(out io.Writer) error {
@@ -175,9 +247,6 @@ func cmdAdd(args []string, out io.Writer, in io.Reader) error {
 	return nil
 }
 
-// readContent takes the note text from the arguments, or from stdin when the
-// only argument is "-". Piping is how an Apple Shortcut or a shell one-liner
-// will use this.
 func readContent(args []string, in io.Reader) (string, error) {
 	if len(args) == 1 && args[0] == "-" {
 		data, err := io.ReadAll(in)
@@ -253,11 +322,23 @@ func cmdList(args []string, out io.Writer) error {
 	return writeJSON(out, notes)
 }
 
-// cmdDelete removes one note.
-//
-// It leaves a tombstone, which is what lets the deletion reach the remote
-// copy. Without one the row would simply be absent, and absent is
-// indistinguishable from never written.
+func cmdProjects(out io.Writer) error {
+	db, err := openStore()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	projects, err := db.Projects(context.Background())
+	if err != nil {
+		return err
+	}
+	if projects == nil {
+		projects = []database.ProjectSummary{}
+	}
+	return writeJSON(out, projects)
+}
+
 func cmdDelete(args []string, out io.Writer) error {
 	if len(args) != 1 {
 		return errors.New("delete takes one note id")
@@ -276,31 +357,65 @@ func cmdDelete(args []string, out io.Writer) error {
 	return nil
 }
 
-func cmdProjects(out io.Writer) error {
+func cmdReview(args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("review", flag.ContinueOnError)
+	accept := fs.String("accept", "", "accept a proposal by id")
+	reject := fs.String("reject", "", "reject a proposal by id")
+	status := fs.String("status", "pending", "filter by status: pending|accepted|rejected|all")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
 	db, err := openStore()
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	projects, err := db.Projects(context.Background())
+	ctx := context.Background()
+
+	if *accept != "" {
+		if err := db.AcceptProposal(ctx, *accept); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "accepted %s\n", *accept)
+		return nil
+	}
+
+	if *reject != "" {
+		if err := db.RejectProposal(ctx, *reject); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "rejected %s\n", *reject)
+		return nil
+	}
+
+	proposals, err := db.Proposals(ctx, database.ProposalStatus(*status))
 	if err != nil {
 		return err
 	}
-	if projects == nil {
-		projects = []database.ProjectSummary{}
+	if proposals == nil {
+		proposals = []database.Proposal{}
 	}
-	return writeJSON(out, projects)
+	return writeJSON(out, proposals)
 }
 
-// writeJSON is the only output format for anything structured. A note's
-// content is arbitrary text, so a column layout would need escaping rules
-// that JSON already has.
-//
-// Callers pass an empty slice rather than a nil one: a consumer parsing this
-// should get [] for no results, never null.
-func writeJSON(out io.Writer, v any) error {
-	enc := json.NewEncoder(out)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
+func cmdMCP(args []string, out io.Writer, in io.Reader) error {
+	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
+	quiet := fs.Bool("quiet", false, "suppress stderr output")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	fmt.Fprintln(out, "MCP server not yet implemented")
+	return nil
+}
+
+func cmdServe(args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	addr := fs.String("addr", "", "address to listen on")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	fmt.Fprintln(out, "HTTP server not yet implemented")
+	return nil
 }

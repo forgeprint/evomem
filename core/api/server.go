@@ -47,6 +47,10 @@ type Store interface {
 	Create(ctx context.Context, n *models.Note) error
 }
 
+// ChatProjectMap maps chat_id (string form of int64) to project_id.
+// Empty map means all chats go to the default project.
+type ChatProjectMap = telegram.ChatProjectMap
+
 // Config is how a server is set up. Every secret is separate: a Telegram
 // secret is chosen by setWebhook and a Jira secret by the webhook's own
 // configuration, so there is no single credential that could cover both.
@@ -66,6 +70,10 @@ type Config struct {
 	// Without it, and a project, /telegram/webhook is not served.
 	TelegramSecret  string
 	TelegramProject string
+
+	// TelegramChatProjects maps chat_id (string form of int64) to project_id.
+	// If empty or nil, all chats use the default TelegramProject.
+	TelegramChatProjects ChatProjectMap
 
 	// JiraSecret is the secret configured on the Jira webhook. Without it
 	// /jira/webhook is not served. JiraProject overrides the issue's own
@@ -115,7 +123,7 @@ func New(store Store, cfg Config) (*Server, error) {
 	}
 
 	if cfg.TelegramSecret != "" && cfg.TelegramProject != "" {
-		h, err := telegram.New(store, cfg.TelegramSecret, cfg.TelegramProject)
+		h, err := telegram.New(store, cfg.TelegramSecret, cfg.TelegramProject, cfg.TelegramChatProjects)
 		if err != nil {
 			return nil, err
 		}

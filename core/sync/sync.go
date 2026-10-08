@@ -40,6 +40,13 @@ type Remote interface {
 	// error: the local side may be reporting a note the remote never saw.
 	PushDeletions(ctx context.Context, deletions []database.Deletion) error
 
+	// PullNotes fetches notes from the remote that are newer than the cursor.
+	// Returns notes and the new cursor position.
+	PullNotes(ctx context.Context, cursorUpdatedAt, cursorID string, limit int) ([]*models.Note, string, string, error)
+
+	// PullAll fetches all notes from the remote (for restore).
+	PullAll(ctx context.Context, limit int, offset int) ([]*models.Note, error)
+
 	// Close releases the connection.
 	Close() error
 }
@@ -293,4 +300,75 @@ func (w *Worker) backoff(failures int) time.Duration {
 		wait = w.cfg.MaxBackoff
 	}
 	return wait + rand.N(wait/4+1)
+}
+
+// Pull pulls notes from the remote that are newer than the local cursor.
+// Returns the new cursor position.
+func (w *Worker) Pull(ctx context.Context) (database.Cursor, error) {
+	cursor, err := w.db.Cursor(ctx, database.CursorNotes)
+	if err != nil {
+		return database.Cursor{}, err
+	}
+
+	notes, nextUpdatedAtStr, nextID, err := w.remote.PullNotes(ctx, cursor.UpdatedAt.Format(time.RFC3339), cursor.ID, w.cfg.BatchSize)
+	if err != nil {
+		return database.Cursor{}, err
+	}
+
+	for _, note := range notes {
+		if err := w.db.Create(ctx, note); err != nil {
+			return database.Cursor{}, fmt.Errorf("pull: creating note %s: %w", note.ID, err)
+		}
+	}
+
+	nextUpdatedAt, err := time.Parse(time.RFC3339Nano, nextUpdatedAtStr)
+	if err != nil {
+		return database.Cursor{}, fmt.Errorf("pull: parsing cursor time: %w", err)
+	}
+
+	next := database.Cursor{UpdatedAt: nextUpdatedAt, ID: nextID}
+
+	if err := w.db.SetCursor(ctx, database.CursorNotes, next); err != nil {
+		return database.Cursor{}, err
+	}
+
+	return next, nil
+}
+
+// Restore replaces all local notes with the remote copy.
+// This is a destructive operation: all local notes are deleted first.
+func (w *Worker) Restore(ctx context.Context) error {
+	// Delete all local notes
+	if err := w.db.DeleteAllNotes(ctx); err != nil {
+		return fmt.Errorf("restore: clearing local notes: %w", err)
+	}
+
+	// Reset cursor
+	if err := w.db.SetCursor(ctx, database.CursorNotes, database.Cursor{}); err != nil {
+		return fmt.Errorf("restore: resetting cursor: %w", err)
+	}
+
+	// Pull all notes in batches
+	offset := 0
+	for {
+		notes, err := w.remote.PullAll(ctx, 1000, offset)
+		if err != nil {
+			return fmt.Errorf("restore: pulling notes: %w", err)
+		}
+		if len(notes) == 0 {
+			break
+		}
+		for _, note := range notes {
+			if err := w.db.Create(ctx, note); err != nil {
+				return fmt.Errorf("restore: creating note %s: %w", note.ID, err)
+			}
+		}
+		offset += len(notes)
+		if len(notes) < 1000 {
+			break
+		}
+	}
+
+	// Update cursor to end
+	return nil
 }

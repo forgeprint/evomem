@@ -13,11 +13,6 @@ import (
 
 // cmdReview is the human half of the proposal flow: an agent suggests, a
 // person decides, and only a decision here creates a note.
-//
-// With no flags it lists what is waiting. The decision is a separate
-// invocation naming an id, rather than a prompt, because this command is also
-// what a person runs over ssh and in a script, and a tool that asks questions
-// cannot be either.
 func cmdReview(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("review", flag.ContinueOnError)
 	accept := fs.String("accept", "", "accept this proposal and store it as a note")
@@ -75,8 +70,6 @@ func cmdReview(args []string, out io.Writer) error {
 	}
 
 	if *status == database.ProposalPending {
-		// The id here is an example of the command's shape, taken from
-		// the newest proposal — not a suggestion to accept that one.
 		fmt.Fprintf(out, "\n%d waiting. Decide on one by id:\n", len(proposals))
 		fmt.Fprintf(out, "  evomem review -accept %s\n", proposals[0].ID)
 		fmt.Fprintf(out, "  evomem review -reject %s\n", proposals[0].ID)
@@ -103,9 +96,6 @@ func writeProposal(out io.Writer, p *database.Proposal) {
 	}
 	fmt.Fprintln(out)
 
-	// The agent's own declaration that the words came from elsewhere. The
-	// person deciding is what this property rests on, so it goes where
-	// they will read it.
 	if p.Tainted() {
 		fmt.Fprintln(out, "  [the agent says this came from outside the project]")
 	}
@@ -117,16 +107,14 @@ func writeProposal(out io.Writer, p *database.Proposal) {
 	}
 }
 
-// reviewReminder is the line other commands print when something is waiting.
-// A queue nobody is told about is a queue nobody reads.
 func reviewReminder(ctx context.Context, db *database.DB) string {
 	pending, err := db.PendingProposals(ctx)
-	if err != nil || pending == 0 {
+	if err != nil || len(pending) == 0 {
 		return ""
 	}
 	noun := "proposals"
-	if pending == 1 {
+	if len(pending) == 1 {
 		noun = "proposal"
 	}
-	return fmt.Sprintf("%d %s waiting for review; see evomem review", pending, noun)
+	return fmt.Sprintf("%d %s waiting for review; see evomem review", len(pending), noun)
 }

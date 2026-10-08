@@ -414,3 +414,32 @@ type ProjectSummary struct {
 	Notes     int       `json:"notes"`
 	NewestAt  time.Time `json:"newest_at"`
 }
+
+// DeleteAllNotes removes all notes from the database. Used for restore.
+func (d *DB) DeleteAllNotes(ctx context.Context) error {
+	_, err := d.write.ExecContext(ctx, `DELETE FROM notes`)
+	return err
+}
+
+// GetAllNotes returns all notes with optional pagination. Used for restore.
+func (d *DB) GetAllNotes(ctx context.Context, limit, offset int) ([]*models.Note, error) {
+	query := `SELECT ` + noteColumns + ` FROM notes ORDER BY created_at ASC LIMIT ? OFFSET ?`
+	rows, err := d.read.QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("database: getting all notes: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*models.Note
+	for rows.Next() {
+		n, err := scanNote(rows)
+		if err != nil {
+			return nil, fmt.Errorf("database: getting all notes: %w", err)
+		}
+		out = append(out, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("database: getting all notes: %w", err)
+	}
+	return out, nil
+}

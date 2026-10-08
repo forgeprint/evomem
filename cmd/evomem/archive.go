@@ -11,14 +11,10 @@ import (
 	"github.com/forgeprint/evomem/shared/database"
 )
 
-// defaultArchiveMonths is the age at which a note is old enough to thin out.
-// Six months, from the plan.
-const defaultArchiveMonths = 6
-
 // cmdArchive removes old notes to thin the local file.
 func cmdArchive(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("archive", flag.ContinueOnError)
-	months := fs.Int("months", defaultArchiveMonths, "remove notes older than this many months")
+	months := fs.Int("months", 6, "remove notes older than this many months")
 	before := fs.String("before", "", "remove notes created before this instant (RFC 3339), instead of -months")
 	project := fs.String("project", "", "only this project")
 	vacuum := fs.Bool("vacuum", false, "rewrite the file afterwards to return the space")
@@ -68,7 +64,6 @@ func cmdArchive(args []string, out io.Writer) error {
 	fmt.Fprintf(out, "removed %d note(s), %d tombstone(s)\n",
 		result.NotesRemoved, result.TombstonesRemoved)
 	if result.Skipped > 0 {
-		// The number that explains a run which seemed to do nothing.
 		fmt.Fprintf(out,
 			"kept %d note(s) that are old enough but have not been synced;\n"+
 				"  they exist only in this file. -include-unsynced removes them anyway.\n",
@@ -83,14 +78,12 @@ func cmdArchive(args []string, out io.Writer) error {
 	return nil
 }
 
-// archiveDryRun counts without removing. Archiving is irreversible, so there
-// has to be a way to see what it would take.
 func archiveDryRun(ctx context.Context, db *database.DB, out io.Writer, opts database.ArchiveOptions) error {
-	total, err := db.Count(ctx, database.ListOptions{ProjectID: opts.ProjectID})
+	total, err := db.Count(context.Background(), database.ListOptions{ProjectID: opts.ProjectID})
 	if err != nil {
 		return err
 	}
-	notes, deletions, err := db.PendingCount(ctx)
+	notes, deletions, err := db.PendingCount(context.Background())
 	if err != nil {
 		return err
 	}
@@ -104,7 +97,6 @@ func archiveDryRun(ctx context.Context, db *database.DB, out io.Writer, opts dat
 	return nil
 }
 
-// cmdSyncStatus reports how far the sync engine has got.
 func cmdSyncStatus(_ []string, out io.Writer) error {
 	db, err := openStore()
 	if err != nil {
@@ -138,18 +130,29 @@ func cmdSyncStatus(_ []string, out io.Writer) error {
 	return nil
 }
 
-// humanBytes is for a line a person reads, not for a calculation.
 func humanBytes(n int64) string {
 	const unit = 1024
-	if n < unit {
+	if n < 1024 {
 		return fmt.Sprintf("%d B", n)
 	}
 	value := float64(n)
 	for _, suffix := range []string{"KiB", "MiB", "GiB"} {
-		value /= unit
-		if value < unit {
+		value /= 1024
+		if value < 1024 {
 			return fmt.Sprintf("%.1f %s", value, suffix)
 		}
 	}
-	return fmt.Sprintf("%.1f TiB", value/unit)
+	return fmt.Sprintf("%.1f TiB", value/1024)
+}
+
+func reviewReminder(ctx context.Context, db *database.DB) string {
+	pending, err := db.PendingProposals(ctx)
+	if err != nil || len(pending) == 0 {
+		return ""
+	}
+	noun := "proposals"
+	if len(pending) == 1 {
+		noun = "proposal"
+	}
+	return fmt.Sprintf("%d %s waiting for review; see evomem review", len(pending), noun)
 }
