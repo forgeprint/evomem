@@ -98,11 +98,17 @@ Bunlar bende değil, sende:
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-1. **Ses dökümü.** Telegram ses mesajları `awaiting_transcription: true` ve
-   `telegram_file_id` ile duruyor; `getFile` ile indirip döküme çevirecek
-   hiçbir şey yok. ADR-0016 kararı verilmiş (**proposed**, self-hosted
-   faster-whisper + yerel Whisper.cpp yedeği) ama tek satır kod yazılmadı.
-   `core/api/adapters/transcription` paketi yok.
+1. **Ses dökümü — karar verildi, kod yazılmadı.** ADR-0016 yeniden yazıldı ve
+   **accepted**: döküm, evomem'in sahibi olmadığı bir HTTP servisi; yalnızca
+   URL biliniyor, yerel yedek yok, `EVOMEM_TRANSCRIPTION_URL` yoksa özellik
+   kapalı. Döngüyü yeni bir `evomem transcribe` komutu çalıştırır (`sync`
+   kalıbı, launchd/systemd tetikler). Döküm `content`'i ezer ve
+   `transcribed: true` ile işaretlenir; Telegram notları zaten tainted.
+   Hatalar nota yazılır, `awaiting_transcription` duruyor kalır.
+   Yazılacaklar: `core/transcribe` paketi, `evomem transcribe` komutu,
+   `EVOMEM_TELEGRAM_BOT_TOKEN` ile `getFile` indirmesi, MCP'de `transcribed`
+   işaretinin yüzeye çıkarılması. Mobildeki kayıtlar kapsam dışı — kendi
+   ADR'sini gerektirir.
 2. **Flutter tarafı ses kaydı → döküm zinciri.** Mobilde kayıt var, dökümü
    tetikleyen bir şey yok; (1) bitmeden anlamı yok.
 

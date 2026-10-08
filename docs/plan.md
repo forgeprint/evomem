@@ -73,4 +73,5 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 - [x] İlk sürüm kesildi ve yayınlandı: **v0.1.1**. (`v0.1.0` tag'i workflow'dan
       önce atılmıştı, release'i hiç olmadı; oynatılmadı, yenisi kesildi.)
       `gpg` kurulu olmadığı için tag `-s` değil `-a` ile atıldı.
-- [ ] Ses dökümü (`core/api/adapters/transcription`) → ADR-0016 hâlâ *proposed*
+- [ ] Ses dökümü (`core/transcribe` + `evomem transcribe`) → ADR-0016 **accepted**;
+      harici HTTP servisi, yerel yedek yok, yapılandırılmazsa kapalı

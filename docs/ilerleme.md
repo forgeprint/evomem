@@ -1018,3 +1018,65 @@ flutter build web --release                                 → ✓ Built build/
 `pub get` ve build'in yeniden ürettiği iki dosya (`apps/mobile/.gitignore`,
 `GeneratedPluginRegistrant.java`) geri alındı — ikincisi
 `IntegrationTestPlugin` kaydını düşürüyordu, bu değişikliğin parçası değil.
+
+---
+
+## 2026-10-08 (yedinci oturum) — ADR-0016 konuşuldu ve yeniden yazıldı
+
+Taslak ADR-0016 kodlanamaz durumdaydı. Dört sorunu vardı:
+
+- **İki seçeneği birden seçiyordu** (faster-whisper + Whisper.cpp yedeği).
+  İkincisi ya cgo ister — ADR-0001'e aykırı — ya da yanında ikili taşımak.
+- **`POST /transcribe` endpoint'i yanlış yöndeydi.** `core/api/adapters/*`
+  gelen adaptörler; döküm giden bir çağrı, evomem istemci. Kimliksiz bir
+  multipart yükleme sunmak ADR-0010'a aykırı, üstelik o paketin gövde sınırı
+  1 MiB.
+- **Sahibi olmadığı servisi yapılandırıyordu** (`_MODEL`, `_DEVICE`).
+- **Asıl soruyu hiç sormamıştı:** döküm hafızaya nasıl girer? ADR-0013 ajanın
+  yalnızca öneri yapabileceğini söylüyor; makine dökümü kimsenin okumadığı
+  makine metni.
+
+Ayrıca doğrulanmamış bir performans iddiası ("CPU'da yeterince hızlı")
+gerekçe olarak kullanılıyordu.
+
+### Doğrulanan Telegram kısıtları
+
+Bot API referansından, 2026-10-08'de Bot API 10.3'e (24 Ağustos 2026) karşı,
+`File` bölümü:
+
+- indirme sınırı **20 MB** — daha uzun bir kayıt hiç alınamaz
+- `file_path` **en az 1 saat** geçerli, süresi geçince `getFile` ile yenilenir
+- indirme `https://api.telegram.org/file/bot<token>/<file_path>` üzerinden,
+  yani **bot token** gerekiyor; `evomem serve` bugün yalnızca webhook
+  secret'ını biliyor
+
+Link kısa ömürlü ama `file_id` değil, dolayısıyla indirme webhook anında
+değil döküm anında yapılmalı.
+
+### Verilen kararlar (üçü de kullanıcının seçimi)
+
+1. **Kapsam: yalnızca harici HTTP servisi.** Evomem bir URL ve opsiyonel bir
+   token bilir; hangi whisper, hangi model, GPU var mı — operatörün işi.
+   Yerel yedek yok.
+2. **Çalıştırıcı: `evomem transcribe` komutu**, `serve` içinde arka plan
+   işçisi değil. `sync` ile aynı kalıp; launchd/systemd tetikler.
+3. **Giriş: `content`'i ezer, makine üretimi olduğu işaretlenir.**
+
+### Konuşma sırasında çıkan düzeltme
+
+Seçilen posture'ın yarısı zaten doğruydu: **Telegram notları hâlihazırda
+tainted**, çünkü her adaptör `MarkTainted` çağırıyor (`telegram.go:207`).
+O işaret "metni üçüncü bir taraf yazdı" diyor; "bir makine türetti" demiyor —
+kayıplı bir döküm için önemli olan ikinci iddia. Bu yüzden ayrı bir
+`transcribed: true` işareti kararlaştırıldı ve MCP'nin bunu `tainted` gibi
+yüzeye çıkarması gerekiyor.
+
+İşareti **temizleyen hiçbir şey yok** ve ADR'de uydurulmadı da: bir dökümü
+onaylayıp `tainted`'ı kaldıran bir akış bugün mevcut değil. Böyle bir akışın
+olup olmayacağı ayrı bir karar.
+
+### Kapsam dışı bırakılanlar
+
+Mobil uygulamanın kendi kayıtları (sunucuda değiller, oraya taşıyacak bir yol
+da yok — kendi ADR'si), hangi whisper implementasyonu, ve servisin wire
+formatı (kod yazılırken o servisin güncel dokümantasyonuna karşı yazılacak).
