@@ -92,6 +92,10 @@ dist/ right now:
   gh release create $version dist/* --draft \\
     --title "$version" --generate-notes
 
-Either way SHA256SUMS has to be among the uploaded files: the install script
-reads it from the release and refuses anything that does not match.
+Either way SHA256SUMS has to be among the uploaded files: it is the only way
+someone who downloads a binary can check the bytes they got. The workflow also
+attests every file in dist/, SHA256SUMS included, so a release built there can
+be checked with:
+
+  gh attestation verify <file> --repo forgeprint/evomem
 EOF

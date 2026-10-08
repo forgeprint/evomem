@@ -1,0 +1,74 @@
+name: release
+
+# Tags only. A release is never cut from a branch: the version in the binary
+# comes from the tag, and a branch build would stamp something that cannot be
+# pointed at later.
+on:
+  push:
+    tags: ['v*']
+
+# contents: to create the release. id-token and attestations: to prove the
+# artifacts came from this workflow and no other. The token is short-lived
+# and never leaves the runner. See ADR-0017.
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    # Pinned rather than ubuntu-latest, for the same reason as in ci.yml: a
+    # build that changes under you is a build you cannot bisect.
+    runs-on: ubuntu-24.04
+    steps:
+      # Actions are pinned to commit SHAs here, not tags as in ci.yml: this
+      # workflow holds contents: write and an attestation identity, so a
+      # moved tag would be a moved release. SHAs resolved from the actions
+      # repositories on 2026-10-08. Update the trailing comment with the SHA.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The release notes are generated from history, and release.sh
+          # refuses a tree it cannot describe.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          # go.mod is the single place the version is written.
+          go-version-file: go.mod
+          # Dependencies are vendored, so there is nothing to cache.
+          cache: false
+
+      # The same script a developer runs. It runs ./scripts/ci.sh first, so a
+      # tag that does not pass the checks produces no artifacts, builds the
+      # five targets with the tag as main.version, and verifies SHA256SUMS
+      # against what it just wrote.
+      - name: Build and checksum
+        run: ./scripts/release.sh "${GITHUB_REF_NAME}"
+
+      # Before the upload, so that nothing can be published without it: a
+      # failure here fails the job and there is no release to fix up after
+      # the fact. The subject is every file in dist/, SHA256SUMS included,
+      # because a checksum file nobody can attribute proves nothing.
+      - name: Attest what was built
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: 'dist/*'
+
+      # A draft, so that a person reads what is in it and presses publish.
+      # Building here rather than on a laptop is also what makes keyless
+      # signing possible: it needs the identity of the workflow that
+      # produced the bytes.
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --draft \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes
+
+concurrency:
+  # Two pushes of the same tag must not race to create the same release.
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
