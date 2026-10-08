@@ -33,7 +33,7 @@ shared/database    tek yazıcılı iki havuz, FTS5 arama, delta izleme,
 core/mcp           stdio JSON-RPC, spec'e göre yazılmış, iki protokol dönemi
 core/api           POST /ingest + Telegram ve Jira webhook'ları
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
-cmd/evomem         13 alt komut (mcp, serve, pull, restore dahil)
+cmd/evomem         14 alt komut (mcp, serve, pull, restore, transcribe dahil)
 apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
 ```
 
@@ -58,6 +58,8 @@ evomem pull                           # aynadan çek
 evomem restore [-confirm]             # aynadan tam geri yükle
 evomem sync-status                    # ne bekliyor
 evomem archive -dry-run               # ne temizlenecek
+evomem transcribe -dry-run            # hangi kayıt dökülecek
+evomem transcribe                     # kuyruğu işle (servis yoksa kapalı)
 ```
 
 ## Neyin doğrulandığı, neyin doğrulanmadığı
@@ -69,6 +71,10 @@ evomem archive -dry-run               # ne temizlenecek
 - HTTP girişinin üç yolu, `curl` ile, kimlik doğrulama hataları dahil
 - PostgreSQL transportu, Docker'da gerçek PostgreSQL 17'ye karşı 10 test
 - Öneri/inceleme akışı, ajan gözünden ve insan gözünden
+- **Ses dökümü**: sahte bir OpenAI-uyumlu servis ve sahte bir Bot API ile
+  uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
+  Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
+  doğrulandı)
 - **Flutter mobil**: sqflite persistence, sync, settings — 42 test,
   `flutter analyze` temiz, web release build'i geçiyor
 
@@ -98,19 +104,21 @@ Bunlar bende değil, sende:
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-1. **Ses dökümü — karar verildi, kod yazılmadı.** ADR-0016 yeniden yazıldı ve
-   **accepted**: döküm, evomem'in sahibi olmadığı bir HTTP servisi; yalnızca
-   URL biliniyor, yerel yedek yok, `EVOMEM_TRANSCRIPTION_URL` yoksa özellik
-   kapalı. Döngüyü yeni bir `evomem transcribe` komutu çalıştırır (`sync`
-   kalıbı, launchd/systemd tetikler). Döküm `content`'i ezer ve
-   `transcribed: true` ile işaretlenir; Telegram notları zaten tainted.
-   Hatalar nota yazılır, `awaiting_transcription` duruyor kalır.
-   Yazılacaklar: `core/transcribe` paketi, `evomem transcribe` komutu,
-   `EVOMEM_TELEGRAM_BOT_TOKEN` ile `getFile` indirmesi, MCP'de `transcribed`
-   işaretinin yüzeye çıkarılması. Mobildeki kayıtlar kapsam dışı — kendi
-   ADR'sini gerektirir.
-2. **Flutter tarafı ses kaydı → döküm zinciri.** Mobilde kayıt var, dökümü
-   tetikleyen bir şey yok; (1) bitmeden anlamı yok.
+1. **Mobildeki kayıtların dökümü.** Flutter tarafında kayıt var; dosyalar
+   telefonda duruyor ve sunucuya taşıyacak bir yol yok. ADR-0016 bunu
+   bilinçli olarak kapsam dışı bıraktı — bir yükleme yolu ve kendi ADR'si
+   gerekiyor.
+2. **Dökümü onaylama akışı.** `tainted` ve `transcribed` işaretlerini
+   temizleyen hiçbir şey yok; bir insanın dökümü okuyup onayladığını
+   söyleyebileceği bir komut yok. ADR-0016 bunu ayrı bir karar olarak
+   bıraktı.
+
+**Ses dökümü tamam** (ADR-0016): `core/transcribe` paketi ve
+`evomem transcribe` komutu yazıldı. OpenAI-uyumlu
+`POST /v1/audio/transcriptions` arayüzünü hedefliyor;
+`EVOMEM_TRANSCRIPTION_URL` yoksa özellik kapalı ve komut bunu söyleyip çıkar.
+Telegram'dan `getFile` + indirme, 20 MB sınırı, hatalar nota yazılıyor,
+MCP iki işareti de modele gösteriyor. Mobildeki kayıtlar kapsam dışı.
 
 **Sürüm ve dağıtım tamam** (ADR-0017): `.github/workflows/release.yml` `v*`
 tag'inde `scripts/release.sh`'i temiz runner'da çalıştırır, `dist/`'in her

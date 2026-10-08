@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  evomem transcribe, on a timer. See ADR-0016.
+
+  Replace USERNAME, and point EVOMEM_TRANSCRIPTION_URL at an
+  OpenAI-compatible transcription service. Without that variable the command
+  does nothing and says so, which is the off switch.
+
+  StartInterval rather than KeepAlive: this is a command that works through
+  the queue and exits, not a daemon. Run it by hand first —
+  `evomem transcribe -dry-run` — to see what it would pick up.
+
+    cp scripts/evomem-transcribe.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/evomem-transcribe.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.forgeprint.evomem-transcribe</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/evomem</string>
+        <string>transcribe</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>EVOMEM_DB</key>
+        <string>/Users/USERNAME/.evomem/evomem.db</string>
+        <key>EVOMEM_TRANSCRIPTION_URL</key>
+        <string>http://127.0.0.1:8001</string>
+        <key>EVOMEM_TRANSCRIPTION_LANGUAGE</key>
+        <string>tr</string>
+        <key>EVOMEM_TELEGRAM_BOT_TOKEN</key>
+        <string>REPLACE-WITH-BOT-TOKEN</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StartInterval</key>
+    <integer>900</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/USERNAME/.evomem/evomem-transcribe.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/USERNAME/.evomem/evomem-transcribe.error.log</string>
+</dict>
+</plist>

@@ -124,6 +124,9 @@ func cmdSyncStatus(_ []string, out io.Writer) error {
 	if noteCursor.IsZero() {
 		fmt.Fprintln(out, "\nnothing has been synced, so evomem archive will not remove anything")
 	}
+	if waiting, err := db.AwaitingTranscriptionCount(ctx); err == nil && waiting > 0 {
+		fmt.Fprintf(out, "recordings %d waiting to be transcribed; see evomem transcribe\n", waiting)
+	}
 	if line := reviewReminder(ctx, db); line != "" {
 		fmt.Fprintf(out, "\n%s\n", line)
 	}

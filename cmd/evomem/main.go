@@ -50,6 +50,7 @@ usage:
   evomem pull
   evomem restore [-confirm]
   evomem sync-status
+  evomem transcribe [-batch <n>] [-dry-run] [-timeout <d>]
   evomem archive [-months <n>] [-project <id>] [-vacuum] [-dry-run]
 
 The mcp command speaks the Model Context Protocol on stdin and stdout; it is
@@ -70,6 +71,14 @@ serve reads its secrets from the environment, never from a flag:
 
 sync reads its connection string from the environment for the same reason:
   EVOMEM_POSTGRES_DSN     postgres://user:password@host:5432/db
+
+transcribe is off until it is given a service, and does nothing without one:
+  EVOMEM_TRANSCRIPTION_URL       an OpenAI-compatible server; unset means off
+  EVOMEM_TRANSCRIPTION_TOKEN     bearer token, if the service wants one
+  EVOMEM_TRANSCRIPTION_MODEL     model name in the request (default whisper-1)
+  EVOMEM_TRANSCRIPTION_LANGUAGE  ISO-639-1 hint, such as tr
+  EVOMEM_TELEGRAM_BOT_TOKEN      needed to download what Telegram holds
+  EVOMEM_TELEGRAM_API_URL        a self-hosted Bot API server, if not Telegram's
 
 An endpoint whose secret is unset is not served at all.
 `
@@ -110,6 +119,8 @@ func run(args []string, out io.Writer, in io.Reader) error {
 		return cmdArchive(rest, out)
 	case "sync-status":
 		return cmdSyncStatus(rest, out)
+	case "transcribe":
+		return cmdTranscribe(rest, out)
 	case "sync":
 		return cmdSync(rest, out)
 	case "pull":

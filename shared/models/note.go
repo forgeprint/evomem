@@ -134,6 +134,34 @@ const (
 	// MetaOrigin names where a tainted note came from, for a person
 	// deciding whether to trust it.
 	MetaOrigin = "origin"
+
+	// MetaAwaitingTranscription marks a note whose content describes a
+	// recording rather than saying what is in it. An adapter that stores
+	// audio sets it; `evomem transcribe` looks for it and clears it only
+	// once a transcript has been written. See ADR-0016.
+	MetaAwaitingTranscription = "awaiting_transcription"
+
+	// MetaTranscribed marks a note whose content a machine derived from
+	// audio. See Transcribed.
+	MetaTranscribed = "transcribed"
+
+	// MetaTranscribedAt is when the transcript was written, RFC 3339.
+	MetaTranscribedAt = "transcribed_at"
+
+	// MetaTranscriptionSource names the service that produced the
+	// transcript, so a bad batch can be traced to what made it.
+	MetaTranscriptionSource = "transcription_source"
+
+	// MetaTranscriptionReplaced keeps the description the note was created
+	// with, which the transcript overwrote.
+	MetaTranscriptionReplaced = "transcription_replaced"
+
+	// MetaTranscriptionError says why the last attempt did not produce a
+	// transcript. MetaAwaitingTranscription stays set alongside it.
+	MetaTranscriptionError = "transcription_error"
+
+	// MetaTranscriptionAttemptedAt is when that attempt was made, RFC 3339.
+	MetaTranscriptionAttemptedAt = "transcription_attempted_at"
 )
 
 // Tainted reports whether this note's content came from outside the project.
@@ -163,4 +191,55 @@ func (n *Note) MarkTainted(origin string) {
 	if origin != "" {
 		n.SetMeta(MetaOrigin, origin)
 	}
+}
+
+// AwaitingTranscription reports whether this note stands for a recording
+// nobody has transcribed yet. Its content describes the recording — how long
+// it was, what the caption said — rather than what was in it.
+func (n *Note) AwaitingTranscription() bool {
+	b, _ := n.Metadata[MetaAwaitingTranscription].(bool)
+	return b
+}
+
+// Transcribed reports whether a machine derived this note's content from
+// audio.
+//
+// It is a different claim from Tainted, and both can be true. Tainted says a
+// third party wrote the text. This says no one wrote it: a model heard the
+// audio and guessed at the words, so a name may be the wrong name and a
+// negation may have been dropped. A reader told this can weigh the text
+// accordingly; one that is not reads a mishearing as something the user said.
+func (n *Note) Transcribed() bool {
+	b, _ := n.Metadata[MetaTranscribed].(bool)
+	return b
+}
+
+// ApplyTranscript replaces the content with what came back from [source],
+// keeping the description it replaced, and clears the awaiting mark so the
+// next run passes this note by.
+//
+// The tainted mark, if the adapter set one, is left alone: where the audio
+// came from did not change.
+func (n *Note) ApplyTranscript(text, source string, at time.Time) {
+	n.SetMeta(MetaTranscriptionReplaced, n.Content)
+	n.Content = text
+	n.SetMeta(MetaTranscribed, true)
+	n.SetMeta(MetaTranscribedAt, at.UTC().Format(time.RFC3339))
+	if source != "" {
+		n.SetMeta(MetaTranscriptionSource, source)
+	}
+	delete(n.Metadata, MetaAwaitingTranscription)
+	delete(n.Metadata, MetaTranscriptionError)
+	delete(n.Metadata, MetaTranscriptionAttemptedAt)
+}
+
+// MarkTranscriptionFailed records why there is still no transcript.
+//
+// The awaiting mark stays, so the next run tries again. A recording larger
+// than the sender will hand over never succeeds, and the reason sits on the
+// note where someone can read it rather than only in a log that has rotated.
+func (n *Note) MarkTranscriptionFailed(reason string, at time.Time) {
+	n.SetMeta(MetaTranscriptionError, reason)
+	n.SetMeta(MetaTranscriptionAttemptedAt, at.UTC().Format(time.RFC3339))
+	n.SetMeta(MetaAwaitingTranscription, true)
 }

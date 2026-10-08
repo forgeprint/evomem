@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func validNote() Note {
@@ -155,5 +156,88 @@ func TestTaintedWrongType(t *testing.T) {
 	n.SetMeta(MetaTainted, "yes")
 	if n.Tainted() {
 		t.Error("a non-boolean was read as true")
+	}
+}
+
+func TestApplyTranscriptKeepsWhatItReplaced(t *testing.T) {
+	n := &Note{ProjectID: "evomem", Content: "Voice message, 0:14", SourceType: SourceTelegram}
+	n.MarkTainted("telegram")
+	n.SetMeta(MetaAwaitingTranscription, true)
+
+	at := time.Date(2026, 10, 8, 6, 35, 22, 0, time.UTC)
+	n.ApplyTranscript("tünel önce ayakta olmalı", "http://localhost:8001/v1/audio/transcriptions", at)
+
+	if n.Content != "tünel önce ayakta olmalı" {
+		t.Errorf("content = %q", n.Content)
+	}
+	if !n.Transcribed() {
+		t.Error("the note does not say it is a transcription")
+	}
+	// Cleared, which is what makes a second run a no-op.
+	if n.AwaitingTranscription() {
+		t.Error("still marked as awaiting a transcript")
+	}
+	if got, _ := n.MetaString(MetaTranscriptionReplaced); got != "Voice message, 0:14" {
+		t.Errorf("replaced = %q", got)
+	}
+	if got, _ := n.MetaString(MetaTranscribedAt); got != "2026-10-08T06:35:22Z" {
+		t.Errorf("transcribed_at = %q", got)
+	}
+	// Where the audio came from did not change, so the taint stays. The
+	// two marks are different claims and both are true here.
+	if !n.Tainted() {
+		t.Error("the taint was dropped")
+	}
+}
+
+func TestApplyTranscriptClearsAnEarlierFailure(t *testing.T) {
+	n := &Note{ProjectID: "evomem", Content: "Voice message, 0:14", SourceType: SourceTelegram}
+	n.MarkTranscriptionFailed("the service was down", time.Now())
+	n.ApplyTranscript("it worked this time", "svc", time.Now())
+
+	if _, ok := n.MetaString(MetaTranscriptionError); ok {
+		t.Error("a stale failure is still on the note")
+	}
+	if _, ok := n.MetaString(MetaTranscriptionAttemptedAt); ok {
+		t.Error("a stale attempt time is still on the note")
+	}
+}
+
+func TestMarkTranscriptionFailedKeepsItWaiting(t *testing.T) {
+	n := &Note{ProjectID: "evomem", Content: "Voice message, 0:14", SourceType: SourceTelegram}
+	n.SetMeta(MetaAwaitingTranscription, true)
+
+	at := time.Date(2026, 10, 8, 6, 40, 11, 0, time.UTC)
+	n.MarkTranscriptionFailed("recording is larger than the sender will download", at)
+
+	// The point of the mark staying: the next run tries again.
+	if !n.AwaitingTranscription() {
+		t.Error("a failed note stopped waiting")
+	}
+	if n.Transcribed() {
+		t.Error("a failed note claims to be a transcription")
+	}
+	if n.Content != "Voice message, 0:14" {
+		t.Errorf("a failure changed the content: %q", n.Content)
+	}
+	if got, _ := n.MetaString(MetaTranscriptionError); got == "" {
+		t.Error("no reason was recorded")
+	}
+	if got, _ := n.MetaString(MetaTranscriptionAttemptedAt); got != "2026-10-08T06:40:11Z" {
+		t.Errorf("attempted_at = %q", got)
+	}
+}
+
+// Metadata arrives from JSON, where a bool may not be one.
+func TestTranscriptionMarksWithWrongTypes(t *testing.T) {
+	n := &Note{Metadata: map[string]any{
+		MetaTranscribed:           "yes",
+		MetaAwaitingTranscription: 1,
+	}}
+	if n.Transcribed() {
+		t.Error(`"yes" was read as true`)
+	}
+	if n.AwaitingTranscription() {
+		t.Error("1 was read as true")
 	}
 }

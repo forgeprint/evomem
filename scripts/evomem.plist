@@ -11,7 +11,7 @@
     </array>
     <key>EnvironmentVariables</key>
     <dict>
-        <key>EVOMEM_STORE_PATH</key>
+        <key>EVOMEM_DB</key>
         <string>/Users/USERNAME/.evomem/evomem.db</string>
         <key>EVOMEM_TELEGRAM_SECRET</key>
         <string>/Users/USERNAME/.evomem/telegram_secret</string>

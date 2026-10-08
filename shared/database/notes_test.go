@@ -514,3 +514,90 @@ func TestParseTimeAcceptsPlainRFC3339(t *testing.T) {
 		t.Error("nonsense was accepted as a timestamp")
 	}
 }
+
+// awaiting stores one note marked as waiting for a transcript.
+func awaiting(t *testing.T, db *DB, content string, waiting bool) *models.Note {
+	t.Helper()
+	n := &models.Note{ProjectID: "evomem", Content: content, SourceType: models.SourceTelegram}
+	if waiting {
+		n.SetMeta(models.MetaAwaitingTranscription, true)
+	}
+	if err := db.Create(context.Background(), n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+func TestAwaitingTranscriptionFindsOnlyWhatIsMarked(t *testing.T) {
+	db := openTemp(t)
+	ctx := context.Background()
+
+	first := awaiting(t, db, "Voice message, 0:14", true)
+	awaiting(t, db, "a typed note", false)
+	second := awaiting(t, db, "Voice message, 1:02", true)
+
+	got, err := db.AwaitingTranscription(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d notes, want 2", len(got))
+	}
+	// Oldest first: this is a queue, and the note that has waited longest
+	// should not keep losing to whatever arrived this morning.
+	if got[0].ID != first.ID || got[1].ID != second.ID {
+		t.Errorf("order was %s, %s; want %s, %s", got[0].ID, got[1].ID, first.ID, second.ID)
+	}
+
+	count, err := db.AwaitingTranscriptionCount(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Errorf("count = %d, want 2", count)
+	}
+}
+
+// A note whose metadata has no such key, and one with the key set to false,
+// are both not waiting. json_extract returns null for the first.
+func TestAwaitingTranscriptionIgnoresUnmarkedNotes(t *testing.T) {
+	db := openTemp(t)
+	ctx := context.Background()
+
+	plain := &models.Note{ProjectID: "evomem", Content: "no metadata at all", SourceType: models.SourceManual}
+	if err := db.Create(ctx, plain); err != nil {
+		t.Fatal(err)
+	}
+	done := &models.Note{ProjectID: "evomem", Content: "already transcribed", SourceType: models.SourceTelegram}
+	done.SetMeta(models.MetaTranscribed, true)
+	if err := db.Create(ctx, done); err != nil {
+		t.Fatal(err)
+	}
+	off := &models.Note{ProjectID: "evomem", Content: "explicitly false", SourceType: models.SourceTelegram}
+	off.SetMeta(models.MetaAwaitingTranscription, false)
+	if err := db.Create(ctx, off); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := db.AwaitingTranscription(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %d notes, want none", len(got))
+	}
+}
+
+func TestAwaitingTranscriptionHonoursTheLimit(t *testing.T) {
+	db := openTemp(t)
+	for i := range 5 {
+		awaiting(t, db, fmt.Sprintf("Voice message %d", i), true)
+	}
+	got, err := db.AwaitingTranscription(context.Background(), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Errorf("got %d notes, want 2", len(got))
+	}
+}

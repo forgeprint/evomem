@@ -443,3 +443,47 @@ func (d *DB) GetAllNotes(ctx context.Context, limit, offset int) ([]*models.Note
 	}
 	return out, nil
 }
+
+// AwaitingTranscription returns notes that stand for a recording nobody has
+// transcribed yet, oldest first.
+//
+// Oldest first, unlike every other listing here: this is a queue being worked
+// through, and a recording that has waited longest should not keep losing to
+// whatever arrived this morning.
+//
+// The mark lives in the metadata column rather than in a column of its own,
+// because a note awaiting a transcript is a passing state of one source's
+// notes and not a pillar of the schema. json_extract reads it; the predicate
+// is `= 1` because SQLite's JSON true is the integer 1.
+func (d *DB) AwaitingTranscription(ctx context.Context, limit int) ([]*models.Note, error) {
+	rows, err := d.read.QueryContext(ctx, `SELECT `+noteColumns+` FROM notes
+		WHERE json_extract(metadata, '$.`+models.MetaAwaitingTranscription+`') = 1
+		ORDER BY created_at ASC, id ASC LIMIT ?`, clampLimit(limit))
+	if err != nil {
+		return nil, fmt.Errorf("database: listing notes awaiting transcription: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*models.Note
+	for rows.Next() {
+		n, err := scanNote(rows)
+		if err != nil {
+			return nil, fmt.Errorf("database: listing notes awaiting transcription: %w", err)
+		}
+		out = append(out, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("database: listing notes awaiting transcription: %w", err)
+	}
+	return out, nil
+}
+
+// AwaitingTranscriptionCount is how many are waiting, for a status line.
+func (d *DB) AwaitingTranscriptionCount(ctx context.Context) (int, error) {
+	var n int
+	if err := d.read.QueryRowContext(ctx, `SELECT COUNT(*) FROM notes
+		WHERE json_extract(metadata, '$.`+models.MetaAwaitingTranscription+`') = 1`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("database: counting notes awaiting transcription: %w", err)
+	}
+	return n, nil
+}

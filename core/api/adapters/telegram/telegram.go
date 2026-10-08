@@ -278,7 +278,7 @@ func describe(msg *message) (string, map[string]any, bool) {
 		if msg.Voice.MIMEType != "" {
 			meta["telegram_mime_type"] = msg.Voice.MIMEType
 		}
-		meta["awaiting_transcription"] = true
+		meta[models.MetaAwaitingTranscription] = true
 		return voiceContent("Voice message", msg.Voice.Duration, msg.Caption), meta, true
 
 	case msg.Audio != nil:
@@ -288,7 +288,7 @@ func describe(msg *message) (string, map[string]any, bool) {
 		if msg.Audio.MIMEType != "" {
 			meta["telegram_mime_type"] = msg.Audio.MIMEType
 		}
-		meta["awaiting_transcription"] = true
+		meta[models.MetaAwaitingTranscription] = true
 		title := "Audio"
 		if msg.Audio.Title != "" {
 			title = "Audio: " + msg.Audio.Title

@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=%i
-Environment=EVOMEM_STORE_PATH=/home/%i/.evomem/evomem.db
+Environment=EVOMEM_DB=/home/%i/.evomem/evomem.db
 Environment=EVOMEM_TELEGRAM_SECRET=%h/.evomem/telegram_secret
 Environment=EVOMEM_TELEGRAM_PROJECT=default
 Environment=EVOMEM_JIRA_SECRET=%h/.evomem/jira_secret

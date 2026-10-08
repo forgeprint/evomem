@@ -1,0 +1,28 @@
+# evomem transcribe, driven by the timer beside this file. See ADR-0016.
+#
+# Type=oneshot: this works through the queue and exits. Without
+# EVOMEM_TRANSCRIPTION_URL it does nothing and says so, which is the off
+# switch.
+#
+# The bot token does not belong in this file, which is world-readable in
+# /etc. EnvironmentFile points at something only this user can read:
+#
+#   install -m 600 /dev/null ~/.evomem/transcribe.env
+#   printf 'EVOMEM_TELEGRAM_BOT_TOKEN=...\n' >> ~/.evomem/transcribe.env
+#
+#   systemctl --user enable --now evomem-transcribe.timer
+
+[Unit]
+Description=Evomem transcription run
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=EVOMEM_DB=%h/.evomem/evomem.db
+Environment=EVOMEM_TRANSCRIPTION_URL=http://127.0.0.1:8001
+Environment=EVOMEM_TRANSCRIPTION_LANGUAGE=tr
+EnvironmentFile=%h/.evomem/transcribe.env
+ExecStart=/usr/local/bin/evomem transcribe
+StandardOutput=journal
+StandardError=journal

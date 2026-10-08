@@ -1,0 +1,17 @@
+# What drives evomem-transcribe.service.
+#
+#   systemctl --user enable --now evomem-transcribe.timer
+#   systemctl --user list-timers evomem-transcribe.timer
+
+[Unit]
+Description=Run evomem transcribe periodically
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+# A missed run is caught up once rather than skipped: a recording that
+# arrived while the machine was asleep should still be transcribed.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

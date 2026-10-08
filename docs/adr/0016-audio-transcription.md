@@ -43,13 +43,29 @@ transcription time rather than at webhook time.
 
 ## Decision
 
-### 1. One integration: an HTTP service, configured by URL alone
+### 1. One integration: an OpenAI-compatible HTTP service
 
-Evomem posts audio to a transcription service over HTTP and reads back text.
+Evomem posts audio to a transcription service over HTTP and reads back text,
+against the interface OpenAI documents and every self-hosted server
+implements: `POST /v1/audio/transcriptions`, multipart with a `file` part and
+a `model` field, `Authorization: Bearer <token>`, and a reply whose `text`
+holds the transcript. Checked 2026-10-08 against
+<https://developers.openai.com/api/docs/guides/speech-to-text>.
+
 Which implementation serves that URL — faster-whisper, whisper.cpp behind a
 socket, something not yet written — is the operator's business and is not
-decided here. Evomem knows a URL and an optional token, nothing else. No
-model name, no device: those configure a service evomem does not own.
+decided here.
+
+**Deviation from the first draft of this decision.** It said evomem would
+know "a URL and an optional token, nothing else. No model name." That did not
+survive contact with the interface: `model` is a **required field of the
+request**, not server configuration, so there is no version of this that does
+not send one. `EVOMEM_TRANSCRIPTION_MODEL` exists, defaulted to `whisper-1`,
+the model every compatible server implements. `EVOMEM_TRANSCRIPTION_LANGUAGE`
+is there for the same reason and is worth setting: a model left to guess the
+language of short Turkish audio returns a confident translation of something
+nobody said. What stays refused is configuring the *service's own* internals —
+device, beam size, compute type — which remain the operator's.
 
 There is **no local fallback**. A second code path that needs cgo, or a
 second binary shipped alongside, costs more than it returns for a feature
@@ -129,6 +145,9 @@ where nobody can tell what happened to it.
   separate decision.
 - **One more thing an operator has to run.** A speech service, on their own
   hardware, with its own lifecycle.
+- **The whole recording is held in memory.** Up to the 20 MB bound, which is
+  therefore evomem's bound as much as the API's. Streaming it through would
+  save the memory and lose the ability to refuse a file before posting it.
 
 ### Explicitly not decided here
 
@@ -146,7 +165,10 @@ where nobody can tell what happened to it.
 ## Configuration
 
 ```
-EVOMEM_TRANSCRIPTION_URL     # absent: transcription is off
-EVOMEM_TRANSCRIPTION_TOKEN   # optional, if the service wants one
-EVOMEM_TELEGRAM_BOT_TOKEN    # needed to download what Telegram holds
+EVOMEM_TRANSCRIPTION_URL       # absent: transcription is off
+EVOMEM_TRANSCRIPTION_TOKEN     # optional, if the service wants one
+EVOMEM_TRANSCRIPTION_MODEL     # required by the interface; default whisper-1
+EVOMEM_TRANSCRIPTION_LANGUAGE  # ISO-639-1 hint, such as tr
+EVOMEM_TELEGRAM_BOT_TOKEN      # needed to download what Telegram holds
+EVOMEM_TELEGRAM_API_URL        # a self-hosted Bot API server, if not Telegram's
 ```

@@ -1080,3 +1080,91 @@ olup olmayacağı ayrı bir karar.
 Mobil uygulamanın kendi kayıtları (sunucuda değiller, oraya taşıyacak bir yol
 da yok — kendi ADR'si), hangi whisper implementasyonu, ve servisin wire
 formatı (kod yazılırken o servisin güncel dokümantasyonuna karşı yazılacak).
+
+---
+
+## 2026-10-08 (sekizinci oturum) — Ses dökümü yazıldı
+
+ADR-0016 koda döküldü. Hedef, kullanıcının seçtiği gibi OpenAI-uyumlu
+`POST /v1/audio/transcriptions` arayüzü. Test sayısı 219 → **276**.
+
+### Doğrulanan wire formatları (hiçbiri hafızadan yazılmadı)
+
+**OpenAI konuşma-metin kılavuzu**, 2026-10-08'de okundu
+(<https://developers.openai.com/api/docs/guides/speech-to-text>):
+`POST /v1/audio/transcriptions`, `multipart/form-data` içinde `file` ve
+`model`, `Authorization: Bearer <key>`, yanıtta `text`. Kod ve ADR bu adrese
+ve tarihe atıf veriyor.
+
+**Telegram Bot API** 10.3 (24 Ağustos 2026), `getFile` ve `File`:
+20 MB indirme sınırı, `file_path` en az 1 saat geçerli, zarf `ok`/`result`/
+`description`, `file_path` opsiyonel, "may not preserve the original file
+name and MIME type". Hepsi `core/transcribe/telegram.go`'nun başında alıntıyla
+duruyor.
+
+### Yazılanlar
+
+- `shared/models/note.go` — altı yeni metadata anahtarı ve dört metot:
+  `AwaitingTranscription`, `Transcribed`, `ApplyTranscript`,
+  `MarkTranscriptionFailed`. Telegram adaptöründeki `"awaiting_transcription"`
+  string'i sabite çevrildi; tek yazım, tek yerde.
+- `shared/database/notes.go` — `AwaitingTranscription` ve
+  `AwaitingTranscriptionCount`. `json_extract(metadata, '$.…') = 1`;
+  SQLite'ın JSON true'su tamsayı 1. Kuyruk **en eski önce**, diğer bütün
+  listelemelerin tersine: en uzun bekleyen kayıt her koşuda sabaha karşı
+  gelene yenilmesin.
+- `core/transcribe/` — üç dosya: `service.go` (OpenAI-uyumlu istemci),
+  `telegram.go` (getFile + indirme), `run.go` (kuyruk döngüsü).
+- `cmd/evomem/transcribe.go` — komut; `sync-status` artık bekleyen kayıt
+  sayısını da söylüyor.
+- `core/mcp/tools.go` — `transcribed` ve `awaiting_transcription` hem
+  `structuredContent`'te hem modelin okuduğu metinde.
+- `scripts/evomem-transcribe.{plist,service,timer}` — on beş dakikada bir.
+
+### Kararın bir yerinden sapıldı, kaydedildi
+
+ADR'ye "evomem yalnızca URL ve token bilir, model adı bilmez" yazmıştım.
+**Tutmadı:** `model` isteğin *zorunlu* alanı, sunucu yapılandırması değil —
+göndermeyen bir sürüm yok. `EVOMEM_TRANSCRIPTION_MODEL` eklendi (varsayılan
+`whisper-1`) ve `EVOMEM_TRANSCRIPTION_LANGUAGE` da eklendi: dili tahmine
+bırakılan bir model, kısa Türkçe sesi akıcı bir çeviriye dönüştürüp kimsenin
+söylemediği bir şeyi döndürüyor. ADR'de "Deviation" başlığıyla duruyor.
+Reddedilen şey yerinde: servisin *kendi* içi (device, beam size) operatörün
+işi ve evomem'den yapılandırılmıyor.
+
+`EVOMEM_TELEGRAM_API_URL` de eklendi. Gerekçesi iki katlı: mutlu yolu uçtan
+uca doğrulamanın başka yolu yoktu, ve Telegram kendi belgelerinde yerel bir
+Bot API sunucusunu zaten anlatıyor.
+
+### Yan yolda bulunan hata
+
+`scripts/` içindeki dört servis dosyası **`EVOMEM_STORE_PATH`** ayarlıyordu;
+kod böyle bir değişken okumuyor, `EVOMEM_DB` okuyor. Yani o dosyalarla
+kurulan bir servis deposunu `~/.evomem/evomem.db`'de değil, ev dizininin
+varsayılanında arardı — sessizce yanlış ama bu örnekte aynı yere denk gelen
+bir davranış. Dördünde de düzeltildi.
+
+Düzeltilmeyen: aynı dosyalar `EVOMEM_POSTGRES_DSN`'i bir **dosya yoluna**
+(`~/.evomem/pg_dsn`) ayarlıyor; kod onu DSN'in kendisi olarak okuyor. Bir DSN'i
+dosyadan okumak desteklenmiyor, dolayısıyla bu bir karar gerektiriyor — açık
+bırakıldı.
+
+### Doğrulama
+
+- 276 test; `./scripts/ci.sh` yeşil, beş hedef cgo'suz derleniyor
+- **Uçtan uca, derlenmiş ikiliyle**: sahte bir OpenAI-uyumlu servis ve sahte
+  bir Bot API. Servisin gördüğü: `path=/v1/audio/transcriptions`,
+  `model=whisper-1`, `language=tr`, `filename=file_7.oga`, ogg baytları
+  yerinde. Not sonrası: `content` döküm, `transcribed: true`,
+  `transcription_replaced: "Voice message, 0:14"`, `awaiting_transcription`
+  gitmiş, `tainted` duruyor.
+- `getFile` bir kez **gerçek** `api.telegram.org`'a gitti (override eklenmeden
+  önce) ve `Unauthorized` döndü — hata yolunun ve token gizlemenin gerçek
+  dünyada çalıştığının kanıtı.
+- MCP çıktısı iki uyarıyı birlikte gösteriyor, arama dökümü buluyor.
+
+### Hiç denenmemiş olan
+
+**Gerçek bir whisper sunucusu.** Sahte servis dokümantasyondaki sözleşmeyi
+taklit ediyor; faster-whisper'ın gerçekten bu sözleşmeyi aynı şekilde
+uyguladığı denenmedi.
