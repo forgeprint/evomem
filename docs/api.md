@@ -157,6 +157,52 @@ whatever reads it next. Nothing here can stop that text being stored; the mark
 is so the reader knows what it is holding. See
 [ADR-0009](adr/0009-tainted-content.md).
 
+## POST /ingest/audio — a recording for a note
+
+Served only with `EVOMEM_API_TOKEN`, under that same token, and only when the
+process has somewhere to put a recording. Two requests, because the
+identifier comes from the first — see
+[ADR-0018](adr/0018-mobile-recordings.md):
+
+```sh
+id=$(curl -s -X POST http://127.0.0.1:8765/ingest \
+  -H "Authorization: Bearer $EVOMEM_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"project":"evomem","content":"Recording, 0:30","source":"audio",
+       "metadata":{"awaiting_transcription":true}}' | jq -r .id)
+
+curl -X POST "http://127.0.0.1:8765/ingest/audio?note=$id" \
+  -H "Authorization: Bearer $EVOMEM_API_TOKEN" \
+  -H 'Content-Type: audio/ogg' \
+  --data-binary @clip.ogg
+```
+
+The body is the recording itself, not a multipart form. A `204` means it is
+stored; `evomem transcribe` picks it up from there.
+
+Accepted content types are the ones the transcription interface documents —
+`audio/mpeg`, `audio/mp4`, `audio/m4a`, `audio/wav`, `audio/webm` — plus
+`audio/ogg`. Anything else is a **415**, named, because a recording saved
+under a guessed extension fails later on someone else's machine.
+
+**20 MiB**, against 1 MiB on every other endpoint here. The deviation is
+recorded in ADR-0018: `core/transcribe` reads a whole recording into memory,
+so the bound is evomem's as much as the sender's.
+
+| what | answer |
+| - | - |
+| stored | `204` |
+| no token, or no store configured | `404` — the endpoint is not served |
+| wrong token | `401` |
+| `?note=` missing, malformed, or naming no note | `400` |
+| a format nothing can decode | `415` |
+| over 20 MiB | `413` |
+
+Recordings are kept in `audio/` beside the database, one file per note, named
+by the note's identifier. **Deleting a note deletes its recording**, and so
+does archiving it or restoring over it. Nothing else removes one: the disk
+grows, which ADR-0018 accepts and names.
+
 ## Transcription
 
 A recording evomem has stored holds a description of itself — `Voice message,
@@ -251,5 +297,10 @@ so a long recording never succeeds. `EVOMEM_TELEGRAM_API_URL` points at a
 self-hosted Bot API server instead of Telegram's, though evomem still bounds
 what it will hold in memory at 20 MB.
 
-The mobile app's own recordings are **not** covered: they sit on the phone,
-and there is no route that carries them to the server yet.
+A recording uploaded to [`/ingest/audio`](#post-ingestaudio--a-recording-for-a-note)
+is read straight off the disk, with no token and no network. Its reference is
+the note's own identifier, because that is what it was stored under.
+
+What is still missing is the other end: **the mobile app cannot record**, and
+it discards the identifier `/ingest` returns, so it has nothing to upload
+against. ADR-0018 has both.

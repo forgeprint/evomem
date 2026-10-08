@@ -45,6 +45,10 @@ const maxBody = 1 << 20
 // Store is the part of the database this package needs.
 type Store interface {
 	Create(ctx context.Context, n *models.Note) error
+
+	// Get is what the audio endpoint checks a note with before storing a
+	// recording against its identifier.
+	Get(ctx context.Context, id string) (*models.Note, error)
 }
 
 // ChatProjectMap maps chat_id (string form of int64) to project_id.
@@ -80,13 +84,20 @@ type Config struct {
 	// project key and is normally empty.
 	JiraSecret  string
 	JiraProject string
+
+	// Recordings is where POST /ingest/audio puts an upload. Nil means
+	// that endpoint is not served at all: there is nowhere to put a
+	// recording, and ADR-0018 keeps recordings only on the condition that
+	// deleting a note can reach them.
+	Recordings Recordings
 }
 
 // Server is the HTTP entrypoint.
 type Server struct {
-	http  *http.Server
-	store Store
-	cfg   Config
+	http       *http.Server
+	store      Store
+	recordings Recordings
+	cfg        Config
 
 	// routes is what was actually served, for the caller to report. A
 	// silently missing endpoint is the failure this makes visible.
@@ -120,6 +131,23 @@ func New(store Store, cfg Config) (*Server, error) {
 	if cfg.Token != "" {
 		mux.Handle("POST /ingest", s.authenticated(http.HandlerFunc(s.handleIngest)))
 		s.routes = append(s.routes, "POST /ingest")
+
+		// Only with somewhere to put a recording. Served under the
+		// same token as /ingest, because it is the second half of one
+		// upload by one sender (ADR-0018), and not wrapped in
+		// `authenticated`: that bounds the body at 1 MiB, and this is
+		// the one endpoint that may not be.
+		if cfg.Recordings != nil {
+			s.recordings = cfg.Recordings
+			mux.Handle("POST /ingest/audio", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if !s.authorized(r) {
+					http.Error(w, "unauthorized", http.StatusUnauthorized)
+					return
+				}
+				s.handleAudio(w, r)
+			}))
+			s.routes = append(s.routes, "POST /ingest/audio")
+		}
 	}
 
 	if cfg.TelegramSecret != "" && cfg.TelegramProject != "" {

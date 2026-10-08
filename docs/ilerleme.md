@@ -1231,3 +1231,85 @@ bilinçli sapma, yalnızca bu endpoint için, gerekçesi ADR'de.
 Bu oturumda yalnızca karar kaydedildi. Dört parça iş açık: mobilde kayıt,
 endpoint + yerel dosya `Fetcher`'ı, telefonun `remote_id`'yi saklaması, ve
 silme yolunun dosyayı da silmesi.
+
+---
+
+## 2026-10-08 (onuncu oturum) — ADR-0018'in sunucu tarafı
+
+Üç parça yazıldı: endpoint, `Fetcher`, silme. Test 276 → **307**.
+
+### `shared/audio` — üç yerin ortak noktası
+
+Yeni paket: nota ait kayıtların dosya deposu. `StoreBeside(dbPath)` ile
+veritabanının yanındaki `audio/` dizinini açar, dosyayı not kimliğiyle
+adlandırır.
+
+Kararlar ve gerekçeleri:
+
+- **Not kimliği dosya adına `NormalizeULID`'den geçerek dönüşüyor.** Bir
+  gönderenin yol seçebileceği tek yer burası; 26 karakter Crockford base32'den
+  sağ çıkan bir `../` yazımı yok. Testi var (`../../etc/passwd` dahil beş
+  deneme) ve hiçbirinde dosya yazılmıyor.
+- **İçerik tipi bilinmiyorsa reddediliyor**, tahmin edilen bir uzantıyla
+  saklanmıyor. Uzantı önemli: döküm servisi neyi nasıl çözeceğine ona göre
+  karar veriyor, yani yanlış ad daha sonra, başka birinin makinesinde
+  patlıyor. Kabul edilenler OpenAI arayüzünün belgelediği formatlar + ogg
+  (Telegram'ın gönderdiği).
+- **Yanına yazıp rename ediliyor.** Yarıda kalan bir yükleme, döküm koşusunun
+  bütünmüş gibi göndereceği yarım bir dosya bırakmıyor.
+- **Başka formatta yeniden yükleme eskisini siliyor**, yoksa bir notun iki
+  kaydı olur ve yalnızca birine erişilir.
+
+### Endpoint
+
+`POST /ingest/audio?note=<id>`, gövde sesin kendisi (multipart değil —
+gönderen telefon ve bir Shortcut, ikisi de dosyayı gövde olarak atabiliyor).
+
+- `EVOMEM_API_TOKEN` yoksa **veya** kayıt yazacak yer yoksa hiç kayıtlı değil
+  (ADR-0010 duruşu). İkinci koşul önemli: yazacak yeri olmayan bir sunucunun
+  yüklemeyi kabul etmesi onu kaybetmek olurdu.
+- `authenticated` sarmalayıcısı **kullanılmadı**, çünkü o gövdeyi 1 MiB ile
+  sınırlıyor; bu endpoint 20 MiB. ADR-0018'in kaydettiği sapma.
+- Not var mı diye bakılıyor; olmayan bir kimlik altında kayıt saklanırsa onu
+  hiçbir şey silmez.
+
+### Silme — ADR'nin isteğe bağlı olmayan maddesi
+
+`database.DB`'ye `Files` arayüzü ve `SetFiles` eklendi. Dosya silme
+**commit'ten sonra**, asla transaction içinde: dosya sistemi SQLite ile
+birlikte geri alınmıyor, ve başarısız bir silme için kaldırılmış bir dosya
+ikisinin kötüsü olurdu.
+
+Üç yol kapatıldı:
+
+- `Delete` — commit sonrası tek dosya
+- `Archive` — `DELETE` yalnızca kaç tane olduğunu söylediği için, silinecek
+  id'ler transaction içinde ayrıca `SELECT` ediliyor ve commit sonrası
+  kaldırılıyor. Yalnızca dosya deposu bağlıysa, yoksa ek maliyet yok.
+- `DeleteAllNotes` (restore) — hepsi
+
+**Hata yutulmuyor:** satır gitmiş, dosya gitmemişse `Delete` hata döndürüyor
+("the note is deleted but its recording is not"). ADR'nin "asla sessizce
+geçmemeli" dediği durum tam bu.
+
+`openStore()` dosya deposunu **her** komuta bağlıyor, yalnızca silenlere
+değil: bağlamayı unutan bir komut bu güvenceyi sessizce bozardı.
+
+### Doğrulama
+
+- 307 test, `./scripts/ci.sh` yeşil, beş hedef cgo'suz
+- **Uçtan uca, derlenmiş ikiliyle**, çalışan `serve` ve sahte döküm servisiyle:
+  `/ingest` → id, `/ingest/audio` → 204, dosya `audio/<id>.ogg` olarak 0600
+  izniyle diskte, `evomem transcribe` içeriği dökümle değiştirdi,
+  `evomem delete` dosyayı da götürdü ve dizin boş kaldı.
+- Reddedilenler, canlı sunucuya karşı: bozuk id, `../../etc/passwd`, olmayan
+  not, eksik parametre → 400; yanlış token → 401. 415 (çözülemeyen format)
+  birim testinde, çünkü uçtan uca denemede not o aşamada zaten silinmişti.
+- Yüklenen kaydın dökümü **tainted işaretlenmiyor** — kullanıcının kendi
+  sesi, üçüncü tarafın metni değil. Testi var.
+
+### Yazılmayan
+
+Telefon tarafı: kayıt (paket, izin, arayüz) ve `/ingest`'ten dönen id'nin
+saklanması. İkincisi olmadan telefon yüklediği sesi hiçbir nota bağlayamaz,
+yani sunucu tarafı şimdilik yalnızca `curl` ve Shortcut'lar için kullanılabilir.

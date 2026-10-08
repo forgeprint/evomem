@@ -149,10 +149,15 @@ func Run(
 
 // audioRef finds what to fetch the audio with.
 //
-// Telegram's file_id is the only one that exists today. A new source adds its
-// key here and a Fetcher beside it; the metadata column is why that needs no
-// migration.
+// What the reference is depends on the source. A Telegram recording is named
+// by the file_id the webhook recorded; one uploaded to /ingest/audio is named
+// by the note itself, because that is what it was stored under (ADR-0018). A
+// new source adds its case here and a Fetcher beside it; the metadata column
+// is why that needs no migration.
 func audioRef(n *models.Note) (string, bool) {
+	if n.SourceType == models.SourceAudio {
+		return n.ID, true
+	}
 	if ref, ok := n.MetaString("telegram_file_id"); ok && ref != "" {
 		return ref, true
 	}

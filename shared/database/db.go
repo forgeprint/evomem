@@ -30,6 +30,51 @@ type DB struct {
 	write *sql.DB
 	read  *sql.DB
 	path  string
+
+	// files removes a note's recording when the note goes. Nil when
+	// nothing in this process keeps recordings, which is every caller
+	// that only reads. See SetFiles.
+	files Files
+}
+
+// Files is where a note's recording is kept. shared/audio implements it; this
+// package takes an interface so that storage stays out of the schema.
+type Files interface {
+	// Remove deletes one note's recording. A note with none is not an
+	// error: most notes are text.
+	Remove(noteID string) error
+
+	// RemoveAll deletes every recording, which is what replacing the
+	// whole store needs.
+	RemoveAll() error
+}
+
+// SetFiles says where recordings are kept, so that deleting a note deletes
+// its recording too.
+//
+// Without it a delete leaves the file behind. That is the right default for a
+// process that only reads, and the wrong one for anything that deletes, which
+// is why ADR-0018 makes removing the file a condition of keeping it at all:
+// content a person deleted must not survive on disk.
+func (d *DB) SetFiles(f Files) { d.files = f }
+
+// removeRecording is called after the rows are committed, never inside the
+// transaction. A filesystem does not roll back with SQLite, and a file
+// removed for a delete that then failed would be the worse of the two
+// mistakes.
+func (d *DB) removeRecording(ids ...string) error {
+	if d.files == nil {
+		return nil
+	}
+	for _, id := range ids {
+		if err := d.files.Remove(id); err != nil {
+			// Reported, not swallowed. The row is gone and the
+			// recording is not, which is exactly the state
+			// ADR-0018 says must never pass unnoticed.
+			return fmt.Errorf("database: the note is deleted but its recording is not: %w", err)
+		}
+	}
+	return nil
 }
 
 // busyTimeoutMS is how long SQLite waits for a lock before giving up. The

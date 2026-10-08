@@ -291,6 +291,12 @@ type ArchiveResult struct {
 	// vacuum, and are zero when Vacuum was off.
 	BytesBefore int64 `json:"bytes_before,omitempty"`
 	BytesAfter  int64 `json:"bytes_after,omitempty"`
+
+	// archivedIDs is which notes went, carried from inside the
+	// transaction to after the commit so their recordings can be removed
+	// by name. Not reported: a caller wants the count, and a list of
+	// identifiers that no longer exist is of no use to anyone.
+	archivedIDs []string
 }
 
 // Archive removes old notes to thin the local file.
@@ -333,6 +339,14 @@ func (d *DB) Archive(ctx context.Context, opts ArchiveOptions) (ArchiveResult, e
 		return result, fmt.Errorf("database: archiving: %w", err)
 	}
 
+	// The rows are committed, so the recordings of the notes that went
+	// should follow. An archived note that left its recording behind
+	// would be an orphan nothing points at — the cost ADR-0018 names, and
+	// this is the half of it that can be paid.
+	if err := d.removeRecording(result.archivedIDs...); err != nil {
+		return result, err
+	}
+
 	if opts.Vacuum {
 		if err := d.vacuum(ctx, &result); err != nil {
 			// The rows are gone and that is committed; only the
@@ -369,6 +383,30 @@ func (d *DB) archiveNotes(ctx context.Context, tx *sql.Tx, cutoff string,
 		}
 		where += ` AND (updated_at, id) <= (?, ?)`
 		args = append(args, formatTime(cursor.UpdatedAt), cursor.ID)
+	}
+
+	// Which notes, before they are gone: the DELETE below says only how
+	// many, and their recordings have to be removed by name after the
+	// transaction commits. Only collected when something keeps
+	// recordings, so an archive run that has none costs nothing extra.
+	if d.files != nil {
+		rows, err := tx.QueryContext(ctx, `SELECT id FROM notes `+where, args...)
+		if err != nil {
+			return fmt.Errorf("database: archiving: %w", err)
+		}
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return fmt.Errorf("database: archiving: %w", err)
+			}
+			result.archivedIDs = append(result.archivedIDs, id)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return fmt.Errorf("database: archiving: %w", err)
+		}
+		rows.Close()
 	}
 
 	res, err := tx.ExecContext(ctx, `DELETE FROM notes `+where, args...)

@@ -19,6 +19,7 @@ import (
 
 	"github.com/forgeprint/evomem/core/mcp"
 	"github.com/forgeprint/evomem/core/sync"
+	"github.com/forgeprint/evomem/shared/audio"
 	"github.com/forgeprint/evomem/shared/database"
 	"github.com/forgeprint/evomem/shared/models"
 )
@@ -408,13 +409,33 @@ func cmdMCP(args []string, out io.Writer, in io.Reader) error {
 }
 
 func openStore() (*database.DB, error) {
-	dbPath := os.Getenv("EVOMEM_DB")
-	if dbPath == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, err
-		}
-		dbPath = filepath.Join(home, ".evomem", "evomem.db")
+	db, err := database.Open(storePath())
+	if err != nil {
+		return nil, err
 	}
-	return database.Open(dbPath)
+	// So that deleting a note deletes its recording. Every command gets
+	// this, not only the ones that delete: ADR-0018 keeps recordings after
+	// transcription only on the condition that a delete reaches them, and
+	// a command that forgot to wire it up would quietly break that.
+	db.SetFiles(recordings())
+	return db, nil
+}
+
+func storePath() string {
+	if dbPath := os.Getenv("EVOMEM_DB"); dbPath != "" {
+		return dbPath
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		// Nothing useful to fall back to, and Open will say so with
+		// the path it tried.
+		return "evomem.db"
+	}
+	return filepath.Join(home, ".evomem", "evomem.db")
+}
+
+// recordings is the one place the audio directory is decided: beside the
+// database, wherever that is.
+func recordings() *audio.Store {
+	return audio.StoreBeside(storePath())
 }

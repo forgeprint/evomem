@@ -67,6 +67,15 @@ func cmdTranscribe(args []string, out io.Writer) error {
 	}
 
 	fetchers := map[models.SourceType]transcribe.Fetcher{}
+
+	// Recordings uploaded to /ingest/audio are on this disk, so this one
+	// needs no credential and is always available.
+	local, err := transcribe.NewLocalFiles(recordings())
+	if err != nil {
+		return err
+	}
+	fetchers[models.SourceAudio] = local
+
 	telegram, err := transcribe.NewTelegramFiles(
 		os.Getenv("EVOMEM_TELEGRAM_BOT_TOKEN"),
 		os.Getenv("EVOMEM_TELEGRAM_API_URL"),

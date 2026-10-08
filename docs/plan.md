@@ -80,8 +80,8 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 - [x] Ses dökümü (`core/transcribe` + `evomem transcribe`) → ADR-0016;
       OpenAI-uyumlu harici servis, yerel yedek yok, yapılandırılmazsa kapalı
 - [ ] Mobilde ses kaydının kendisi (paket, izinler, arayüz) — ADR-0018 kapsam dışı
-- [ ] `POST /ingest/audio` + yerel dosya `Fetcher`'ı → ADR-0018
+- [x] `POST /ingest/audio` + `shared/audio` deposu + yerel dosya `Fetcher`'ı → ADR-0018
 - [ ] Telefonun `/ingest`'ten dönen id'yi saklaması (`remote_id`); bugün atıyor,
       bu yüzden push idempotent değil → ADR-0018
-- [ ] Not silindiğinde ses dosyasının da silinmesi → ADR-0018
+- [x] Not silindiğinde ses dosyasının da silinmesi (archive ve restore dahil) → ADR-0018
 - [ ] Dökümü onaylayıp işaretleri temizleyen akış (ayrı karar)

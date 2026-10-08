@@ -284,7 +284,10 @@ func (d *DB) Delete(ctx context.Context, id string) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("database: deleting note %s: %w", id, err)
 	}
-	return nil
+	// After the commit: the row is gone for certain, so the recording
+	// should be too. ADR-0018 keeps recordings after transcription, which
+	// is only defensible if a delete reaches them.
+	return d.removeRecording(id)
 }
 
 // ListOptions bounds a listing. A zero Limit means defaultLimit.
@@ -417,8 +420,19 @@ type ProjectSummary struct {
 
 // DeleteAllNotes removes all notes from the database. Used for restore.
 func (d *DB) DeleteAllNotes(ctx context.Context) error {
-	_, err := d.write.ExecContext(ctx, `DELETE FROM notes`)
-	return err
+	if _, err := d.write.ExecContext(ctx, `DELETE FROM notes`); err != nil {
+		return err
+	}
+	// Every note is gone, so every recording goes with it. A restore that
+	// kept them would leave recordings belonging to notes that no longer
+	// exist, under identifiers the new rows may reuse.
+	if d.files == nil {
+		return nil
+	}
+	if err := d.files.RemoveAll(); err != nil {
+		return fmt.Errorf("database: the notes are deleted but their recordings are not: %w", err)
+	}
+	return nil
 }
 
 // GetAllNotes returns all notes with optional pagination. Used for restore.

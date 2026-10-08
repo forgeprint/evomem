@@ -28,16 +28,18 @@ Tek statik Go ikilisi, çalışma zamanı bağımlılığı yok. 11 tane paket:
 ```
 shared/models      Note, açık uçlu source_type, metadata uzatma noktası,
                    elde yazılmış ULID, tainted işareti
+shared/audio       nota ait kayıtların dosya deposu, silme dahil
 shared/database    tek yazıcılı iki havuz, FTS5 arama, delta izleme,
                    tombstone, öneriler, arşivleme
 core/mcp           stdio JSON-RPC, spec'e göre yazılmış, iki protokol dönemi
-core/api           POST /ingest + Telegram ve Jira webhook'ları
+core/api           POST /ingest, /ingest/audio + Telegram ve Jira webhook'ları
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
 cmd/evomem         14 alt komut (mcp, serve, pull, restore, transcribe dahil)
 apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
 ```
 
-Şema sürümü **3**. Bağımlılıklar: `modernc.org/sqlite`, `jackc/pgx/v5`,
+Şema sürümü **3**. Kayıtlar şemada değil, veritabanının yanındaki `audio/`
+dizininde. Bağımlılıklar: `modernc.org/sqlite`, `jackc/pgx/v5`,
 ikisi de vendor'lı ve saf Go.
 
 ## Komutlar
@@ -71,7 +73,12 @@ evomem transcribe                     # kuyruğu işle (servis yoksa kapalı)
 - HTTP girişinin üç yolu, `curl` ile, kimlik doğrulama hataları dahil
 - PostgreSQL transportu, Docker'da gerçek PostgreSQL 17'ye karşı 10 test
 - Öneri/inceleme akışı, ajan gözünden ve insan gözünden
-- **Ses dökümü (yalnızca Telegram yolu)**: sahte bir OpenAI-uyumlu servis ve sahte bir Bot API ile
+- **Ses yükleme → döküm → silme**: derlenmiş ikiliyle uçtan uca; yükleme 204,
+  dosya `audio/<id>.ogg` olarak 0600 izniyle yazıldı, döküm içeriği
+  değiştirdi, `evomem delete` dosyayı da götürdü, dizin boş kaldı. Hatalı
+  istekler: bozuk id / yol denemesi / olmayan not / eksik parametre → 400,
+  yanlış token → 401
+- **Ses dökümü (Telegram yolu)**: sahte bir OpenAI-uyumlu servis ve sahte bir Bot API ile
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
@@ -104,23 +111,24 @@ Bunlar bende değil, sende:
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-1. **Mobilde ses kaydı — yolu kararlaştırıldı, hiçbiri yazılmadı.**
-   ADR-0018: telefon sesi `POST /ingest/audio?note=<id>` ile yükler, dosya
-   veritabanının yanında durur, `evomem transcribe` onu `Fetcher` dikişinden
-   işler. Dört parça iş: (a) mobilde kaydın kendisi — paket, izinler, arayüz
-   (ADR-0018 kapsam dışı bıraktı), (b) endpoint ve yerel dosya `Fetcher`'ı,
-   (c) telefonun `/ingest`'ten dönen id'yi saklaması, (d) not silinince ses
-   dosyasının da silinmesi.
-
-   **Mobilde ses kaydı diye bir şey yok.** `plan.md`'de o kutu yanlış
-   işaretliymiş; ADR-0016 de bu yanlışı tekrarlamış. İkisi de düzeltildi.
-2. **Push idempotent değil.** Telefon `/ingest`'in döndürdüğü id'yi atıyor ve
-   `/ingest` her çağrıda yeni not yaratıyor; yarıda kalan bir batch sonraki
-   koşuda notları ikinci kez yazar. (c) ile aynı düzeltme kapatıyor.
+1. **Mobilde ses kaydının kendisi.** Sunucu tarafı hazır (aşağıya bakın) ama
+   telefon hâlâ kayıt yapamıyor: ne paket, ne mikrofon izni, ne arayüz.
+   ADR-0018 bunu bilinçli olarak kapsam dışı bıraktı; paket seçimi için
+   dokümantasyon doğrulaması gerekiyor.
+2. **Telefonun `/ingest`'ten dönen id'yi saklaması** (`remote_id`). Bugün
+   atıyor, bu yüzden (a) yüklediği sesi hiçbir nota bağlayamaz, (b) push
+   idempotent değil — yarıda kalan batch notları ikinci kez yazar. Aynı
+   düzeltme ikisini de kapatıyor. → ADR-0018
 3. **Dökümü onaylama akışı.** `tainted` ve `transcribed` işaretlerini
    temizleyen hiçbir şey yok; bir insanın dökümü okuyup onayladığını
    söyleyebileceği bir komut yok. ADR-0016 bunu ayrı bir karar olarak
    bıraktı.
+
+**Ses yükleme tamam** (ADR-0018, sunucu tarafı): `POST /ingest/audio?note=<id>`
+kayıtları veritabanının yanındaki `audio/` dizinine yazıyor,
+`shared/audio` deposu üç yerin ortak noktası, `core/transcribe`'ın yerel
+`Fetcher`'ı onları ağsız ve kimlik bilgisiz okuyor. **Not silinince dosya da
+siliniyor** — arşivleme ve restore dahil. Telefon tarafı yazılmadı.
 
 **Ses dökümü tamam** (ADR-0016): `core/transcribe` paketi ve
 `evomem transcribe` komutu yazıldı. OpenAI-uyumlu
