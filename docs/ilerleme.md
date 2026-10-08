@@ -963,3 +963,58 @@ layout `BoxConstraints forces an infinite width` ile patlıyor — production
 kodunda bir hata. Üç test bu yüzden düşüyor. Ayrıca `flutter analyze` 124
 uyarı veriyor ve `ci.yml` `--no-fatal-infos` kullanmadığı için Flutter işi
 kırmızı kalıyor. Sıradaki iş bu.
+
+---
+
+## 2026-10-08 (altıncı oturum) — Flutter CI yeşile çekildi
+
+`flutter analyze` 122 → **0**, testler 39/42 → **42/42**.
+
+### Düşen testlerin iki ayrı nedeni vardı
+
+1. **`settings_screen.dart`** — bir `Row`'un doğrudan çocuğu olarak
+   `SizedBox(width: double.infinity)` veriliyordu. Row sınırsız genişlik
+   sunar, `BoxConstraints forces an infinite width` ile patlar. İki düğme de
+   `Expanded`'a alındı, içteki gereksiz `SizedBox` kaldırıldı. Routing
+   testini düşüren buydu.
+2. **`test/sqflite_test_setup.dart`** — `databaseFactoryFfi` isolate'lı
+   çalışır ve future'larını **gerçek zamanda** tamamlar; `testWidgets` ise
+   FakeAsync içinde koşar ve `pumpAndSettle` o sahte saati ilerletir. Yazma
+   hâlâ uçarken widget ağacı atılıyor, bu da sqflite'ın 10 saniyelik lock
+   uyarı timer'ı olarak yüzeye çıkıyordu. `databaseFactoryFfiNoIsolate`'e
+   geçildi — aynı isolate'ta, deterministik. Üç koşu üst üste yeşil.
+
+   Yani `durum.md`'nin "sqflite_ffi timer cleanup" notu bu iki test için
+   doğruymuş, teşhisi değil çözümü eksikti; routing testi için ise yanlıştı.
+   Önceki oturumun "hepsi layout hatası" düzeltmesi de fazla genellemeydi.
+
+### Lint
+
+- `dart fix --apply` 16 dosyada 65 düzeltme yaptı (122 → 61). Kalanlar elle.
+- **Gerçek olanlar:**
+  - `_confirmClearData`'da `replaceAll` await edilmiyordu — veri silme
+    diyaloğu, silme bitmeden "temizlendi" diyordu. Ayrıca dialog'un kendi
+    `context`'i State'in `mounted`'ıyla korunuyordu; `Navigator` ve
+    `ScaffoldMessenger` artık await'lerden önce alınıyor.
+  - 5 çıplak `catch` daraltıldı (`on Exception`, metadata çözümünde
+    `on FormatException`). Çıplak catch Error'ları da yutuyordu.
+  - 4 yerde `Future.microtask(...)` atılıyordu; `unawaited()` ile niyet
+    yazılı hale getirildi ve içleri `try/on Exception`'a çevrildi
+    (`catchError` yerine).
+  - 8 `async` fonksiyon future'ı await etmeden döndürüyordu.
+- **Mekanik olanlar:** 25 public üyeye doc yorumu, pubspec bağımlılıkları
+  alfabetik, 7 uzun satır bölündü, TODO Flutter biçimine çevrildi.
+
+### Doğrulama (CI'ın yaptığı her adım yerelde)
+
+```
+flutter pub get · gen-l10n + git diff --exit-code lib/l10n  → temiz
+dart format --set-exit-if-changed .                         → temiz
+flutter analyze                                             → No issues found!
+flutter test                                                → 42/42
+flutter build web --release                                 → ✓ Built build/web
+```
+
+`pub get` ve build'in yeniden ürettiği iki dosya (`apps/mobile/.gitignore`,
+`GeneratedPluginRegistrant.java`) geri alındı — ikincisi
+`IntegrationTestPlugin` kaydını düşürüyordu, bu değişikliğin parçası değil.

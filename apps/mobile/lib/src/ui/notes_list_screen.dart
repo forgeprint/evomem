@@ -1,18 +1,18 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:evomem_mobile/l10n/app_localizations.dart';
 import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/rules/note_rules.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 /// The list of notes, with a field to add one and a search bar.
 class NotesListScreen extends ConsumerStatefulWidget {
   /// Creates the screen.
-  const NotesListScreen({super.key});
+  const new({super.key});
 
   @override
   ConsumerState<NotesListScreen> createState() => _NotesListScreenState();
@@ -155,7 +155,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
 
   Future<void> _showDeleteDialog(String noteId) async {
     final l10n = AppLocalizations.of(context);
-    return showDialog<void>(
+    return await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.deleteNote),
@@ -172,7 +172,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
               ScaffoldMessenger.of(context)
                   .showSnackBar(SnackBar(content: Text(l10n.noteDeleted)));
             },
-            child: Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -183,7 +183,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
 /// One row: a widget class rather than a `_buildRow` method, so that it has
 /// an element of its own and rebuilds only when its own note changes.
 class _NoteRow extends StatelessWidget {
-  const _NoteRow({
+  const new({
     required this.note,
     required this.onTap,
     required this.onDelete,
@@ -244,7 +244,8 @@ class _NoteRow extends StatelessWidget {
   }
 
   String _formatDate(DateTime date) {
-    return '${date.day}.${date.month}.${date.year} '
-        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '${date.day}.${date.month}.${date.year} $hour:$minute';
   }
 }

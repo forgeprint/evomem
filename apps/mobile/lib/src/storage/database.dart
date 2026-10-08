@@ -11,12 +11,15 @@ const String _databaseName = 'evomem.db';
 
 /// Database helper class managing the SQLite connection.
 class DatabaseHelper {
-  DatabaseHelper._();
+  new _();
 
+  /// The one helper for the process. The database is a single file and
+  /// sqflite keeps one connection to it.
   static final DatabaseHelper instance = DatabaseHelper._();
 
   Database? _database;
 
+  /// The open database, opening and migrating it on first use.
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
@@ -27,12 +30,11 @@ class DatabaseHelper {
     final documentsDirectory = await getDatabasesPath();
     final dbPath = path.join(documentsDirectory, _databaseName);
 
-    return openDatabase(
+    return await openDatabase(
       dbPath,
       version: _databaseVersion,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
-      singleInstance: true,
     );
   }
 
@@ -160,7 +162,8 @@ class DatabaseHelper {
         )
       ''');
       await db.execute(
-        'CREATE INDEX idx_proposals_pending ON proposals(status, proposed_at DESC)',
+        'CREATE INDEX idx_proposals_pending '
+        'ON proposals(status, proposed_at DESC)',
       );
     }
 
@@ -172,6 +175,7 @@ class DatabaseHelper {
     );
   }
 
+  /// Closes the connection. The next read of [database] reopens it.
   Future<void> close() async {
     final db = await database;
     await db.close();

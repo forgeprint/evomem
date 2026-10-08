@@ -1,6 +1,6 @@
+import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:evomem_mobile/src/routing/routes.dart';
 
 import '../app_harness.dart';
 import '../sqflite_test_setup.dart' as sqflite_setup;

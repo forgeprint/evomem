@@ -1,18 +1,18 @@
 import 'dart:async';
 
+import 'package:evomem_mobile/l10n/app_localizations.dart';
+import 'package:evomem_mobile/src/routing/routes.dart';
+import 'package:evomem_mobile/src/state/notes_notifier.dart';
+import 'package:evomem_mobile/src/storage/database.dart';
+import 'package:evomem_mobile/src/sync/sync_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:evomem_mobile/l10n/app_localizations.dart';
-import 'package:evomem_mobile/src/routing/routes.dart';
-import 'package:evomem_mobile/src/sync/sync_service.dart';
-import 'package:evomem_mobile/src/storage/database.dart';
-import 'package:evomem_mobile/src/state/notes_notifier.dart';
 
 /// Sync status screen showing sync state and manual sync trigger.
 class SyncStatusScreen extends ConsumerStatefulWidget {
   /// Creates the screen.
-  const SyncStatusScreen({super.key});
+  const new({super.key});
 
   @override
   ConsumerState<SyncStatusScreen> createState() => _SyncStatusScreenState();
@@ -28,7 +28,9 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSyncStatus();
+    // initState cannot await; the screen renders and fills in when the
+    // read returns.
+    unawaited(_loadSyncStatus());
   }
 
   Future<void> _loadSyncStatus() async {
@@ -45,8 +47,8 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
       }
     }
 
-    // TODO: Calculate actual pending counts based on cursor
-    // For now, show placeholder
+    // TODO(evomem): count what is actually pending from the cursor.
+    // Until then this reads zero rather than a real figure.
     _pendingNotes = 0;
     _pendingDeletions = 0;
 
@@ -111,7 +113,7 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
           }
         });
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         setState(() {
           _isSyncing = false;
@@ -181,14 +183,14 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
                               color: Theme.of(context).colorScheme.primary,
                             )
                           : _lastError != null
-                          ? TextStyle(color: Colors.red)
+                          ? const TextStyle(color: Colors.red)
                           : null,
                     ),
                     if (_lastError != null) ...[
                       const SizedBox(height: 8),
                       Text(
                         _lastError!,
-                        style: TextStyle(color: Colors.red, fontSize: 12),
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
                       ),
                     ],
                   ],
@@ -226,14 +228,16 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
                     ),
                     const SizedBox(height: 16),
                     const Text(
-                      'Configure the Evomem server URL and API token in Settings to enable cloud synchronization.',
+                      'Configure the Evomem server URL and API token in '
+                      'Settings to enable cloud synchronization.',
                       style: TextStyle(color: Colors.grey),
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'The sync is one-directional: local SQLite to remote PostgreSQL. '
-                      'Local data is the authority; the cloud is a mirror. '
-                      'Archived notes (older than 6 months) are thinned locally but kept in the cloud.',
+                      'The sync is one-directional: local SQLite to remote '
+                      'PostgreSQL. Local data is the authority; the cloud is '
+                      'a mirror. Archived notes (older than 6 months) are '
+                      'thinned locally but kept in the cloud.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -248,7 +252,7 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
 }
 
 class _StatusRow extends StatelessWidget {
-  const _StatusRow({required this.label, required this.value, this.valueStyle});
+  const new({required this.label, required this.value, this.valueStyle});
 
   final String label;
   final String value;

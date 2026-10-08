@@ -1,18 +1,18 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:evomem_mobile/l10n/app_localizations.dart';
 import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/rules/note_rules.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 /// One note, reached by a link such as `/notes/abc123`.
 class NoteDetailScreen extends ConsumerWidget {
   /// Creates the screen for the note with this [noteId].
-  const NoteDetailScreen({required this.noteId, super.key});
+  const new({required this.noteId, super.key});
 
   /// The id parsed out of the link.
   final String noteId;
@@ -125,7 +125,7 @@ class NoteDetailScreen extends ConsumerWidget {
     final controller = TextEditingController(text: note.content);
     NoteProblem? problem;
 
-    return showDialog<void>(
+    return await showDialog<void>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
@@ -182,7 +182,7 @@ class NoteDetailScreen extends ConsumerWidget {
     String noteId,
   ) async {
     final l10n = AppLocalizations.of(context);
-    return showDialog<void>(
+    return await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.deleteNote),
@@ -200,7 +200,7 @@ class NoteDetailScreen extends ConsumerWidget {
               ScaffoldMessenger.of(context)
                   .showSnackBar(SnackBar(content: Text(l10n.noteDeleted)));
             },
-            child: Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -225,7 +225,8 @@ class NoteDetailScreen extends ConsumerWidget {
   }
 
   String _formatDateTime(DateTime date) {
-    return '${date.day}.${date.month}.${date.year} '
-        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '${date.day}.${date.month}.${date.year} $hour:$minute';
   }
 }

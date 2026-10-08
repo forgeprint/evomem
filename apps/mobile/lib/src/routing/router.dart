@@ -1,10 +1,10 @@
-import 'package:go_router/go_router.dart';
 import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/ui/missing_screen.dart';
-import 'package:evomem_mobile/src/ui/notes_list_screen.dart';
 import 'package:evomem_mobile/src/ui/note_detail_screen.dart';
+import 'package:evomem_mobile/src/ui/notes_list_screen.dart';
 import 'package:evomem_mobile/src/ui/settings_screen.dart';
 import 'package:evomem_mobile/src/ui/sync_status_screen.dart';
+import 'package:go_router/go_router.dart';
 
 /// Builds the router.
 ///

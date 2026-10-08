@@ -1,8 +1,10 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
+
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/rules/note_rules.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
 import 'package:evomem_mobile/src/storage/notes_dao.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// The notes list for a project, and the only thing allowed to change it.
 final notesProvider = NotifierProvider<NotesNotifier, List<Note>>(
@@ -47,8 +49,8 @@ class NotesNotifier extends Notifier<List<Note>> {
         limit: 1000,
       );
       state = notes;
-    } catch (_) {
-      // If load fails, start with empty list
+    } on Exception {
+      // A read that fails leaves the screen empty rather than stale.
       state = const [];
     }
   }
@@ -82,10 +84,15 @@ class NotesNotifier extends Notifier<List<Note>> {
     state = [...state, note];
 
     // Persist to database
-    Future.microtask(
-      () => _dao.insert(note).catchError((_) {
-        // Rollback on error
-        state = state.where((n) => n.id != note.id).toList();
+    unawaited(
+      Future.microtask(() async {
+        try {
+          await _dao.insert(note);
+        } on Exception {
+          // The note never reached the database, so take it back out of the
+          // list the screen is showing.
+          state = state.where((n) => n.id != note.id).toList();
+        }
       }),
     );
 
@@ -112,10 +119,15 @@ class NotesNotifier extends Notifier<List<Note>> {
     ];
 
     // Persist to database
-    Future.microtask(
-      () => _dao.update(updatedNote).catchError((_) {
-        // Rollback on error
-        loadNotes();
+    unawaited(
+      Future.microtask(() async {
+        try {
+          await _dao.update(updatedNote);
+        } on Exception {
+          // The database still holds the old content; show that instead of
+          // the edit that did not land.
+          await loadNotes();
+        }
       }),
     );
 
@@ -136,11 +148,15 @@ class NotesNotifier extends Notifier<List<Note>> {
     state = state.where((note) => note.id != id).toList();
 
     // Persist to database
-    Future.microtask(
-      () => _dao.delete(id).catchError((_) {
-        // Rollback on error
-        if (deletedNote != null) {
-          state = [...state, deletedNote];
+    unawaited(
+      Future.microtask(() async {
+        try {
+          await _dao.delete(id);
+        } on Exception {
+          // The row is still there, so put the note back in the list.
+          if (deletedNote != null) {
+            state = [...state, deletedNote];
+          }
         }
       }),
     );
@@ -172,10 +188,14 @@ class NotesNotifier extends Notifier<List<Note>> {
     ];
 
     // Persist to database
-    Future.microtask(
-      () => _dao.update(updatedNote).catchError((_) {
-        // Rollback on error
-        loadNotes();
+    unawaited(
+      Future.microtask(() async {
+        try {
+          await _dao.update(updatedNote);
+        } on Exception {
+          // The pin did not land; show what the database holds.
+          await loadNotes();
+        }
       }),
     );
   }
@@ -192,7 +212,7 @@ class NotesNotifier extends Notifier<List<Note>> {
     String? sourceType,
     int? limit,
   }) async {
-    return _dao.search(
+    return await _dao.search(
       query: query,
       projectId: _projectId,
       sourceType: sourceType,
@@ -201,7 +221,8 @@ class NotesNotifier extends Notifier<List<Note>> {
   }
 
   String _generateId() {
-    // Simple ULID-like generation (not cryptographically secure, but unique enough for local use)
+    // ULID-shaped, not a ULID: good enough to be unique on one device, and
+    // not cryptographically random.
     final now = DateTime.now().millisecondsSinceEpoch.toRadixString(36);
     final random = (DateTime.now().microsecondsSinceEpoch % 1000000)
         .toRadixString(36);

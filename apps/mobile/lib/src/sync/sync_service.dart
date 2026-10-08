@@ -1,16 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:evomem_mobile/src/rules/note.dart';
+import 'package:evomem_mobile/src/storage/database.dart';
+import 'package:evomem_mobile/src/storage/notes_dao.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:sqflite/sqflite.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:evomem_mobile/src/rules/note.dart';
-import 'package:evomem_mobile/src/storage/notes_dao.dart';
-import 'package:evomem_mobile/src/storage/database.dart';
 
 /// Result of a sync operation.
 class SyncResult {
-  const SyncResult({
+  /// Use [SyncResult.success] or [SyncResult.failure] instead; this takes
+  /// every field and checks none of them against each other.
+  const new({
     required this.success,
     required this.notesPushed,
     required this.deletionsPushed,
@@ -19,14 +21,9 @@ class SyncResult {
     this.cursorId,
   });
 
-  final bool success;
-  final int notesPushed;
-  final int deletionsPushed;
-  final String? error;
-  final String? cursorUpdatedAt;
-  final String? cursorId;
-
-  factory SyncResult.success({
+  /// A push that went through, with how much of it moved and where the
+  /// cursor now stands.
+  factory success({
     required int notesPushed,
     required int deletionsPushed,
     String? cursorUpdatedAt,
@@ -41,7 +38,9 @@ class SyncResult {
     );
   }
 
-  factory SyncResult.failure({
+  /// A push that did not go through. The counts say how much had already
+  /// moved before it stopped.
+  factory failure({
     required String error,
     int notesPushed = 0,
     int deletionsPushed = 0,
@@ -53,6 +52,24 @@ class SyncResult {
       deletionsPushed: deletionsPushed,
     );
   }
+
+  /// Whether the push finished.
+  final bool success;
+
+  /// How many notes reached the server.
+  final int notesPushed;
+
+  /// How many deletions reached the server.
+  final int deletionsPushed;
+
+  /// Why it stopped, or null when it did not.
+  final String? error;
+
+  /// The `updated_at` half of the cursor to resume from.
+  final String? cursorUpdatedAt;
+
+  /// The `id` half of the cursor, which breaks ties within one timestamp.
+  final String? cursorId;
 
   @override
   String toString() {
@@ -66,16 +83,24 @@ class SyncResult {
 
 /// Configuration for the sync service.
 class SyncConfig {
-  const SyncConfig({
+  /// Where to push and with what token.
+  const new({
     required this.serverUrl,
     required this.apiToken,
     this.batchSize = 200,
     this.timeout = const Duration(seconds: 30),
   });
 
+  /// Base URL of the Go backend, without a trailing path.
   final String serverUrl;
+
+  /// Bearer token for `/ingest`.
   final String apiToken;
+
+  /// How many rows go in one request.
   final int batchSize;
+
+  /// How long one request may take before it is given up on.
   final Duration timeout;
 }
 
@@ -84,14 +109,15 @@ class SyncConfig {
 /// Uses the `/ingest` endpoint with Bearer token authentication.
 /// Implements delta sync using cursor (updated_at, id) similar to Go backend.
 class SyncService {
-  SyncService._({
+  new _({
     required this.config,
-    required NotesDao notesDao,
-    required DatabaseHelper dbHelper,
-  }) : _notesDao = notesDao,
-       _dbHelper = dbHelper;
+    required this._notesDao,
+    required this._dbHelper,
+  });
 
+  /// What this service was configured with.
   final SyncConfig config;
+
   final NotesDao _notesDao;
   final DatabaseHelper _dbHelper;
 
@@ -105,8 +131,8 @@ class SyncService {
       );
     }
 
-    int totalNotesPushed = 0;
-    int totalDeletionsPushed = 0;
+    var totalNotesPushed = 0;
+    var totalDeletionsPushed = 0;
     String? finalCursorUpdatedAt;
     String? finalCursorId;
 
@@ -136,7 +162,7 @@ class SyncService {
           deletionsPushed: totalDeletionsPushed,
         );
       }
-    } catch (e) {
+    } on Exception catch (e) {
       return SyncResult.failure(
         error: 'Sync failed: $e',
         notesPushed: totalNotesPushed,
@@ -147,7 +173,7 @@ class SyncService {
 
   /// Pushes notes in batches using cursor-based pagination.
   Future<SyncResult> _pushNotes() async {
-    int totalPushed = 0;
+    var totalPushed = 0;
     String? cursorUpdatedAt;
     String? cursorId;
 
@@ -274,11 +300,16 @@ class SyncService {
 
 /// State for the sync service provider.
 class SyncServiceState {
-  const SyncServiceState({this.config, this.isInitialized = false});
+  /// A state with no configuration is what the app starts in.
+  const new({this.config, this.isInitialized = false});
 
+  /// The configuration in force, or null before Settings has been filled in.
   final SyncConfig? config;
+
+  /// Whether a service has been built from [config].
   final bool isInitialized;
 
+  /// A copy with the given fields replaced.
   SyncServiceState copyWith({SyncConfig? config, bool? isInitialized}) {
     return SyncServiceState(
       config: config ?? this.config,
@@ -300,10 +331,10 @@ class SyncServiceNotifier extends Notifier<SyncServiceState> {
   void initialize({
     required String serverUrl,
     required String apiToken,
-    int batchSize = 200,
-    Duration timeout = const Duration(seconds: 30),
     required NotesDao notesDao,
     required DatabaseHelper dbHelper,
+    int batchSize = 200,
+    Duration timeout = const Duration(seconds: 30),
   }) {
     final config = SyncConfig(
       serverUrl: serverUrl,
@@ -334,13 +365,16 @@ class SyncServiceNotifier extends Notifier<SyncServiceState> {
         error: 'Sync service not initialized. Configure in Settings.',
       );
     }
-    return _service!.push();
+    return await _service!.push();
   }
 
   /// Get the current sync service instance.
   SyncService? get service => _service;
 
+  /// Whether a service has been built and can push.
   bool get isInitialized => state.isInitialized;
+
+  /// The configuration in force, or null before Settings has been filled in.
   SyncConfig? get config => state.config;
 }
 

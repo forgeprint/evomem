@@ -1,19 +1,19 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import 'package:evomem_mobile/l10n/app_localizations.dart';
 import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
 import 'package:evomem_mobile/src/sync/sync_service.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 
 /// Settings screen for the app.
 class SettingsScreen extends ConsumerStatefulWidget {
   /// Creates the screen.
-  const SettingsScreen({super.key});
+  const new({super.key});
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
@@ -113,7 +113,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           );
         }
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -182,17 +182,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _saveSettings,
-                            child: const Text('Save Settings'),
-                          ),
+                        child: ElevatedButton(
+                          onPressed: _saveSettings,
+                          child: const Text('Save Settings'),
                         ),
                       ),
                       const SizedBox(width: 12),
-                      SizedBox(
-                        width: double.infinity,
+                      Expanded(
                         child: OutlinedButton.icon(
                           onPressed: _testingConnection
                               ? null
@@ -246,11 +242,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 ? 'Configured'
                                 : 'Not configured',
                             valueStyle: initialized
-                                ? TextStyle(
+                                ? const TextStyle(
                                     color: Colors.green,
                                     fontWeight: FontWeight.w600,
                                   )
-                                : TextStyle(
+                                : const TextStyle(
                                     color: Colors.orange,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -347,7 +343,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _showDatabaseInfo() async {
-    return showDialog<void>(
+    return await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Database Info'),
@@ -373,12 +369,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _confirmClearData() async {
     final l10n = AppLocalizations.of(context);
-    return showDialog<void>(
+    return await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Clear All Data?'),
         content: const Text(
-          'This will delete all local notes and settings. This cannot be undone.',
+          'This will delete all local notes and settings. '
+          'This cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -387,16 +384,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           TextButton(
             onPressed: () async {
+              // Taken from the dialog's own context before the awaits. The
+              // State's `mounted` says nothing about whether this dialog is
+              // still up, and replaceAll has to finish before the dialog
+              // reports the data as cleared.
+              final navigator = Navigator.of(context);
+              final messenger = ScaffoldMessenger.of(context);
+
               await _storage.deleteAll();
-              ref.read(notesProvider.notifier).replaceAll([]);
-              // Also reset sync service
+              await ref.read(notesProvider.notifier).replaceAll([]);
               ref.read(syncServiceProvider.notifier).dispose();
-              if (mounted) {
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('All local data cleared')),
-                );
-              }
+
+              navigator.pop();
+              messenger.showSnackBar(
+                const SnackBar(content: Text('All local data cleared')),
+              );
             },
             child: const Text('Clear', style: TextStyle(color: Colors.red)),
           ),
@@ -407,7 +409,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 }
 
 class _ConfigRow extends StatelessWidget {
-  const _ConfigRow({required this.label, required this.value, this.valueStyle});
+  const new({required this.label, required this.value, this.valueStyle});
 
   final String label;
   final String value;

@@ -1,10 +1,13 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:flutter_test/flutter_test.dart';
 
+/// Points sqflite at the in-process ffi implementation for tests.
+///
+/// `databaseFactoryFfiNoIsolate`, not `databaseFactoryFfi`: the isolate-backed
+/// factory completes its futures in real time, while `testWidgets` runs inside
+/// FakeAsync, whose clock `pumpAndSettle` advances instead. A write would then
+/// still be in flight when the widget tree was disposed, which surfaces as a
+/// pending 10-second timer — sqflite's lock warning — and a flaky test.
 void setupSqfliteFfi() {
   sqfliteFfiInit();
-  databaseFactory = databaseFactoryFfi;
+  databaseFactory = databaseFactoryFfiNoIsolate;
 }
-
-// This file should be imported by test files that need sqflite
-// Usage: import 'package:evomem_mobile/test/sqflite_test_setup.dart' as setup; setup.setupSqfliteFfi();

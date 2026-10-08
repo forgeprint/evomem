@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:evomem_mobile/l10n/app_localizations.dart';
 import 'package:evomem_mobile/src/routing/router.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 /// The application: theme, localisations and the router.
 ///
@@ -72,7 +72,7 @@ ThemeData buildTheme() {
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
-    appBarTheme: AppBarTheme(
+    appBarTheme: const AppBarTheme(
       centerTitle: false,
       elevation: 0,
       scrolledUnderElevation: 1,

@@ -1,6 +1,6 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/rules/note_rules.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('checkNoteContent', () {
@@ -61,8 +61,8 @@ void main() {
           projectId: 'proj',
           content: 'original',
           sourceType: 'manual',
-          createdAt: DateTime(2026, 1, 1),
-          updatedAt: DateTime(2026, 1, 1),
+          createdAt: DateTime(2026),
+          updatedAt: DateTime(2026),
         );
         final updated = original.withContent(
           'new content',

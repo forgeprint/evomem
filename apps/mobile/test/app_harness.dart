@@ -1,7 +1,7 @@
+import 'package:evomem_mobile/src/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:evomem_mobile/src/app.dart';
 
 /// Pumps the whole app, router and localisations included.
 ///

@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:evomem_mobile/l10n/app_localizations.dart';
 import 'package:evomem_mobile/src/routing/routes.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 /// Where a link the app cannot serve ends up.
 ///

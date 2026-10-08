@@ -1,17 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:sqflite/sqflite.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
+import 'package:sqflite/sqflite.dart';
 
 /// Data Access Object for notes table.
 class NotesDao {
-  NotesDao(this._dbHelper);
+  /// Reads and writes notes through the helper's connection.
+  new(this._dbHelper);
 
   final DatabaseHelper _dbHelper;
 
-  Future<Database> get _db async => _dbHelper.database;
+  Future<Database> get _db async => await _dbHelper.database;
 
   /// Converts a database row to a Note.
   Note _noteFromMap(Map<String, dynamic> map) {
@@ -33,7 +34,9 @@ class NotesDao {
     }
     try {
       return json.decode(metadataJson) as Map<String, dynamic>;
-    } catch (_) {
+    } on FormatException {
+      // Metadata is an open extension point, so a row written by another
+      // version may not decode. An unreadable one is dropped, not fatal.
       return {};
     }
   }
@@ -134,7 +137,7 @@ class NotesDao {
     }
 
     final result = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM notes WHERE ${where.toString()}',
+      'SELECT COUNT(*) as count FROM notes WHERE $where',
       whereArgs,
     );
     return Sqflite.firstIntValue(result) ?? 0;

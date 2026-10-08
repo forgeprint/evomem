@@ -1,8 +1,8 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/rules/note_rules.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import '../sqflite_test_setup.dart' as sqflite_setup;
 
@@ -142,7 +142,7 @@ void main() {
     expect(container.read(notesProvider).single.metadata['pinned'], false);
   });
 
-  test('replaceAll replaces the entire list', () {
+  test('replaceAll replaces the entire list', () async {
     final container = ProviderContainer.test();
     container
         .read(notesProvider.notifier)
@@ -154,20 +154,20 @@ void main() {
         projectId: 'default',
         content: 'new one',
         sourceType: 'manual',
-        createdAt: DateTime(2026, 1, 1),
-        updatedAt: DateTime(2026, 1, 1),
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
       ),
       Note(
         id: 'new2',
         projectId: 'default',
         content: 'new two',
         sourceType: 'manual',
-        createdAt: DateTime(2026, 1, 1),
-        updatedAt: DateTime(2026, 1, 1),
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
       ),
     ];
 
-    container.read(notesProvider.notifier).replaceAll(newNotes);
+    await container.read(notesProvider.notifier).replaceAll(newNotes);
     expect(container.read(notesProvider).length, 2);
     expect(container.read(notesProvider).map((n) => n.content).toList(), [
       'new one',
