@@ -9,7 +9,6 @@ import (
 	"os"
 
 	"github.com/forgeprint/evomem/core/api"
-	"github.com/forgeprint/evomem/shared/database"
 )
 
 // cmdServe starts the HTTP server.
@@ -61,4 +60,12 @@ func parseChatProjects(s string) api.ChatProjectMap {
 		return nil
 	}
 	return m
+}
+
+// getEnv prefers the environment, falling back to a flag's value.
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }

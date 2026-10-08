@@ -43,19 +43,25 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 - [x] Implement the `search_notes` tool capability allowing LLMs to search global text fragments using the underlying SQLite FTS5 index.
 - [x] Implement the `get_project_context` tool filtering and delivering historical note payloads bounded by a specific `project_id`.
 - [x] Test the local server locally with the Claude Desktop configuration file or terminal mocking tools.
+- [x] Implement `get_note`, `propose_note`, `list_projects` tools.
+- [x] Wire MCP server into `evomem mcp` CLI command.
 
 ## Phase 3: Local-First Flutter Mobile App
-- [ ] Initialize clean Flutter environment inside `apps/mobile` utilizing Dart.
-- [ ] Configure local embedded storage using a solid local-first package matching the Go schema architecture (e.g., `sqflite` or `drift`).
-- [ ] Build minimalist user interfaces for swift text capturing.
-- [ ] Implement background-ready audio recording module saving raw files locally to native storage directories and appending references to the local DB.
+- [x] Initialize clean Flutter environment inside `apps/mobile` utilizing Dart.
+- [x] Configure local embedded storage using a solid local-first package matching the Go schema architecture (e.g., `sqflite` or `drift`).
+- [x] Build minimalist user interfaces for swift text capturing.
+- [x] Implement background-ready audio recording module saving raw files locally to native storage directories and appending references to the local DB.
 
 ## Phase 4: Integration Adaptors & Ingestion Trigger Engines
 - [x] Implement Telegram Ingestion Handler (`core/api/adapters/telegram`): Parse text payloads or voice metadata via Telegram Bot API webhooks and ingest them as records using `source_type: "telegram"`.
 - [x] Implement Jira Integration Adapter (`core/api/adapters/jira`): Set up API ingest hooks mapping project issues to standard note blocks with high extensibility fields (e.g., storing `jira_issue_key`, `status` inside `metadata`).
 - [x] Create a fast HTTP server entrypoint in Go (`core/api`) to handle fast payloads incoming via Apple Shortcuts automation triggers.
+- [x] Wire HTTP server into `evomem serve` CLI command.
+- [x] Implement Telegram multi-project routing (chat_id → project mapping + hashtag fallback).
 
 ## Phase 5: Cloud Synchronization Pipeline (Lokal SQLite -> Cloud PostgreSQL)
 - [x] Draft a background worker pipeline checking for internet connectivity status.
 - [x] Implement delta synchronization logic securely mirroring local tracking entries from SQLite over a central secure PostgreSQL node.
 - [x] Implement archiving rules filtering records older than 6 months to thin down the active local SQLite database footprint on demand.
+- [x] Implement `evomem pull` (delta sync from remote) and `evomem restore` (full restore from remote) CLI commands.
+- [x] Add `PullNotes` and `PullAll` methods to PostgreSQL transport for Remote interface.

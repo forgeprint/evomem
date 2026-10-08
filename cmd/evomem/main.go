@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgeprint/evomem/core/api"
+	"github.com/forgeprint/evomem/core/mcp"
 	"github.com/forgeprint/evomem/core/sync"
 	"github.com/forgeprint/evomem/shared/database"
 	"github.com/forgeprint/evomem/shared/models"
@@ -358,47 +358,16 @@ func cmdDelete(args []string, out io.Writer) error {
 	return nil
 }
 
-func cmdReview(args []string, out io.Writer) error {
-	fs := flag.NewFlagSet("review", flag.ContinueOnError)
-	accept := fs.String("accept", "", "accept a proposal by id")
-	reject := fs.String("reject", "", "reject a proposal by id")
-	status := fs.String("status", "pending", "filter by status: pending|accepted|rejected|all")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	db, err := openStore()
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	ctx := context.Background()
-
-	if *accept != "" {
-		if err := db.AcceptProposal(ctx, *accept); err != nil {
-			return err
-		}
-		fmt.Fprintf(out, "accepted %s\n", *accept)
-		return nil
-	}
-
-	if *reject != "" {
-		if err := db.RejectProposal(ctx, *reject); err != nil {
-			return err
-		}
-		fmt.Fprintf(out, "rejected %s\n", *reject)
-		return nil
-	}
-
-	proposals, err := db.Proposals(ctx, database.ProposalStatus(*status))
-	if err != nil {
-		return err
-	}
-	if proposals == nil {
-		proposals = []database.Proposal{}
-	}
-	return writeJSON(out, proposals)
+// writeJSON is the only output format for anything structured. A note's
+// content is arbitrary text, so a column layout would need escaping rules
+// that JSON already has.
+//
+// Callers pass an empty slice rather than a nil one: a consumer parsing this
+// should get [] for no results, never null.
+func writeJSON(out io.Writer, v any) error {
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
 }
 
 func cmdMCP(args []string, out io.Writer, in io.Reader) error {
@@ -414,14 +383,17 @@ func cmdMCP(args []string, out io.Writer, in io.Reader) error {
 	}
 	defer db.Close()
 
-	server := mcp.New(context.Background(), db, version)
-
-	var serverOut io.Writer = out
-	if *quiet {
-		serverOut = io.Discard
+	if !*quiet {
+		fmt.Fprintf(os.Stderr, "evomem %s: MCP server on stdio\n", version)
+		if msg := reviewReminder(context.Background(), db); msg != "" {
+			fmt.Fprintln(os.Stderr, msg)
+		}
 	}
 
-	return server.Serve(in, serverOut)
+	// The protocol owns stdout; anything the server says about itself went
+	// to stderr above.
+	server := mcp.New(context.Background(), db, version)
+	return server.Serve(in, out)
 }
 
 func openStore() (*database.DB, error) {

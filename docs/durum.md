@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-08 · Son commit: `ab8937f` · CI: yeşil
+Son güncelleme: 2026-10-08 (üçüncü oturum) · Son commit: `52c87ff` sonrası · CI: yeşil (doğrulandı)
 
 ---
 
@@ -32,7 +32,7 @@ shared/database    tek yazıcılı iki havuz, FTS5 arama, delta izleme,
 core/mcp           stdio JSON-RPC, spec'e göre yazılmış, iki protokol dönemi
 core/api           POST /ingest + Telegram ve Jira webhook'ları
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
-cmd/evomem         13 alt komut
+cmd/evomem         13 alt komut (mcp, serve, pull, restore dahil)
 apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
 ```
 
@@ -53,6 +53,8 @@ evomem review -accept <id>            # kabul et
 evomem mcp                            # ajanın başlattığı sunucu
 evomem serve                          # HTTP girişi
 evomem sync -once                     # aynaya gönder
+evomem pull                           # aynadan çek
+evomem restore [-confirm]             # aynadan tam geri yükle
 evomem sync-status                    # ne bekliyor
 evomem archive -dry-run               # ne temizlenecek
 ```
@@ -91,22 +93,20 @@ Bunlar bende değil, sende:
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-1. **Telegram çoklu proje yönlendirmesi.** Şu an bir bot = bir proje
-   (`EVOMEM_TELEGRAM_PROJECT`). Seçenekler: `chat_id` → proje eşlemesi,
-   mesajdaki `#etiket`, bot komutu. Üçü çelişiyor, biri seçilmeli.
-   `telegram_chat_id` metadata'da saklı olduğu için migration gerekmiyor.
-2. **Pull / restore.** Senkronizasyon tek yönlü; ikinci bir makine aynadan
-   okuyamıyor, aynadan geri yükleme yok. Ayna şeması ikisini de mümkün
-   kılacak kadar sade bırakıldı (ADR-0012'nin son maddesi). Kendi ADR'sini
-   gerektirir.
-3. **Servis tanımı.** `evomem sync` ve `evomem serve` elle çalıştırılıyor.
-   macOS için launchd plist, Linux için systemd unit.
-4. **Ses dökümü.** Telegram ses mesajları `awaiting_transcription: true` ve
-   `telegram_file_id` ile duruyor; `getFile` ile indirip döküme çevirecek bir
-   şey yok. Bir döküm bağımlılığı gerektirir → ADR.
-5. **Sürüm ve dağıtım.** forgelore'da `release.sh` + `npm-pack.sh` +
-   attestation'lı release workflow var; burada hiç yok. İlk sürümü kesmek
-   istediğinde o kalıp alınabilir.
+1. **Ses dökümü.** Telegram ses mesajları `awaiting_transcription: true` ve
+   `telegram_file_id` ile duruyor; `getFile` ile indirip döküme çevirecek
+   hiçbir şey yok. ADR-0016 kararı verilmiş (**proposed**, self-hosted
+   faster-whisper + yerel Whisper.cpp yedeği) ama tek satır kod yazılmadı.
+   `core/api/adapters/transcription` paketi yok.
+2. **Sürüm ve dağıtım.** `scripts/release.sh` var ve `dist/` içinde v0.1.0
+   ikilileri duruyor, ama GitHub'da release workflow'u yok — `.github/workflows`
+   altında yalnızca `ci.yml`. forgelore'daki attestation'lı workflow kalıbı
+   alınabilir. İlk sürüm henüz kesilmedi.
+3. **Flutter tarafı ses kaydı → döküm zinciri.** Mobilde kayıt var, dökümü
+   tetikleyen bir şey yok; (1) bitmeden anlamı yok.
+
+Plan'daki (`plan.md`) beş fazın bütün kutuları işaretli. Kalan iş plan dışı:
+döküm, dağıtım ve gerçek dünya denemeleri.
 
 ## Bilinen sınırlar (hata değil, karar)
 
@@ -121,6 +121,9 @@ Bunlar bende değil, sende:
   `evomem archive` hiçbir şey yapmıyor (ve nedenini söylüyor). → ADR-0012
 - **Flutter widget testlerinde sqflite_ffi timer cleanup** — test ortamı
   kısıtlama, production kodunda sorun yok (FakeAsync timer cleanup).
+- **`evomem mcp -quiet` yalnızca stderr'i susturur**, protokol çıktısını
+  değil. stdout protokolün; sunucunun kendisi hakkında söylediği her şey
+  stderr'e gider.
 
 ## Yeni oturuma nasıl başlanır
 

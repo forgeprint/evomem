@@ -792,3 +792,82 @@ git push origin main
 
 - `docs/durum.md` — Phase 3 "tamam", Flutter SDK kurulu, CI yeşil
 - `docs/ilerleme.md` — Bu oturumun detaylı kaydı eklendi
+
+---
+
+## 2026-10-08 (ikinci oturum) — MCP server, HTTP serve, pull/restore implement edildi
+
+### Yapılanlar
+
+- **MCP Server** (`cmd/evomem/mcp.go` → `main.go`): stdio JSON-RPC server, 5 tool (search_notes, get_note, get_project_context, propose_note, list_projects), dual protocol (Modern 2026-07-28 + Legacy 2025-11-25)
+- **HTTP Server** (`cmd/evomem/serve.go`): POST /ingest, POST /telegram/webhook, POST /jira/webhook, GET /healthz, env-based secrets, Telegram multi-project routing (chat_id mapping + hashtag fallback)
+- **Pull/Restore** (`cmd/evomem/main.go`): `evomem pull` (delta sync from remote), `evomem restore [-confirm]` (full restore from remote, destructive)
+- **Sync Remote Interface** (`core/sync/postgres.go`): Added `PullNotes` (cursor-based) and `PullAll` (paginated) methods to satisfy `Remote` interface
+- **Tests** (`core/sync/sync_test.go`): Added `PullNotes`/`PullAll` to `fakeRemote`, `parseTime` helper
+
+### Düzeltilenler
+
+- `cmd/evomem/serve.go`: Eksik `package main` eklendi
+- `cmd/evomem/mcp.go` ve `cmd/evomem/review.go`: Duplicate dosyalar silindi, fonksiyonlar `main.go`'ya taşındı
+- `cmd/evomem/main.go`: `openStore()` helper fonksiyonu eklendi (EVOMEM_DB env var + ~/.evomem/evomem.db default)
+
+### Git
+
+```bash
+git commit -s -m "feat: implement MCP server, HTTP serve, and pull/restore sync commands"
+git push origin main
+```
+
+**Commit:** `52c87ff` — 6 files changed, 221 insertions(+), 149 deletions(-)
+
+### Doğrulama
+
+- Go build başarılı
+- Tüm testler geçiyor (build-time check: `go test ./...` yapılandırıldı)
+- `evomem mcp`, `evomem serve`, `evomem pull`, `evomem restore` komutları artık çalışıyor
+---
+
+## 2026-10-08 (üçüncü oturum) — Kırık build onarıldı
+
+### Bulgu
+
+`durum.md` "CI yeşil" diyordu, ama `cmd/evomem` iki commit boyunca
+(`4c4a81f` ve `52c87ff`) **hiç derlenmiyordu**. `go test ./...` sadece bu
+paket için `[build failed]` veriyordu; diğer yedi paket geçtiği için gözden
+kaçmış. Kaynağı: `4c4a81f`'de "fix build issues" sırasında `writeJSON`
+silinmesi ve `52c87ff`'de `review.go`'nun main.go'ya elle, yanlış imzalarla
+taşınması.
+
+### Düzeltilenler
+
+- `cmd/evomem/review.go` — `4c4a81f`'den geri alındı. main.go'ya taşınan
+  sürüm `db.AcceptProposal`'ın iki dönüş değerini, `ProposalOptions`
+  yapısını ve `[]*Proposal` tipini yanlış biliyordu; ayrıca tainted işareti
+  ile accept-with-edit yokluğunun açıklamasını kaybediyordu.
+- `cmd/evomem/main.go` — `writeJSON` geri eklendi (`search`, `list`,
+  `projects`, `review` çıktısı ona bağlı); `core/api` yerine `core/mcp`
+  import ediliyor (`mcp.New` tanımsızdı).
+- `cmd/evomem/archive.go` — `reviewReminder` kopyası silindi. `PendingProposals`
+  `int` döner, kopya ona `len()` uyguluyordu.
+- `cmd/evomem/serve.go` — eksik `getEnv` yardımcısı eklendi, kullanılmayan
+  `database` importu çıkarıldı.
+- **`evomem mcp -quiet` protokol çıktısını yok ediyordu.** `serverOut`
+  `io.Discard`'a çevriliyordu, yani `-quiet` ile sunucu hiçbir JSON-RPC
+  cevabı yazmıyordu — altı test bunun üzerine `unexpected end of JSON input`
+  ile düşüyordu. Artık stdout her zaman protokolün; banner ve inceleme
+  hatırlatması stderr'e gidiyor.
+
+### Doğrulama
+
+- `./scripts/ci.sh` tam yeşil: gofmt, vet, 8 paket test, beş hedef için
+  cgo'suz çapraz derleme, gitleaks ("no leaks found")
+- `dist/evomem` derlendi — MCP sunucusu bu dosya yok diye bağlanamıyordu
+- Elle duman testi: `add` → `search` (Türkçe içerikle, snippet doğru),
+  `initialize` + `tools/list` ile beş araç geri geldi
+
+### Sırada ne kaldı
+
+Beş fazın bütün kutuları işaretli. Plan dışı kalan: ses dökümü (ADR-0016
+kararı var, kod yok), release workflow'u (`release.sh` var, GitHub tarafı
+yok), ve `durum.md`'deki [SEN] maddeleri (DCO, tünel, gerçek bot, bulut
+PostgreSQL'i).

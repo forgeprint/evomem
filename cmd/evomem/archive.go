@@ -144,15 +144,3 @@ func humanBytes(n int64) string {
 	}
 	return fmt.Sprintf("%.1f TiB", value/1024)
 }
-
-func reviewReminder(ctx context.Context, db *database.DB) string {
-	pending, err := db.PendingProposals(ctx)
-	if err != nil || len(pending) == 0 {
-		return ""
-	}
-	noun := "proposals"
-	if len(pending) == 1 {
-		noun = "proposal"
-	}
-	return fmt.Sprintf("%d %s waiting for review; see evomem review", len(pending), noun)
-}
