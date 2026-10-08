@@ -25,6 +25,7 @@ class NotesDao {
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
       metadata: metadata,
+      remoteId: (map['remote_id'] as String?) ?? '',
     );
   }
 
@@ -57,6 +58,7 @@ class NotesDao {
       'created_at': note.createdAt.toIso8601String(),
       'updated_at': note.updatedAt.toIso8601String(),
       'metadata': _encodeMetadata(note.metadata),
+      'remote_id': note.remoteId,
     }, conflictAlgorithm: ConflictAlgorithm.fail);
   }
 
@@ -72,6 +74,21 @@ class NotesDao {
       },
       where: 'id = ?',
       whereArgs: [note.id],
+    );
+  }
+
+  /// Records what the server called a note it accepted.
+  ///
+  /// Written on its own rather than through [update], which moves
+  /// `updated_at` forward: this changes nothing about the note, and bumping
+  /// the timestamp would push it back over the sync cursor it just crossed.
+  Future<void> setRemoteId(String localId, String remoteId) async {
+    final db = await _db;
+    await db.update(
+      'notes',
+      {'remote_id': remoteId},
+      where: 'id = ?',
+      whereArgs: [localId],
     );
   }
 

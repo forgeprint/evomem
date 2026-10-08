@@ -1,10 +1,17 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:sqflite/sqflite.dart';
 
-/// Database version — must match Go backend schema version.
-const int _databaseVersion = 3;
+/// Database version.
+///
+/// Versions 1 to 3 match the Go backend's, because the tables were the same
+/// ones. Version 4 is the phone's alone: `notes.remote_id` records what the
+/// server called a note it accepted, which is a fact about this device's sync
+/// and not part of the store the backend keeps. The two numbers diverge from
+/// here on.
+const int _databaseVersion = 4;
 
 /// Database file name.
 const String _databaseName = 'evomem.db';
@@ -19,6 +26,15 @@ class DatabaseHelper {
 
   Database? _database;
 
+  /// Overrides the file the store is kept in.
+  ///
+  /// Only a test sets this. `flutter test` runs files in parallel against one
+  /// temporary directory, so two of them opening the same name share a file —
+  /// and a test that needs a store at a particular schema version cannot have
+  /// another one creating it first.
+  @visibleForTesting
+  static String? databasePathOverride;
+
   /// The open database, opening and migrating it on first use.
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -28,7 +44,8 @@ class DatabaseHelper {
 
   Future<Database> _initDatabase() async {
     final documentsDirectory = await getDatabasesPath();
-    final dbPath = path.join(documentsDirectory, _databaseName);
+    final dbPath =
+        databasePathOverride ?? path.join(documentsDirectory, _databaseName);
 
     return await openDatabase(
       dbPath,
@@ -48,7 +65,8 @@ class DatabaseHelper {
         source_type TEXT NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-        metadata TEXT NOT NULL DEFAULT '{}'
+        metadata TEXT NOT NULL DEFAULT '{}',
+        remote_id TEXT NOT NULL DEFAULT ''
       )
     ''');
 
@@ -167,12 +185,30 @@ class DatabaseHelper {
       );
     }
 
+    if (oldVersion < 4) {
+      // What the server called a note it accepted. Empty means it has not
+      // been accepted yet, which is what every existing row gets: the ids
+      // the server minted for them were discarded and cannot be recovered,
+      // so those notes stay unattachable. See ADR-0018.
+      await db.execute(
+        "ALTER TABLE notes ADD COLUMN remote_id TEXT NOT NULL DEFAULT ''",
+      );
+    }
+
     await db.update(
       'meta',
       {'value': newVersion.toString()},
       where: 'key = ?',
       whereArgs: ['schema_version'],
     );
+  }
+
+  /// Forgets the open connection without closing it, so the next read of
+  /// [database] opens the file again. Only a test needs this, after pointing
+  /// [databasePathOverride] somewhere else.
+  @visibleForTesting
+  void forgetConnection() {
+    _database = null;
   }
 
   /// Closes the connection. The next read of [database] reopens it.

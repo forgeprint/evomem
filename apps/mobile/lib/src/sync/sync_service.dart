@@ -198,15 +198,17 @@ class SyncService {
         break;
       }
 
-      final success = await _pushNotesBatch(notes);
-      if (!success) {
+      final pushed = await _pushNotesBatch(notes);
+      if (pushed == null) {
         return SyncResult.failure(
           error: 'Failed to push notes batch',
           notesPushed: totalPushed,
         );
       }
 
-      totalPushed += notes.length;
+      // What was actually posted, not how many were read: a batch may be
+      // mostly notes the server already has.
+      totalPushed += pushed;
 
       // Update cursor to last note in batch
       final lastNote = notes.last;
@@ -230,7 +232,14 @@ class SyncService {
   }
 
   /// Pushes a single batch of notes to the /ingest endpoint.
-  Future<bool> _pushNotesBatch(List<Note> notes) async {
+  ///
+  /// `/ingest` always creates, so a note posted twice becomes two notes. The
+  /// identifier it returns is therefore kept, and a note that has one is not
+  /// posted again — which is what makes a batch that failed half way safe to
+  /// retry. See ADR-0018.
+  /// Returns how many notes were posted, or null when the batch failed.
+  Future<int?> _pushNotesBatch(List<Note> notes) async {
+    var posted = 0;
     final client = http.Client();
     try {
       final uri = Uri.parse('${config.serverUrl}/ingest');
@@ -239,8 +248,17 @@ class SyncService {
         'Authorization': 'Bearer ${config.apiToken}',
       };
 
-      // Process notes sequentially to maintain order
+      // Sequentially, so the server's created_at order matches the phone's.
       for (final note in notes) {
+        if (note.isPushed) {
+          // Already accepted, under the id in remote_id. An edit made since
+          // does not reach the server: /ingest cannot update a note, and
+          // posting it again would duplicate it rather than change it. The
+          // remote copy stays as first sent — a known limit of one-way sync
+          // through this endpoint.
+          continue;
+        }
+
         final body = json.encode({
           'project': note.projectId,
           'content': note.content,
@@ -258,12 +276,40 @@ class SyncService {
         final response = await http.Response.fromStream(streamedResponse);
 
         if (response.statusCode != 201) {
-          return false;
+          return null;
         }
+
+        final remoteId = _remoteIdOf(response.body);
+        if (remoteId == null) {
+          // Accepted, but this cannot tell which note it became. Treated as
+          // a failure: carrying on would advance the cursor past a note
+          // nothing can ever attach a recording to, and the next run would
+          // post it again.
+          return null;
+        }
+        await _notesDao.setRemoteId(note.id, remoteId);
+        posted++;
       }
-      return true;
+      return posted;
     } finally {
       client.close();
+    }
+  }
+
+  /// Reads the id out of what /ingest answered.
+  ///
+  /// `{"status":"ok","id":"01M4D...","project":"evomem"}`. Null when the
+  /// reply is not that shape, which is not something to guess at: the id is
+  /// the only way back to the note the server stored.
+  static String? _remoteIdOf(String responseBody) {
+    try {
+      final decoded = json.decode(responseBody);
+      if (decoded is! Map<String, dynamic>) return null;
+      final id = decoded['id'];
+      if (id is! String || id.isEmpty) return null;
+      return id;
+    } on FormatException {
+      return null;
     }
   }
 

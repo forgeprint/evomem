@@ -13,6 +13,7 @@ class Note {
     required this.createdAt,
     required this.updatedAt,
     this.metadata = const {},
+    this.remoteId = '',
   });
 
   /// Identifies the note in a link such as `/notes/abc123`.
@@ -36,6 +37,18 @@ class Note {
   /// Extensible metadata for source-specific attributes.
   final Map<String, dynamic> metadata;
 
+  /// What the server called this note when it accepted it, or empty when it
+  /// has not been accepted.
+  ///
+  /// The phone mints [id] and the server mints its own, so one note has two
+  /// identifiers and only this says what the other one is. Two things need
+  /// it: a recording is uploaded against the server's id, and a note that
+  /// already has one is not posted a second time. See ADR-0018.
+  final String remoteId;
+
+  /// Whether the server has accepted this note.
+  bool get isPushed => remoteId.isNotEmpty;
+
   /// The same note with [content] and [updatedAt] changed.
   Note withContent(String newContent, DateTime newUpdatedAt) => Note(
     id: id,
@@ -45,5 +58,18 @@ class Note {
     createdAt: createdAt,
     updatedAt: newUpdatedAt,
     metadata: metadata,
+    remoteId: remoteId,
+  );
+
+  /// The same note with the identifier the server gave it.
+  Note withRemoteId(String newRemoteId) => Note(
+    id: id,
+    projectId: projectId,
+    content: content,
+    sourceType: sourceType,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    metadata: metadata,
+    remoteId: newRemoteId,
   );
 }

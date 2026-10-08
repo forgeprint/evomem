@@ -36,6 +36,7 @@ core/api           POST /ingest, /ingest/audio + Telegram ve Jira webhook'ları
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
 cmd/evomem         14 alt komut (mcp, serve, pull, restore, transcribe dahil)
 apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
+                   mobil şema v4: notes.remote_id
 ```
 
 Şema sürümü **3**. Kayıtlar şemada değil, veritabanının yanındaki `audio/`
@@ -82,8 +83,12 @@ evomem transcribe                     # kuyruğu işle (servis yoksa kapalı)
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings — 42 test,
+- **Flutter mobil**: sqflite persistence, sync, settings — 53 test,
   `flutter analyze` temiz, web release build'i geçiyor
+- **`remote_id`**: yerel bir HTTP sunucusuna karşı; dönen id saklanıyor,
+  `updated_at` oynamıyor, ikinci push hiç istek atmıyor, yarıda kalan batch
+  tekrarlandığında yalnızca eksik notu gönderiyor. v3→v4 migration gerçek bir
+  v3 dosyası yaratılıp uygulamanın açılış yolundan geçirilerek denendi.
 
 **Hiç denenmedi:**
 
@@ -115,14 +120,17 @@ Bunlar bende değil, sende:
    telefon hâlâ kayıt yapamıyor: ne paket, ne mikrofon izni, ne arayüz.
    ADR-0018 bunu bilinçli olarak kapsam dışı bıraktı; paket seçimi için
    dokümantasyon doğrulaması gerekiyor.
-2. **Telefonun `/ingest`'ten dönen id'yi saklaması** (`remote_id`). Bugün
-   atıyor, bu yüzden (a) yüklediği sesi hiçbir nota bağlayamaz, (b) push
-   idempotent değil — yarıda kalan batch notları ikinci kez yazar. Aynı
-   düzeltme ikisini de kapatıyor. → ADR-0018
-3. **Dökümü onaylama akışı.** `tainted` ve `transcribed` işaretlerini
-   temizleyen hiçbir şey yok; bir insanın dökümü okuyup onayladığını
-   söyleyebileceği bir komut yok. ADR-0016 bunu ayrı bir karar olarak
-   bıraktı.
+2. **Dökümü onaylama akışı.** `tainted` ve `transcribed` işaretlerini
+   temizleyen hiçbir şey yok. ADR-0016 ayrı bir karar olarak bıraktı.
+3. **Mobilde düzenlenen not sunucuya gitmiyor.** `/ingest` güncelleme
+   yapamıyor ve `remote_id`'si olan not ikinci kez gönderilmiyor, yani uzak
+   kopya ilk gönderildiği hali koruyor. Çift kayıt yerine bayat kayıt —
+   bilinçli takas, ama bir güncelleme yolu gerekiyor.
+
+**`remote_id` tamam** (ADR-0018): telefon artık `/ingest`'ten dönen id'yi
+`notes.remote_id`'ye yazıyor (mobil şema v4), ve `remote_id`'si olan notu
+ikinci kez göndermiyor. İki şeyi birden kapattı: ses artık bir nota
+bağlanabilir, ve yarıda kalan bir batch güvenle tekrarlanabilir.
 
 **Ses yükleme tamam** (ADR-0018, sunucu tarafı): `POST /ingest/audio?note=<id>`
 kayıtları veritabanının yanındaki `audio/` dizinine yazıyor,

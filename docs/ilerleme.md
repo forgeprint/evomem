@@ -1331,3 +1331,64 @@ ile filtreleyip yeşil saymıştım; oysa o koşuda "no leaks found" satırı hi
 yoktu, yerine "leaks found: 1" vardı ve grep'im onu da göstermiyordu. Yani
 yeşil olduğunu gördüğüm için değil, kırmızı olduğunu göremediğim için yeşil
 sandım. Filtre, aradığı satırın yokluğunu sessizlik olarak okuyordu.
+
+---
+
+## 2026-10-08 (on birinci oturum) — `remote_id`
+
+ADR-0018'in telefon tarafındaki önkoşulu. Flutter testleri 42 → **53**.
+
+### Yapılanlar
+
+- **Mobil şema v4**: `notes.remote_id TEXT NOT NULL DEFAULT ''`. Dosyadaki
+  "Go backend sürümüyle aynı olmalı" yorumu düzeltildi: v1–v3 aynıydı çünkü
+  tablolar aynıydı, v4 telefonun kendi bilgisi (sunucunun o nota ne dediği)
+  ve iki numara buradan sonra ayrışıyor.
+- `Note.remoteId`, `isPushed`, `withRemoteId`; `withContent` artık
+  `remoteId`'yi koruyor.
+- `NotesDao.setRemoteId` — **`update` üzerinden değil**, çünkü o `updated_at`'i
+  ileri alıyor; bu da notu az önce geçtiği sync imlecinin gerisine düşürüp
+  sonraki koşuda yeniden göndertirdi. Testi var.
+- `SyncService._pushNotesBatch`: dönen gövdeden `id` okunuyor ve yazılıyor;
+  `isPushed` olan not atlanıyor; sayaç gerçekten gönderileni sayıyor
+  (`notes.length` değil).
+- **201 ama kullanılabilir id yok** durumu başarısızlık sayılıyor. Devam
+  etmek, hiçbir zaman ses bağlanamayacak bir notun üstünden imleci geçirmek
+  ve sonraki koşuda onu yeniden göndermek olurdu.
+
+### Bilinçli takas
+
+`remote_id`'si olan not bir daha gönderilmiyor. Yani **mobilde düzenlenen bir
+not sunucuya gitmiyor**: `/ingest` güncelleme yapamıyor, yeniden göndermek de
+notu değiştirmek yerine çoğaltırdı. Önceki davranış çift kayıt, yenisi bayat
+kayıt. ADR-0018'in seçtiği bu; `durum.md`'de açık iş olarak duruyor.
+
+Migration'da mevcut satırlar `remote_id = ''` alıyor — sunucunun onlara verdiği
+id'ler atılmıştı ve geri getirilemez, yani o notlara ses bağlanamaz. İmleç
+onları yeniden göndermekten koruyor; düzenlenirlerse eski davranışa (çift
+kayıt) düşerler.
+
+### Test altyapısında bulunan sorun
+
+Yeni testler tam süitte düşüyordu. Nedeni kodda değil testlerde:
+`flutter test` dosyaları **paralel** çalıştırıyor ve hepsi `getDatabasesPath()`
+altında aynı `evomem.db` adını açıyor — yani aynı dosyayı paylaşıyorlar.
+Şema sürümü belirli olmalı olan bir test, başkası dosyayı önce yaratırsa
+çalışamaz.
+
+`DatabaseHelper.databasePathOverride` ve `forgetConnection()` eklendi
+(`@visibleForTesting`). Yeni üç test dosyası kendi dosyasını kullanıyor.
+Süit üst üste iki kez yeşil koştu.
+
+### Doğrulama
+
+- 53 Flutter testi, `flutter analyze` temiz, `dart format` temiz, l10n temiz,
+  `flutter build web --release` geçiyor
+- Sync testleri **gerçek bir yerel HTTP sunucusuna** karşı (`dart:io
+  HttpServer`), mock edilmiş istemciye karşı değil: test edilen şey
+  `SyncService`'in cevapla ne yaptığı
+- **v3 → v4 migration gerçekten denendi**: v3 şemasıyla ve içinde bir notla
+  bir dosya yaratıldı, sonra uygulamanın açılış yolundan geçirildi. Not
+  korundu, kolon eklendi, `remote_id` boş geldi, `schema_version` 4 oldu.
+- `pub get`/build'in yeniden ürettiği iki dosya yine geri alındı
+  (`.gitignore`, `GeneratedPluginRegistrant.java`) — geçen oturumda olduğu gibi
