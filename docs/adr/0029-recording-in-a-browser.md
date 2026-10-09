@@ -118,8 +118,29 @@ is still unproven in a browser, exactly as it is on a phone.
   against a temp directory, the browser one not at all in unit tests, since
   no test here has a browser. It is checked by hand, in one.
 
+### Playing it back
+
+A recording you cannot hear is a recording you cannot check, so a note that
+stands for one offers a play button.
+
+`RecordingPlayer` is a port like the store, and for the same reason: a
+browser already has an audio element and needs nothing added, while a phone
+needs a package this app does not have — and cannot currently be built at
+all, since there are no `android/` or `ios/` build files. So the browser
+implementation is real and the phone one reports that it cannot play, which
+is what hides the button. A button that would do nothing is worse than no
+button; the package earns its place when the phone can run.
+
+The button checks the bytes are still there before pointing anything at
+them. An audio element aimed at a blob URL whose document has been reloaded
+fails in a way nobody can read, and "that recording is gone" is the true
+answer.
+
 ### Explicitly not decided here
 
 - **IndexedDB for recordings**, which is what would make this durable.
 - **Transcription in the browser.** Nothing on any client transcribes
   (ADR-0016) and that is unchanged.
+- **Playing back what the server holds.** Once a recording is uploaded the
+  server has it, but there is no endpoint that serves one and adding it is
+  its own decision. Playback is of what this device still holds.

@@ -5,6 +5,7 @@ import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/rules/note_rules.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
+import 'package:evomem_mobile/src/ui/play_recording_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -89,6 +90,8 @@ class NoteDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             Text(note.content, style: Theme.of(context).textTheme.bodyLarge),
+            const SizedBox(height: 16),
+            PlayRecordingButton(note),
             if (note.metadata.isNotEmpty) ...[
               const SizedBox(height: 16),
               const Divider(),

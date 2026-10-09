@@ -2782,3 +2782,24 @@ listenin ilki tutuyor.
 `stop()` öncesi `isRecording()` soruluyor. "Çalışıyordu ama ses üretmedi" ile
 "zaten durmuştu" farklı satırlar; ikincisinde sebep `framework` kaynaklı
 satırda, çünkü `debugPrint` oraya akıyor.
+
+
+## Yirminci oturum — kayıt çalıştı, dinlemek yoktu
+
+Opus düzeltmesinden sonra tarayıcıda kayıt alındı. Ama dinlenemiyordu —
+duyamadığın bir sesli not, doğrulayamadığın bir kayıt yolu demek.
+
+`RecordingPlayer` portu eklendi, depoyla aynı desende. Tarayıcı uygulaması
+gerçek: `<audio>` elementini kaydedicinin verdiği blob URL'ine yöneltiyor,
+paket yok, bayt kopyalanmıyor. Telefon tarafı "çalamıyorum" diyor ve bu
+düğmeyi gizliyor — çalmak için bir paket gerekiyor, ve telefon zaten şu an
+hiç derlenemiyor (`android/`, `ios/` dosyaları yok). Hiçbir şey yapmayan bir
+düğme, olmayan düğmeden kötüdür.
+
+Düğme çalmadan önce baytların hâlâ orada olduğunu kontrol ediyor:
+yenilenmiş bir sayfanın blob URL'ine yöneltilen bir audio elementi kimsenin
+okuyamayacağı şekilde başarısız oluyor, oysa doğru cevap "o kayıt gitti".
+
+4 widget testi: kaydı olmayan not düğme göstermiyor, çalamayan derleme
+göstermiyor, çalma handle'ı oynatıcıya geçiyor, ve gitmiş bir kayıt
+söylüyor ve hiçbir şey çalmıyor.

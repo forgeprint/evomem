@@ -69,6 +69,44 @@ class BlobRecordingStore implements RecordingStore {
   }
 }
 
+/// Plays back through an audio element.
+RecordingPlayer newRecordingPlayer() => BlobRecordingPlayer();
+
+/// [RecordingPlayer] over an `<audio>` element pointed at the blob URL.
+///
+/// The browser already has everything needed to play its own blob, so this
+/// is the whole implementation: no package, no bytes copied, and the same
+/// handle the recorder handed back.
+class BlobRecordingPlayer implements RecordingPlayer {
+  web.HTMLAudioElement? _element;
+
+  @override
+  bool get canPlay => true;
+
+  @override
+  Future<void> play(String handle) async {
+    await stop();
+    final element = web.HTMLAudioElement()
+      ..src = handle
+      ..preload = 'auto';
+    _element = element;
+    await element.play().toDart;
+  }
+
+  @override
+  Future<void> stop() async {
+    final element = _element;
+    if (element == null) return;
+    element
+      ..pause()
+      // Dropping the source releases the decoder; the blob itself stays,
+      // because the note may be played again.
+      ..removeAttribute('src')
+      ..load();
+    _element = null;
+  }
+}
+
 /// Asks the browser why the microphone is not available.
 ///
 /// Three different things come back as one refusal and they need different

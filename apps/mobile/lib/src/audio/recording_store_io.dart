@@ -13,6 +13,29 @@ RecordingStore newRecordingStore() => FileRecordingStore();
 /// says afterwards is between the person and the operating system.
 Future<String> describeMicrophone() async => '';
 
+/// There is no player on this side yet.
+RecordingPlayer newRecordingPlayer() => const NoRecordingPlayer();
+
+/// A player that says it cannot play, so nothing offers the button.
+///
+/// Playing a file on a phone needs a package this app does not have, and
+/// the phone cannot currently be built at all — there are no android/ios
+/// build files. That is when a player package earns its place, not before
+/// (ADR-0029).
+class NoRecordingPlayer implements RecordingPlayer {
+  /// Creates the player.
+  const new();
+
+  @override
+  bool get canPlay => false;
+
+  @override
+  Future<void> play(String handle) async {}
+
+  @override
+  Future<void> stop() async {}
+}
+
 /// [RecordingStore] over the filesystem.
 class FileRecordingStore implements RecordingStore {
   /// Creates a store. [directory] is for a test that does not want

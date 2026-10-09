@@ -111,7 +111,7 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük — 116 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük, ses çalma — 120 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
   sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve
@@ -126,7 +126,8 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
 - **Tarayıcıda ses kaydının altyapısı** (ADR-0029): `blob:` URL hem `fetch`
   hem `XMLHttpRequest` ile okunuyor ve `content-type`'ı veriyor — gerçek
   tarayıcıda ölçüldü, yani `package:http` yetiyor. Yükleme artık gerçek
-  medya tipini gönderiyor. **Mikrofonla gerçek kayıt denenmedi.**
+  medya tipini gönderiyor. **Tarayıcıda gerçek mikrofonla kayıt alındı** —
+  encoder'ın platforma göre seçilmesinden sonra (tarayıcıda Opus).
 - **Sunucu PostgreSQL'de, uçtan uca**: üç not `/ingest` ile yazıldı,
   PostgreSQL'de 8 tablo ve notlar orada, sunucunun volume'unda SQLite dosyası
   **yok**. Arama konteynerden gerçek depoya karşı: `veritabani` → `veritabanı`,
@@ -206,11 +207,16 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    `debugPrint` günlüğe akıyor; paketin kendi hata metni bir sonraki
    denemede `/log`'da görünecek.
 
-3. **Mikrofonla gerçek bir kayıt hiç alınmadı** — ne tarayıcıda ne telefonda.
-   Claude'un tarayıcı paneli mikrofonu **bilerek engelliyor**
-   (`getUserMedia` → `NotAllowedError`, `permission: denied`), yani orada
-   hiç denenemez. Kullanıcının kendi tarayıcısında denenmesi gerekiyor;
-   başarısız olursa `/log` artık nedeni yazıyor.
+3. **Telefonda ses çalma yok.** `RecordingPlayer`'ın tarayıcı uygulaması
+   gerçek, telefon tarafı "çalamıyorum" diyor — bir paket gerekiyor ve
+   telefon zaten derlenemiyor. Android/iOS dosyaları gelince birlikte
+   bakılacak (ADR-0029).
+
+4. **Telefonda mikrofonla kayıt hiç denenmedi.** Tarayıcıda çalışıyor
+   (kullanıcı doğruladı). Telefon tarafı denenemez, çünkü `android/` ve
+   `ios/` derleme dosyaları yok. Not: Claude'un tarayıcı paneli mikrofonu
+   bilerek engelliyor, yani orada da denenemez — kullanıcının kendi
+   tarayıcısı gerekiyor.
 
 1. **Android/iOS derleme dosyaları yok.** `android/` ve `ios/` ağaçlarında ne
    `build.gradle`, ne `settings.gradle`, ne `Podfile`, ne `Runner.xcodeproj`

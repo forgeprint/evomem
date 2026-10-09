@@ -46,6 +46,28 @@ abstract interface class RecordingStore {
   Future<void> remove(String handle);
 }
 
+/// Plays back a recording this device still holds.
+///
+/// A port like [RecordingStore], and for the same reason: a browser has an
+/// audio element and a phone needs a package that is not here yet. It
+/// reports whether it can play at all, so a button that would do nothing is
+/// never offered (ADR-0029).
+abstract interface class RecordingPlayer {
+  /// Whether this build can play anything.
+  bool get canPlay;
+
+  /// Plays the recording behind [handle], from the start.
+  Future<void> play(String handle);
+
+  /// Stops whatever is playing.
+  Future<void> stop();
+}
+
+/// How this build plays a recording back. A test overrides it.
+final recordingPlayerProvider = Provider<RecordingPlayer>(
+  (ref) => platform.newRecordingPlayer(),
+);
+
 /// Why the microphone is not available, in words somebody can act on.
 ///
 /// Empty when there is nothing useful to add — on a phone the platform's own
