@@ -58,6 +58,41 @@ class SyncStatusRoute {
   String get location => path;
 }
 
+/// The groupings the server made over this project's notes.
+class ClustersRoute {
+  /// Creates the route to the list of groupings.
+  const new();
+
+  /// The pattern `GoRouter` matches on.
+  static const String path = '/clusters';
+
+  /// Where to send `context.go`.
+  String get location => path;
+}
+
+/// One grouping, addressed by its id on the server.
+class ClusterDetailRoute {
+  /// Creates the route to the grouping with this [id].
+  const new(this.id);
+
+  /// The pattern `GoRouter` matches on, with its one path parameter.
+  static const String path = '/clusters/:id';
+
+  /// The grouping this route names.
+  final String id;
+
+  /// Where to send `context.go`.
+  String get location => '/clusters/$id';
+}
+
+/// Reads a [ClusterDetailRoute] out of [state], or `null` when the link is
+/// not one this app can serve.
+ClusterDetailRoute? parseClusterDetailRoute(GoRouterState state) {
+  final raw = state.pathParameters['id'];
+  if (raw == null || raw.isEmpty) return null;
+  return ClusterDetailRoute(raw);
+}
+
 /// Reads a [NoteDetailRoute] out of [state], or `null` when the link is not
 /// one this app can serve.
 ///

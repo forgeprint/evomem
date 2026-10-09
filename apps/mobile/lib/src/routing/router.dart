@@ -1,4 +1,6 @@
 import 'package:evomem_mobile/src/routing/routes.dart';
+import 'package:evomem_mobile/src/ui/cluster_detail_screen.dart';
+import 'package:evomem_mobile/src/ui/clusters_screen.dart';
 import 'package:evomem_mobile/src/ui/missing_screen.dart';
 import 'package:evomem_mobile/src/ui/note_detail_screen.dart';
 import 'package:evomem_mobile/src/ui/notes_list_screen.dart';
@@ -29,6 +31,18 @@ GoRouter buildRouter({String initialLocation = NotesListRoute.path}) {
           final route = parseNoteDetailRoute(state);
           if (route == null) return const MissingScreen();
           return NoteDetailScreen(noteId: route.id);
+        },
+      ),
+      GoRoute(
+        path: ClustersRoute.path,
+        builder: (context, state) => const ClustersScreen(),
+      ),
+      GoRoute(
+        path: ClusterDetailRoute.path,
+        builder: (context, state) {
+          final route = parseClusterDetailRoute(state);
+          if (route == null) return const MissingScreen();
+          return ClusterDetailScreen(clusterId: route.id);
         },
       ),
       GoRoute(

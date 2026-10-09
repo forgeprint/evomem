@@ -98,5 +98,7 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 ## Plan dışı: yapay zekâ ile organize etme
 - [x] Kümeler: `clusters` + `cluster_notes` tabloları (şema 4), beş MCP aracı,
       `evomem clusters` komutu → ADR-0023
-- [ ] Kümelerin tarayıcıda görünmesi (Flutter kendi deposunu okuyor, ajan Go'nunkine yazıyor)
+- [x] Kümelerin tarayıcıda görünmesi: `GET /clusters` + `lib/src/clusters/` + iki ekran
+- [ ] Kümelerin uygulamadan düzenlenebilmesi (okuma var, yazma yok)
+- [ ] Uygulamada proje seçimi (`currentProjectProvider` `default`'a sabit)
 - [ ] Kümelerin senkronize olması (ADR-0012 yalnızca not ve mezar taşı taşıyor)

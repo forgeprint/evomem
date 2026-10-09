@@ -1987,3 +1987,47 @@ konulamıyor, çünkü orası Flutter import edemiyor (bir test bunu zorluyor) v
   döndü, izinsiz origin hiçbir `Access-Control-Allow-Origin` almadı
 - **Zincirin tamamı**: ajan MCP ile küme yaptı → bir istemci onu HTTP ile
   okudu, içindeki notlarla birlikte; token olmadan 401
+
+---
+
+## 2026-10-09 (devam) — Kümeler tarayıcıda görünüyor
+
+Sıralamayı ben seçtim: okuma yolu hazır olduğu için bu küçük bir işti ve
+kullanıcının denemek istediği döngüyü **ilk kez uçtan uca** tamamlıyor.
+Flutter testleri 77 → **84**.
+
+### Yazılanlar
+
+`lib/src/clusters/`: `Cluster` modeli, `ClusterService` (HTTP), sağlayıcılar.
+Yerel depo **yok ve olmayacak** — not yazıldığı cihaza ait, küme sunucuda
+türetilir ve yalnızca orada yaşar (ADR-0024). Telefonun kümeleri iki yönlü
+sync olmadan görmesini sağlayan şey bu; bedeli çevrimdışı görünmemeleri.
+
+İki ekran: liste (ad, özet, **boyut**) ve detay (küme + içindeki notlar, her
+notun kaynağı ve işaretleriyle). Boş ekranın üç ayrı anlamı olduğu için üçü
+ayrı açıklanıyor: yapılandırılmamış, ulaşılamıyor, okunamıyor.
+
+`ClusterService` başka bir programın çıktısını okuduğu için **tanımadığı bir
+girdiyi düşürüp kalanını tutuyor**; tek bozuk kayıt bütün listeyi
+kaybettirmiyor.
+
+### Doğrulama
+
+- 84 Flutter testi (iki koşu), analyze/format/l10n temiz, Go tarafı yeşil
+- **Gerçek tarayıcıda, gerçek sunucuya karşı**: ayarlar arayüzden girildi
+  ("Configured"), ajan MCP ile iki notu grupladı, uygulama `GET /clusters`
+  çağırdı (CORS preflight 204 + GET 200), kümeyi listeledi, detayında iki
+  notu **kaynaklarıyla** gösterdi: `jira` ve `mobile`
+
+### Yolda çıkan iki şey
+
+**Proje uyuşmazlığı.** Uygulama `currentProjectProvider` ile her zaman
+`default` soruyor; test verimi `evomem` projesine yazmıştım, bu yüzden ekran
+doğru biçimde "henüz gruplanmamış" dedi. Kod değil benim verim şaşırmıştı —
+ama bu gerçek bir sınır: **uygulama tek projeye sabit** ve hafızanın birden
+çok projesi olacaksa seçilebilir olmalı. `durum.md`'ye açık madde yazıldı.
+
+**Sağlayıcı önbelleği.** Aynı URL'e yeniden gitmek sayfayı yeniden
+yüklemediği için küme listesi eskide kaldı; ekranın kendi yenileme düğmesi
+(`ref.invalidate`) doğru sonucu getirdi. İstenen davranış, ama listenin
+kendiliğinden tazelenmediğini bilmek gerekiyor.

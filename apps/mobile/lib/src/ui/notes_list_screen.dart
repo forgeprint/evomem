@@ -84,6 +84,11 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
         title: Text(l10n.homeScreenTitle),
         actions: [
           IconButton(
+            tooltip: 'Groups',
+            icon: const Icon(Icons.workspaces_outline),
+            onPressed: () => context.go(const ClustersRoute().location),
+          ),
+          IconButton(
             tooltip: l10n.settings,
             icon: const Icon(Icons.settings),
             onPressed: () => context.go(const SettingsRoute().location),

@@ -90,8 +90,12 @@ evomem clusters -delete <id>          # gruplamayı geri al (notlar kalır)
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı — 77 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler — 84 test,
   `flutter analyze` temiz, web release build'i geçiyor
+- **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
+  sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve
+  detayında notları kaynaklarıyla (`jira`, `mobile`) gösterdi. Ayarlar
+  arayüzden girildi, CORS gerçek tarayıcıda çalıştı.
 - **`remote_id`**: yerel bir HTTP sunucusuna karşı; dönen id saklanıyor,
   `updated_at` oynamıyor, ikinci push hiç istek atmıyor, yarıda kalan batch
   tekrarlandığında yalnızca eksik notu gönderiyor. v3→v4 migration gerçek bir
@@ -143,8 +147,10 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    başına kimlik bilgisi, kaynak başına imleç ve bir tetikleyici gerekiyor —
    panelin API anahtarının duracağı yer de burası. Kendi kararını istiyor.
 
-1. **Kümeleri istemci arayüzü henüz göstermiyor.** Okuma yolu **var**
-   (`GET /clusters`), Flutter tarafı onu henüz çağırmıyor.
+1. **Uygulama tek projeye sabit.** `currentProjectProvider` her zaman
+   `default` dönüyor, yani başka bir projedeki notlar ve kümeler arayüzde
+   hiç görünmüyor. Hafızanın birden çok projesi olacaksa bu seçilebilir
+   olmalı.
 
 2. **Tarayıcıda ses kaydı çalışmıyor.** `record`'un web desteği var ama kaydı
    yazdığımız yolu `path_provider` veriyor ve onun web uygulaması yok.
@@ -162,6 +168,13 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 5. **Sunucuda silinen not telefonda kalıyor.** `evomem pull` notları okuyor,
    mezar taşlarını okumuyor. Diğer yön; pull tarafının `deletions` tablosunu
    da okuması gerekiyor. ADR-0020 kapsam dışı bıraktı.
+
+**Kümeler tarayıcıda görünüyor**: `lib/src/clusters/` (model, HTTP servisi,
+sağlayıcılar) ve iki ekran — liste ve detay. Kümeler yerelde saklanmıyor,
+her açılışta sunucuya soruluyor (ADR-0024). Yapılandırılmamış / ulaşılamayan /
+okunamayan durumları ayrı ayrı açıklanıyor, çünkü boş ekranın üç ayrı anlamı
+var. Detayda her notun **kaynağı** ve işaretleri (dışarıdan, makine dökümü,
+onaylı) gösteriliyor.
 
 **Okuma yolu açıldı** (ADR-0024): `GET /notes`, `GET /clusters`,
 `GET /clusters/{id}` — hepsi aynı token'ın arkasında, token yoksa endpoint de
