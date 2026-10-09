@@ -9,6 +9,10 @@ import 'package:path_provider/path_provider.dart';
 /// The store a phone uses: files in the application documents directory.
 RecordingStore newRecordingStore() => FileRecordingStore();
 
+/// Nothing to add here: a phone shows its own permission dialog, and what it
+/// says afterwards is between the person and the operating system.
+Future<String> describeMicrophone() async => '';
+
 /// [RecordingStore] over the filesystem.
 class FileRecordingStore implements RecordingStore {
   /// Creates a store. [directory] is for a test that does not want

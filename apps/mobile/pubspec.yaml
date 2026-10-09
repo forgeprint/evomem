@@ -21,6 +21,12 @@ dependencies:
   record: 7.1.1
   sqflite: 2.4.2
   sqflite_common_ffi_web: 1.2.0
+  # Already in the build as a transitive dependency of record_web and
+  # sqflite_common_ffi_web, so declaring it adds nothing to the bundle. It is
+  # here because the web build asks the browser why the microphone is not
+  # available, and there is no other way to ask. Pinned exactly, like the
+  # rest.
+  web: 1.1.1
 
 dev_dependencies:
   flutter_test:

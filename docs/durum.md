@@ -195,8 +195,10 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    kapalı değil (ADR-0027).
 
 2. **Mikrofonla gerçek bir kayıt hiç alınmadı** — ne tarayıcıda ne telefonda.
-   Zincirin geri kalanının testi var, ama mikrofon izni gerektiren adımı
-   otomatik bir koşu vermemeli; bunu elle denemek gerekiyor (ADR-0029).
+   Claude'un tarayıcı paneli mikrofonu **bilerek engelliyor**
+   (`getUserMedia` → `NotAllowedError`, `permission: denied`), yani orada
+   hiç denenemez. Kullanıcının kendi tarayıcısında denenmesi gerekiyor;
+   başarısız olursa `/log` artık nedeni yazıyor.
 
 1. **Android/iOS derleme dosyaları yok.** `android/` ve `ios/` ağaçlarında ne
    `build.gradle`, ne `settings.gradle`, ne `Podfile`, ne `Runner.xcodeproj`
@@ -216,7 +218,9 @@ gösteriyor, "Copy all" panoya alıyor. Diske yazılmıyor. Sebebi: bu
 uygulamanın koştuğu iki yerin de kimsenin bakacağı bir konsolu yok. Yol
 boyunca bir hata bulundu — **`on Exception`, tarayıcı interop'undan gelen
 `Error`'ı yakalamıyor**, yani bir kayıt hatası handler'dan kaçıp okunacak
-hiçbir şey bırakmıyordu. Kayıt yolundaki her yakalama artık `on Object`.
+hiçbir şey bırakmıyordu. Kayıt yolundaki her yakalama artık `on Object`. Tarayıcıda izin reddedilince
+günlük **nedenini** de yazıyor (`describeMicrophone`): secure context mi,
+izin ne durumda, kaç ses girişi var — üç farklı sorun üç farklı çözüm ister.
 
 **Tarayıcıda ses kaydı** (ADR-0029): depolama `RecordingStore` portunun
 arkasında — telefonda dosya, tarayıcıda `blob:`. Paket kaynağından okundu:

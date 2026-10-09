@@ -1,5 +1,8 @@
+import 'dart:js_interop';
+
 import 'package:evomem_mobile/src/audio/recording_store.dart';
 import 'package:http/http.dart' as http;
+import 'package:web/web.dart' as web;
 
 /// The store a browser uses.
 RecordingStore newRecordingStore() => BlobRecordingStore();
@@ -64,4 +67,52 @@ class BlobRecordingStore implements RecordingStore {
     // and the browser frees it when the page goes, which is also when the
     // bytes would have been lost anyway (ADR-0029).
   }
+}
+
+/// Asks the browser why the microphone is not available.
+///
+/// Three different things come back as one refusal and they need different
+/// fixes: the page is not a secure context, the permission is denied, or
+/// there is no input device. Each is asked separately so the answer names
+/// which — that is the difference between a log somebody can act on and one
+/// that only says something went wrong.
+///
+/// Every call is guarded on its own. A browser that will not answer one of
+/// them should still report the other two.
+Future<String> describeMicrophone() async {
+  final parts = <String>[];
+
+  if (!web.window.isSecureContext) {
+    parts.add(
+      'the page is not a secure context, so no browser will give it a '
+      'microphone; serve it over https or from localhost',
+    );
+  }
+
+  try {
+    final status = await web.window.navigator.permissions
+        .query(_PermissionDescriptor(name: 'microphone'))
+        .toDart;
+    parts.add('permission is ${status.state}');
+  } on Object {
+    parts.add('the browser would not say what the permission is');
+  }
+
+  try {
+    final devices = await web.window.navigator.mediaDevices
+        .enumerateDevices()
+        .toDart;
+    final inputs = devices.toDart.where((d) => d.kind == 'audioinput').length;
+    parts.add('$inputs audio input(s)');
+  } on Object {
+    parts.add('the devices could not be listed');
+  }
+
+  return parts.join('; ');
+}
+
+/// The shape `permissions.query` takes. Written out because package:web
+/// does not expose one; the same workaround record_web uses.
+extension type _PermissionDescriptor._(JSObject _) implements JSObject {
+  external factory({required String name});
 }

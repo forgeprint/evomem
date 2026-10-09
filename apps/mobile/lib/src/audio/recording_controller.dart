@@ -104,7 +104,16 @@ class RecordingController extends Notifier<RecordingState> {
       return RecordingProblem.recorderFailed;
     }
     if (!allowed) {
-      _log.warn('recording', 'the microphone was refused');
+      // Why, not just that. In a browser a refusal is three different
+      // things — denied, no device, or an insecure page — and they need
+      // three different fixes (ADR-0029). On a phone this is empty and the
+      // platform's own dialog is the whole story.
+      final why = await describeMicrophone();
+      _log.warn(
+        'recording',
+        'the microphone was refused',
+        why.isEmpty ? null : why,
+      );
       state = const RecordingState.failed(RecordingProblem.noPermission);
       return RecordingProblem.noPermission;
     }

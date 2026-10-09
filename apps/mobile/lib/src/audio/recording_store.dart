@@ -46,6 +46,16 @@ abstract interface class RecordingStore {
   Future<void> remove(String handle);
 }
 
+/// Why the microphone is not available, in words somebody can act on.
+///
+/// Empty when there is nothing useful to add — on a phone the platform's own
+/// dialog is the whole story. In a browser there are three different reasons
+/// a refusal happens and they need different fixes, so this asks which.
+///
+/// A log line that says "the microphone was refused" and nothing else is the
+/// half-answer this whole logbook exists to stop.
+Future<String> describeMicrophone() => platform.describeMicrophone();
+
 /// Where this build keeps recordings. A test overrides it.
 final recordingStoreProvider = Provider<RecordingStore>(
   (ref) => platform.newRecordingStore(),

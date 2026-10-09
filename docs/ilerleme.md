@@ -2623,3 +2623,37 @@ durdurmak, iptal etmek, ve "hiçbir şey yakalanmadı".
 
 Kullanıcının tarayıcıda Record'a basıp `/log`'a bakması. Artık hata
 görünecek.
+
+### Teşhis: panel mikrofonu engelliyor
+
+Günlük kurulduktan sonra tarayıcıda sordum:
+
+```
+secureContext: true, hasMediaRecorder: true, audioInputs: 1,
+permission: "denied"
+getUserMedia → NotAllowedError: Permission denied
+```
+
+Yani uygulama hatası değil: **Claude'un tarayıcı paneli mikrofonu bilerek
+engelliyor**, orada kayıt hiç çalışmaz. Kullanıcının kendi tarayıcısında
+denenmesi gerekiyor.
+
+Paket kaynağından ayrıca: web'de `hasPermission()` **hiç fırlatmıyor**, her
+şeyi yakalayıp `false` dönüyor. Yani uygulama doğru kategoriyi
+(`noPermission`) zaten söylüyormuş — eksik olan nedendi.
+
+### Bunun üzerine eklenen
+
+`describeMicrophone()` — koşullu import'un üçüncü üyesi. Telefonda boş
+dizge (platformun kendi diyaloğu zaten her şeyi söylüyor); tarayıcıda üç şeyi
+ayrı ayrı soruyor: secure context mi, izin ne durumda, kaç ses girişi var.
+Üçü ayrı `try` içinde, çünkü birine cevap vermeyen bir tarayıcı diğer ikisini
+yine de bildirmeli.
+
+Artık "the microphone was refused" satırının altında
+`permission is denied; 1 audio input(s)` yazıyor. Üç farklı sorun üç farklı
+çözüm istiyor ve tek bir "refused" hangisi olduğunu söylemiyordu.
+
+`package:web` doğrudan bağımlılık oldu. Zaten record_web ve
+sqflite_common_ffi_web üzerinden derlemedeydi, yani pakete hiçbir şey
+eklemiyor; tarayıcıya bunu sormanın başka yolu yok.
