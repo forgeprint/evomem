@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// How bad an entry is.
@@ -139,3 +140,31 @@ class Logbook extends Notifier<List<LogEntry>> {
 
 /// What the app has been doing.
 final logbookProvider = NotifierProvider<Logbook, List<LogEntry>>(Logbook.new);
+
+/// Sends what the Flutter framework and its packages print into [logbook].
+///
+/// `debugPrint` is where a package says what went wrong when it has decided
+/// not to throw. record_web does exactly that: its MediaRecorder delegate
+/// catches every failure in `start`, calls `debugPrint` and returns normally
+/// — so the recording is already dead while the app is told it began, and
+/// the only account of why is on a console nobody opens.
+///
+/// The previous printer is kept and still called, so `flutter run` and the
+/// browser console show what they always did.
+void routeDebugPrintTo(Logbook logbook) {
+  if (_rerouted) return;
+  _rerouted = true;
+
+  final previous = debugPrint;
+  debugPrint = (message, {wrapWidth}) {
+    previous(message, wrapWidth: wrapWidth);
+    if (message == null || message.trim().isEmpty) return;
+    logbook.add(
+      level: LogLevel.warning,
+      source: 'framework',
+      message: message.trim(),
+    );
+  };
+}
+
+bool _rerouted = false;

@@ -111,7 +111,7 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük — 115 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük — 116 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
   sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve
@@ -198,7 +198,15 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    konuşturmak için önüne bir uyum katmanı gerekir. `Grouper` arayüzü buna
    kapalı değil (ADR-0027).
 
-2. **Mikrofonla gerçek bir kayıt hiç alınmadı** — ne tarayıcıda ne telefonda.
+2. **Tarayıcıda kayıt hâlâ çalışmıyor, ama sebebi artık görünecek.**
+   `record_web`'in `MediaRecorderDelegate.start`'ı her hatayı yakalayıp
+   `debugPrint`'e yazıyor ve **fırlatmıyor** — yani `start()` başarıyla
+   dönüyor, kaydedici ölü, `stop()` null veriyor. Logdaki "started" sonra
+   "handle=null" tam buydu. Artık `isRecording()` ile doğrulanıyor ve
+   `debugPrint` günlüğe akıyor; paketin kendi hata metni bir sonraki
+   denemede `/log`'da görünecek.
+
+3. **Mikrofonla gerçek bir kayıt hiç alınmadı** — ne tarayıcıda ne telefonda.
    Claude'un tarayıcı paneli mikrofonu **bilerek engelliyor**
    (`getUserMedia` → `NotAllowedError`, `permission: denied`), yani orada
    hiç denenemez. Kullanıcının kendi tarayıcısında denenmesi gerekiyor;
@@ -222,7 +230,8 @@ gösteriyor, "Copy all" panoya alıyor. Diske yazılmıyor. Sebebi: bu
 uygulamanın koştuğu iki yerin de kimsenin bakacağı bir konsolu yok. Yol
 boyunca bir hata bulundu — **`on Exception`, tarayıcı interop'undan gelen
 `Error`'ı yakalamıyor**, yani bir kayıt hatası handler'dan kaçıp okunacak
-hiçbir şey bırakmıyordu. Kayıt yolundaki her yakalama artık `on Object`. Tarayıcıda izin reddedilince
+hiçbir şey bırakmıyordu. Kayıt yolundaki her yakalama artık `on Object`, ve `debugPrint` günlüğe
+bağlı — bir paket fırlatmamaya karar ettiğinde orada konuşuyor. Tarayıcıda izin reddedilince
 günlük **nedenini** de yazıyor (`describeMicrophone`): secure context mi,
 izin ne durumda, kaç ses girişi var — üç farklı sorun üç farklı çözüm ister.
 

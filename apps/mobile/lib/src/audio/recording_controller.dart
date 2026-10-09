@@ -130,6 +130,27 @@ class RecordingController extends Notifier<RecordingState> {
       return RecordingProblem.recorderFailed;
     }
 
+    // Asked, not assumed. record_web's delegate catches every failure in
+    // its own start, prints it and returns normally — so a dead recorder
+    // looks exactly like a working one from here, and the next thing that
+    // happens is stop() handing back nothing (ADR-0029).
+    bool running;
+    try {
+      running = await _recorder.isRecording();
+    } on Object catch (e) {
+      _log.warn('recording', 'could not tell whether recording began', e);
+      running = true;
+    }
+    if (!running) {
+      _log.error(
+        'recording',
+        'the recorder reported no error but is not recording',
+        await describeMicrophone(),
+      );
+      state = const RecordingState.failed(RecordingProblem.recorderFailed);
+      return RecordingProblem.recorderFailed;
+    }
+
     _log.info('recording', 'started, into $path');
     _path = path;
     state = RecordingState.recording(DateTime.now());

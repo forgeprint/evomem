@@ -2702,3 +2702,52 @@ Düzeltme: uzantısı olan her yol bir varlıktır ve yoksa 404 der. Doğruland�
 gerçek dosyalar 200 ve doğru tiple, `/favicon.ico` ve
 `/does-not-exist.js` 404, `/sources` hâlâ 200 HTML, `index.html`'in
 `no-cache` başlığı yerinde.
+
+## On dokuzuncu oturum — "started" sonra "handle=null"
+
+Kullanıcı `/log`'u gösterdi ve teşhis oradan çıktı:
+
+```
+16:20:29  INFO     recording: started, into recording-1791552029690
+16:20:34  WARNING  recording: nothing was captured — handle=null size=null
+```
+
+İzin verilmiş (uyarı yok), `start()` sorunsuz dönmüş, beş saniye sonra
+`stop()` **null** vermiş.
+
+### Sebebi pakette
+
+`MediaRecorderDelegate.start` gövdesinin tamamı bir `try` içinde ve sonu:
+
+```dart
+} catch (error) {
+  _onError(error);   // _reset(); debugPrint(error.toString());
+}
+```
+
+**Yeniden fırlatmıyor.** Yani getUserMedia reddetse de, mime tipi bulunamasa
+da, `MediaRecorder` kurulamasa da `start()` normal dönüyor. Bizim tarafımız
+"started" yazıyor, kaydedici ise ölü; `_mediaRecorder` null olduğu için
+`stop()` da hemen null veriyor. Logdaki iki satır tam olarak bu.
+
+Hatanın tek izi paketin `debugPrint`'i — yani kimsenin açmadığı konsol.
+
+`MediaRecorder`'ın kendisi suçlu değil: sentetik bir ses akışıyla, record_web'in
+kullandığı tam ayarlarla (`audio/mp4;codecs=mp4a.40.2` ve
+`audio/webm;codecs=opus`, 32 kbit/s) denedim — ikisi de 6 parça ve bayt
+üretti, hata yok.
+
+### İki düzeltme
+
+1. **Başlamayı doğrula, iddiaya güvenme.** `VoiceRecorder` artık
+   `isRecording()` taşıyor ve denetleyici `start()`'tan hemen sonra soruyor.
+   Hayır derse `recorderFailed` ve günlüğe mikrofon teşhisiyle birlikte
+   yazılıyor. Testi var: sessizce ölen bir kaydedici.
+2. **`debugPrint` günlüğe bağlandı.** Bir paketin fırlatmamaya karar
+   ettiğinde konuştuğu yer orası. Önceki yazıcı korunuyor, yani
+   `flutter run` ve tarayıcı konsolu eskisi gibi görüyor. `main()`'de ilk
+   kareden önce kuruluyor, çünkü yakalaması gereken şey her şeyden önce
+   oluyor.
+
+Artık bir sonraki denemede record_web'in kendi hata metni `/log`'da
+`framework` kaynağıyla görünecek — asıl sebep oradan okunacak.

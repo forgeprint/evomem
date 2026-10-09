@@ -31,12 +31,20 @@ class FakeRecorder implements VoiceRecorder {
   final bool failOnStart;
   final bool failOnStop;
 
+  /// What isRecording() answers once start() has been called. False stands
+  /// in for record_web's delegate, which swallows its own failure and
+  /// leaves the caller believing a recording began.
+  bool reportsRecording = true;
+
   String? startedAt;
   int cancels = 0;
   int disposes = 0;
 
   @override
   Future<bool> hasPermission() async => permitted;
+
+  @override
+  Future<bool> isRecording() async => reportsRecording && startedAt != null;
 
   @override
   Future<void> start(String path) async {

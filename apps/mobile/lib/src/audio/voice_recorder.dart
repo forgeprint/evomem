@@ -13,6 +13,14 @@ abstract interface class VoiceRecorder {
   /// Starts recording into [path].
   Future<void> start(String path);
 
+  /// Whether a recording is actually running.
+  ///
+  /// Asked after [start], because a start that returns is not a start that
+  /// worked: record_web's MediaRecorder delegate catches every failure in
+  /// its own `start`, prints it and returns normally, leaving the caller
+  /// told that recording began when nothing is (ADR-0029).
+  Future<bool> isRecording();
+
   /// Stops recording and returns the file, or null when nothing was written.
   Future<String?> stop();
 
@@ -53,8 +61,8 @@ const recordingMediaType = 'audio/m4a';
 /// [VoiceRecorder] over the `record` package.
 ///
 /// Verified against record 7.1.1 (pub.dev, read 2026-10-08): `AudioRecorder`
-/// with `hasPermission`, `start(RecordConfig, path:)`, `stop()` returning the
-/// path, `cancel()` and `dispose()`.
+/// with `hasPermission`, `start(RecordConfig, path:)`, `isRecording()`,
+/// `stop()` returning the path, `cancel()` and `dispose()`.
 ///
 ///   https://pub.dev/packages/record
 class PackageVoiceRecorder implements VoiceRecorder {
@@ -66,6 +74,9 @@ class PackageVoiceRecorder implements VoiceRecorder {
   @override
   Future<void> start(String path) =>
       _recorder.start(speechRecordConfig, path: path);
+
+  @override
+  Future<bool> isRecording() => _recorder.isRecording();
 
   @override
   Future<String?> stop() => _recorder.stop();

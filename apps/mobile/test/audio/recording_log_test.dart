@@ -17,6 +17,9 @@ class RefusingRecorder implements VoiceRecorder {
   Future<bool> hasPermission() async => false;
 
   @override
+  Future<bool> isRecording() async => false;
+
+  @override
   Future<void> start(String path) async {}
 
   @override
@@ -37,7 +40,36 @@ class ErroringRecorder implements VoiceRecorder {
   Future<bool> hasPermission() async => throw StateError('NotAllowedError');
 
   @override
+  Future<bool> isRecording() async => false;
+
+  @override
   Future<void> start(String path) async {}
+
+  @override
+  Future<String?> stop() async => null;
+
+  @override
+  Future<void> cancel() async {}
+
+  @override
+  Future<void> dispose() async {}
+}
+
+/// What record_web actually does: its MediaRecorder delegate catches every
+/// failure inside its own `start`, prints it, and returns normally. The
+/// caller is told recording began; nothing is recording.
+///
+/// This is the case that produced "started" followed by "nothing was
+/// captured — handle=null" in the log, with no error anywhere between them.
+class SilentlyDeadRecorder implements VoiceRecorder {
+  @override
+  Future<bool> hasPermission() async => true;
+
+  @override
+  Future<void> start(String path) async {}
+
+  @override
+  Future<bool> isRecording() async => false;
 
   @override
   Future<String?> stop() async => null;
@@ -110,5 +142,27 @@ void main() {
     final entry = container.read(logbookProvider).first;
     expect(entry.level, LogLevel.warning);
     expect(entry.message, contains('refused'));
+  });
+
+  // A start that returns is not a start that worked. Before this, the app
+  // said "started", the user waited, and stop() handed back nothing with no
+  // error anywhere — which is exactly what the log showed.
+  test('a recorder that dies silently is caught at start', () async {
+    final container = containerWith(SilentlyDeadRecorder());
+
+    final problem = await container
+        .read(recordingControllerProvider.notifier)
+        .start();
+
+    expect(problem, RecordingProblem.recorderFailed);
+    expect(
+      container.read(recordingControllerProvider).isRecording,
+      isFalse,
+      reason: 'the app believes it is recording when nothing is',
+    );
+
+    final entry = container.read(logbookProvider).first;
+    expect(entry.level, LogLevel.error);
+    expect(entry.message, contains('not recording'));
   });
 }
