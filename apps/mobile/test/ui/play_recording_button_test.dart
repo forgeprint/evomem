@@ -14,11 +14,11 @@ class FakePlayer implements RecordingPlayer {
   @override
   final bool canPlay;
 
-  final List<String> played = [];
+  final List<RecordingBytes> played = [];
   int stops = 0;
 
   @override
-  Future<void> play(String handle) async => played.add(handle);
+  Future<void> play(RecordingBytes recording) async => played.add(recording);
 
   @override
   Future<void> stop() async => stops++;
@@ -110,15 +110,14 @@ void main() {
     await tester.tap(find.textContaining('Play'));
     await tester.pumpAndSettle();
 
-    expect(player.played, ['blob:x']);
+    expect(player.played.single.bytes, [1, 2, 3]);
+    expect(player.played.single.mediaType, 'audio/webm');
   });
 
   // The bytes do not survive a reload in a browser (ADR-0029). Pointing an
   // audio element at a dead blob fails in a way nobody can read, so it is
   // checked first and said plainly instead.
-  testWidgets('a recording that is gone says so and plays nothing', (
-    tester,
-  ) async {
+  testWidgets('a recording that is gone and unsynced says so', (tester) async {
     final player = FakePlayer(canPlay: true);
 
     await pump(
@@ -131,6 +130,27 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(player.played, isEmpty);
-    expect(find.textContaining('gone'), findsOneWidget);
+    expect(find.textContaining('nothing to play'), findsOneWidget);
+  });
+
+  // The note stands for audio the server has, even though this device no
+  // longer holds the bytes. That is the case the endpoint exists for.
+  testWidgets('a synced note still offers the button', (tester) async {
+    await pump(
+      tester,
+      Note(
+        id: 'n1',
+        projectId: 'default',
+        content: 'Voice note, 0:03',
+        sourceType: 'audio',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        metadata: const {metaAwaitingTranscription: true},
+        remoteId: '01M4D3H3HNMFM69N4MHNAYBZ1X',
+      ),
+      player: FakePlayer(canPlay: true),
+      store: FakeStore(),
+    );
+    expect(find.textContaining('Play'), findsOneWidget);
   });
 }

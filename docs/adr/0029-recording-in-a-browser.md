@@ -131,16 +131,22 @@ implementation is real and the phone one reports that it cannot play, which
 is what hides the button. A button that would do nothing is worse than no
 button; the package earns its place when the phone can run.
 
-The button checks the bytes are still there before pointing anything at
-them. An audio element aimed at a blob URL whose document has been reloaded
-fails in a way nobody can read, and "that recording is gone" is the true
-answer.
+The button asks this device first and the server second. Once a recording
+has been uploaded the server is the only copy that survives a reload, so
+`GET /notes/{id}/audio` hands it back — behind the same token as everything
+else, with the media type worked out from how it was stored rather than
+guessed, and `Cache-Control: no-store`, because it is somebody's own audio.
+
+The bytes are fetched and played from a blob this app builds, rather than
+pointing an audio element at the URL. An audio element sends no headers, so
+a URL would mean the API token in a query string, and that is the wrong
+place for it (ADR-0010).
 
 ### Explicitly not decided here
 
 - **IndexedDB for recordings**, which is what would make this durable.
 - **Transcription in the browser.** Nothing on any client transcribes
   (ADR-0016) and that is unchanged.
-- **Playing back what the server holds.** Once a recording is uploaded the
-  server has it, but there is no endpoint that serves one and adding it is
-  its own decision. Playback is of what this device still holds.
+- **Keeping browser recordings across a reload.** IndexedDB would do it.
+  Syncing covers the same ground with a store that already exists, so this
+  stays deferred.

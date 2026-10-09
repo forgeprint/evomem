@@ -2803,3 +2803,49 @@ okuyamayacağı şekilde başarısız oluyor, oysa doğru cevap "o kayıt gitti"
 4 widget testi: kaydı olmayan not düğme göstermiyor, çalamayan derleme
 göstermiyor, çalma handle'ı oynatıcıya geçiyor, ve gitmiş bir kayıt
 söylüyor ve hiçbir şey çalmıyor.
+
+
+## Yirmi birinci oturum — "the recording is gone", ve yanlış bir teşhis
+
+Kullanıcı Play'e bastı ve günlükte şu çıktı:
+
+```
+17:03:04  WARNING  playback: the recording is gone
+          handle=blob:http://127.0.0.1:8080/870f8d4c-...
+```
+
+Günlükte **başka hiçbir satır yoktu** — kaydı yapan satırlar da gitmişti.
+
+### Önce yanlış teşhis koydum, sonra ölçtüm
+
+Riverpod 3'ün sağlayıcıları varsayılan olarak attığını biliyordum, ve
+tarayıcıda baytlar `BlobRecordingStore`'un içinde duruyor. "Sağlayıcı
+atılıyor, yeni boş bir depo cevap veriyor" dedim ve `keepAlive()` ekledim.
+
+**Yazdığım testler `keepAlive` olmadan da geçti** — yani hiçbir şey
+kanıtlamıyorlardı. Tek kapsam içinde izleyen bir widget'ı açıp kapatarak
+gerçek koşulu kurdum: `keepAlive` olsa da olmasa da **aynı nesne** geliyor.
+Teşhis yanlıştı. Değişikliği ve testleri geri aldım.
+
+Doğru açıklama çok daha basit ve zaten ADR-0029'da yazılı: **sayfa
+yenilendi.** Play düğmesini eklemek için web konteynerini yeniden kurdum,
+kullanıcı yeni derlemeyi almak için yeniledi, ve blob da bellekteki günlük
+de o belgeyle birlikte öldü. Uygulama doğru davranmış, mesaj doğruymuş.
+
+### Asıl eksiği kapattım
+
+Sync'ten sonra sesi **sunucu** tutuyor ama geri vermiyordu.
+`GET /notes/{id}/audio` eklendi: aynı token'ın arkasında, medya tipi
+dosyanın saklandığı adından türetiliyor (tahmin edilmiyor), ve
+`Cache-Control: no-store` — bu birinin kendi sesi.
+
+Çalma artık önce bu cihaza, sonra sunucuya bakıyor. Baytlar `http` ile
+**başlıkla** çekiliyor ve buradan kurulan bir blob'dan çalınıyor; audio
+elementi başlık göndermediği için URL vermek token'ı sorgu dizesine koymak
+olurdu ve orası yanlış yer (ADR-0010).
+
+### Doğrulandı, koşturularak
+
+Derlenmiş sunucuya karşı: yükleme 204, geri okuma **200** +
+`Content-Type: audio/webm` + `Cache-Control: no-store`, token'sız **401**,
+sesi olmayan notta **404**. CORS başlıkları izin verilen origin'e veriliyor.

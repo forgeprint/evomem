@@ -56,8 +56,13 @@ abstract interface class RecordingPlayer {
   /// Whether this build can play anything.
   bool get canPlay;
 
-  /// Plays the recording behind [handle], from the start.
-  Future<void> play(String handle);
+  /// Plays [recording] from the start.
+  ///
+  /// Bytes rather than a handle, because the bytes can come from two
+  /// places: this device, or the server once the recording has been
+  /// uploaded. Taking a URL instead would mean putting the API token in a
+  /// query string, since an audio element sends no headers (ADR-0029).
+  Future<void> play(RecordingBytes recording);
 
   /// Stops whatever is playing.
   Future<void> stop();

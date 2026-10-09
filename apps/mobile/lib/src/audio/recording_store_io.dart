@@ -30,7 +30,7 @@ class NoRecordingPlayer implements RecordingPlayer {
   bool get canPlay => false;
 
   @override
-  Future<void> play(String handle) async {}
+  Future<void> play(RecordingBytes recording) async {}
 
   @override
   Future<void> stop() async {}

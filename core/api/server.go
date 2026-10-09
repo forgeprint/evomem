@@ -118,10 +118,11 @@ type Config struct {
 	// being connected: that is reported per request (ADR-0027).
 	Organize OrganizeFunc
 
-	// Recordings is where POST /ingest/audio puts an upload. Nil means
-	// that endpoint is not served at all: there is nowhere to put a
-	// recording, and ADR-0018 keeps recordings only on the condition that
-	// deleting a note can reach them.
+	// Recordings is where POST /ingest/audio puts an upload and where
+	// GET /notes/{id}/audio reads one back. Nil means neither endpoint is
+	// served: there is nowhere to put a recording, and ADR-0018 keeps
+	// recordings only on the condition that deleting a note can reach
+	// them.
 	Recordings Recordings
 }
 
@@ -233,7 +234,12 @@ func New(store Store, cfg Config) (*Server, error) {
 				}
 				s.handleAudio(w, r)
 			}))
-			s.routes = append(s.routes, "POST /ingest/audio")
+			// Reading one back is ordinary: the token guards it
+			// like every other read (ADR-0029).
+			mux.Handle("GET /notes/{id}/audio",
+				s.authenticated(http.HandlerFunc(s.handleGetAudio)))
+			s.routes = append(s.routes,
+				"POST /ingest/audio", "GET /notes/{id}/audio")
 		}
 	}
 

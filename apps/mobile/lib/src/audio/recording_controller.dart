@@ -25,6 +25,10 @@ const metaLocalPath = 'local_audio_path';
 /// audio is gone, so the upload marks it and takes the waiting flag off.
 const metaRecordingLost = 'recording_lost';
 
+/// Set by the server once a recording has been turned into text (ADR-0016).
+/// A transcribed note still stands for audio, so it can still be played.
+const metaTranscribed = 'transcribed';
+
 /// Why a recording did not start.
 enum RecordingProblem {
   /// The microphone was refused, or the person has not allowed it.

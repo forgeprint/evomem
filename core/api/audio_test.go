@@ -21,6 +21,20 @@ type fakeRecordings struct {
 	body      string
 	err       error
 	calls     int
+
+	// What Open hands back. storedName is the filename the recording
+	// would have on disk, which is what the media type is derived from.
+	storedName string
+	openErr    error
+	opens      int
+}
+
+func (f *fakeRecordings) Open(noteID string) (io.ReadCloser, string, error) {
+	f.opens++
+	if f.openErr != nil {
+		return nil, "", f.openErr
+	}
+	return io.NopCloser(strings.NewReader(f.body)), f.storedName, nil
 }
 
 func (f *fakeRecordings) Save(noteID, mediaType string, r io.Reader) (string, error) {

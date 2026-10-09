@@ -33,8 +33,9 @@ shared/database    tek yazıcılı iki havuz, FTS5 arama, delta izleme,
                    tombstone, öneriler, kümeler, arşivleme
 core/mcp           stdio JSON-RPC, 10 araç (6 okur, 1 önerir, 3 gruplar)
 core/api           POST /ingest, /ingest/audio, PUT + DELETE /notes/{id},
-                   GET /notes + /clusters, /connections + /organize (panel),
-                   CORS, Telegram ve Jira webhook'ları
+                   GET /notes + /clusters + /notes/{id}/audio,
+                   /connections + /organize (panel), CORS,
+                   Telegram ve Jira webhook'ları
 core/organize      kümesiz notları OpenAI-uyumlu bir modele gruplatır
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
 cmd/evomem         20 alt komut (mcp, serve, pull, restore, transcribe, endorse dahil)
@@ -111,7 +112,7 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük, ses çalma — 120 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük, ses çalma — 121 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
   sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve

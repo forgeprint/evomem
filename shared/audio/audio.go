@@ -235,3 +235,27 @@ func knownExtensions() []string {
 	}
 	return out
 }
+
+// MediaTypeFor is the reverse of ExtensionFor: what to call a stored file
+// when handing it back.
+//
+// Derived from the same table rather than written out a second time, so a
+// format added to one is in both. The first media type that maps to an
+// extension wins, which is why the table's preferred spelling for each is
+// listed first.
+func MediaTypeFor(name string) (string, bool) {
+	ext := strings.ToLower(filepath.Ext(name))
+	for _, mediaType := range preferredTypes {
+		if extensions[mediaType] == ext {
+			return mediaType, true
+		}
+	}
+	return "", false
+}
+
+// preferredTypes is the spelling to hand back for each extension, in the
+// order the table lists them. A map has no order, and "audio/m4a" rather
+// than "audio/aac" is the one a player expects.
+var preferredTypes = []string{
+	"audio/mpeg", "audio/mp4", "audio/wav", "audio/webm", "audio/ogg",
+}

@@ -79,16 +79,27 @@ RecordingPlayer newRecordingPlayer() => BlobRecordingPlayer();
 /// handle the recorder handed back.
 class BlobRecordingPlayer implements RecordingPlayer {
   web.HTMLAudioElement? _element;
+  String? _url;
 
   @override
   bool get canPlay => true;
 
   @override
-  Future<void> play(String handle) async {
+  Future<void> play(RecordingBytes recording) async {
     await stop();
+
+    // Its own blob, built from the bytes it was handed. The recorder's
+    // blob is not reused: these bytes may have come from the server, and
+    // one path for both is one path to get wrong.
+    final blob = web.Blob(
+      [recording.bytes.toJS].toJS,
+      web.BlobPropertyBag(type: recording.mediaType),
+    );
+    final url = web.URL.createObjectURL(blob);
     final element = web.HTMLAudioElement()
-      ..src = handle
+      ..src = url
       ..preload = 'auto';
+    _url = url;
     _element = element;
     await element.play().toDart;
   }
@@ -96,14 +107,21 @@ class BlobRecordingPlayer implements RecordingPlayer {
   @override
   Future<void> stop() async {
     final element = _element;
-    if (element == null) return;
-    element
-      ..pause()
-      // Dropping the source releases the decoder; the blob itself stays,
-      // because the note may be played again.
-      ..removeAttribute('src')
-      ..load();
-    _element = null;
+    if (element != null) {
+      element
+        ..pause()
+        ..removeAttribute('src')
+        ..load();
+      _element = null;
+    }
+    // Revoked, unlike the recorder's own URL: this one was made here, so
+    // leaving it would hold a copy of the audio for the life of the page
+    // every time anybody pressed play.
+    final url = _url;
+    if (url != null) {
+      web.URL.revokeObjectURL(url);
+      _url = null;
+    }
   }
 }
 
