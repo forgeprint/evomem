@@ -135,6 +135,15 @@ const (
 	// deciding whether to trust it.
 	MetaOrigin = "origin"
 
+	// MetaWasTainted records that a note was tainted before a person
+	// endorsed it. The warning was a state; where the content came from is
+	// a fact, and MetaOrigin keeps saying it. See Endorse.
+	MetaWasTainted = "was_tainted"
+
+	// MetaEndorsedAt is when a person said they had read the content and
+	// stood behind it, RFC 3339.
+	MetaEndorsedAt = "endorsed_at"
+
 	// MetaAwaitingTranscription marks a note whose content describes a
 	// recording rather than saying what is in it. An adapter that stores
 	// audio sets it; `evomem transcribe` looks for it and clears it only
@@ -191,6 +200,38 @@ func (n *Note) MarkTainted(origin string) {
 	if origin != "" {
 		n.SetMeta(MetaOrigin, origin)
 	}
+}
+
+// Endorse records that a person has read this content and stands behind it,
+// which clears the tainted mark.
+//
+// Only the tainted mark. It says nobody has read this and a third party wrote
+// it, and a person reading it and saying yes is the thing it exists to be
+// absent for — the same reasoning AcceptProposal already applies to a
+// proposal a person accepts. Transcribed is a different claim and stays:
+// after the reading the content is still something a model guessed at from
+// audio, and a reader two months later deserves to know.
+//
+// What was claimed is kept rather than erased: MetaWasTainted, and MetaOrigin
+// goes on saying where the content came from. See ADR-0021.
+//
+// Reports whether anything changed, so a caller can tell a person who asked
+// for a state the note was already in.
+func (n *Note) Endorse(at time.Time) bool {
+	if !n.Tainted() {
+		return false
+	}
+	delete(n.Metadata, MetaTainted)
+	n.SetMeta(MetaWasTainted, true)
+	n.SetMeta(MetaEndorsedAt, at.UTC().Format(time.RFC3339))
+	return true
+}
+
+// Endorsed reports whether a person has said they read this content and stood
+// behind it.
+func (n *Note) Endorsed() bool {
+	_, ok := n.MetaString(MetaEndorsedAt)
+	return ok
 }
 
 // AwaitingTranscription reports whether this note stands for a recording

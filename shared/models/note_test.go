@@ -241,3 +241,77 @@ func TestTranscriptionMarksWithWrongTypes(t *testing.T) {
 		t.Error("1 was read as true")
 	}
 }
+
+func TestEndorseClearsTheTaintAndKeepsTheClaim(t *testing.T) {
+	n := &Note{ProjectID: "evomem", Content: "tünel önce ayakta olmalı", SourceType: SourceTelegram}
+	n.MarkTainted("telegram")
+
+	at := time.Date(2026, 10, 9, 8, 15, 0, 0, time.UTC)
+	if !n.Endorse(at) {
+		t.Fatal("endorsing a tainted note reported no change")
+	}
+
+	// The warning was a state and it goes.
+	if n.Tainted() {
+		t.Error("still tainted")
+	}
+	// Where it came from is a fact and stays saying so.
+	if got, _ := n.MetaString(MetaOrigin); got != "telegram" {
+		t.Errorf("origin = %q", got)
+	}
+	if n.Metadata[MetaWasTainted] != true {
+		t.Error("the note does not record that it was tainted")
+	}
+	if got, _ := n.MetaString(MetaEndorsedAt); got != "2026-10-09T08:15:00Z" {
+		t.Errorf("endorsed_at = %q", got)
+	}
+	if !n.Endorsed() {
+		t.Error("Endorsed() is false after endorsing")
+	}
+}
+
+// A person settles one of the two claims. The other is still true.
+func TestEndorseLeavesATranscriptMarkedAsOne(t *testing.T) {
+	n := &Note{ProjectID: "evomem", Content: "Voice message, 0:14", SourceType: SourceTelegram}
+	n.MarkTainted("telegram")
+	n.ApplyTranscript("tünel önce ayakta olmalı", "svc", time.Now())
+
+	if !n.Endorse(time.Now()) {
+		t.Fatal("reported no change")
+	}
+	if n.Tainted() {
+		t.Error("still tainted")
+	}
+	if !n.Transcribed() {
+		t.Error("the machine-transcription mark was cleared by a reading")
+	}
+}
+
+// The person asked for a state the note is already in.
+func TestEndorseAnUntaintedNoteChangesNothing(t *testing.T) {
+	n := &Note{ProjectID: "evomem", Content: "typed by hand", SourceType: SourceManual}
+	if n.Endorse(time.Now()) {
+		t.Error("reported a change on a note that was not tainted")
+	}
+	if n.Endorsed() {
+		t.Error("an untainted note was marked endorsed")
+	}
+	if len(n.Metadata) != 0 {
+		t.Errorf("metadata was written: %v", n.Metadata)
+	}
+}
+
+func TestEndorseIsNotRepeatable(t *testing.T) {
+	n := &Note{ProjectID: "evomem", Content: "from outside", SourceType: SourceJira}
+	n.MarkTainted("jira")
+	if !n.Endorse(time.Date(2026, 10, 9, 8, 0, 0, 0, time.UTC)) {
+		t.Fatal("first endorsement reported no change")
+	}
+	// Already endorsed: nothing left to clear, and the first time stands.
+	if n.Endorse(time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)) {
+		t.Error("a second endorsement reported a change")
+	}
+	if got, _ := n.MetaString(MetaEndorsedAt); got != "2026-10-09T08:00:00Z" {
+		t.Errorf("endorsed_at was overwritten: %q", got)
+	}
+}

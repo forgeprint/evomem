@@ -93,4 +93,4 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
       yerel mezar taşı kuyruğu (mobil şema v6) → ADR-0020
 - [ ] Sunucuda silinen notun telefondan da silinmesi (`pull` mezar taşı okumuyor)
 - [x] Not silindiğinde ses dosyasının da silinmesi (archive ve restore dahil) → ADR-0018
-- [ ] Dökümü onaylayıp işaretleri temizleyen akış (ayrı karar)
+- [x] Dökümü onaylayıp `tainted`'ı temizleyen akış: `evomem endorse` → ADR-0021

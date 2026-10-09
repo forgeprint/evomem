@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/forgeprint/evomem/shared/database"
 	"github.com/forgeprint/evomem/shared/models"
@@ -1110,5 +1111,51 @@ func TestToolSetWithPropose(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("propose_note is missing: %v", names)
+	}
+}
+
+// An endorsed note carries no untrusted warning although an adapter wrote it,
+// because a person read it and said so (ADR-0021). The transcription mark is
+// a different claim and stays in the text a model reads.
+func TestEndorsedNoteLosesTheUntrustedLine(t *testing.T) {
+	s, db := newTestServer(t)
+	ctx := context.Background()
+
+	n := &models.Note{
+		ProjectID:  "evomem",
+		Content:    "tünel önce ayakta olmalı",
+		SourceType: models.SourceTelegram,
+	}
+	n.MarkTainted("telegram")
+	n.SetMeta(models.MetaTranscribed, true)
+	if err := db.Create(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _ := callTool(t, s, "get_note", `{"id":"`+n.ID+`"}`)
+	before := toolText(t, result)
+	if !strings.Contains(before, "untrusted") {
+		t.Fatalf("a tainted note carries no warning: %s", before)
+	}
+
+	if !n.Endorse(time.Now()) {
+		t.Fatal("endorsing reported no change")
+	}
+	if err := db.Update(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _ = callTool(t, s, "get_note", `{"id":"`+n.ID+`"}`)
+	after := toolText(t, result)
+	if strings.Contains(after, "untrusted") {
+		t.Errorf("an endorsed note still warns: %s", after)
+	}
+	// The other claim is still true after the reading.
+	if !strings.Contains(after, "machine transcription") {
+		t.Errorf("the transcription mark was dropped: %s", after)
+	}
+	// And what was claimed is readable in the metadata rather than erased.
+	if !strings.Contains(after, "was_tainted") {
+		t.Errorf("the metadata does not record the warning that was there: %s", after)
 	}
 }

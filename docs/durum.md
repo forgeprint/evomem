@@ -35,7 +35,7 @@ core/mcp           stdio JSON-RPC, spec'e göre yazılmış, iki protokol dönem
 core/api           POST /ingest, /ingest/audio, PUT + DELETE /notes/{id},
                    Telegram ve Jira webhook'ları
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
-cmd/evomem         14 alt komut (mcp, serve, pull, restore, transcribe dahil)
+cmd/evomem         16 alt komut (mcp, serve, pull, restore, transcribe, endorse dahil)
 apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
                    mobil şema v6: notes.remote_id/remote_updated_at, deletions.remote_id
                    record 7.1.1 + path_provider 2.1.6 (ses kaydı)
@@ -65,6 +65,7 @@ evomem sync-status                    # ne bekliyor
 evomem archive -dry-run               # ne temizlenecek
 evomem transcribe -dry-run            # hangi kayıt dökülecek
 evomem transcribe                     # kuyruğu işle (servis yoksa kapalı)
+evomem endorse <id>                   # dışarıdan gelen notu sahiplen
 ```
 
 ## Neyin doğrulandığı, neyin doğrulanmadığı
@@ -124,11 +125,18 @@ Bunlar bende değil, sende:
    ama **gerçek bir mikrofonla hiç denenmedi ve bu dosyalar olmadan
    denenemez**. `record` 7.1.1'in istediği minSdk 23 ve iOS 12 de yazılacak
    bir yer bulamadı (manifest ve Info.plist'e yorum olarak düşüldü).
-2. **Dökümü onaylama akışı.** `tainted` ve `transcribed` işaretlerini
-   temizleyen hiçbir şey yok. ADR-0016 ayrı bir karar olarak bıraktı.
+2. **Toplu onay yok.** `evomem endorse` tek notu alıyor; proje ya da kaynak
+   bazında onay ADR-0021'de bilinçli olarak dışarıda bırakıldı (sürtünme
+   koruma sayıldı). Bunun tiyatro mu koruma mı olduğu kullanımla anlaşılacak.
 3. **Sunucuda silinen not telefonda kalıyor.** `evomem pull` notları okuyor,
    mezar taşlarını okumuyor. Diğer yön; pull tarafının `deletions` tablosunu
    da okuması gerekiyor. ADR-0020 kapsam dışı bıraktı.
+
+**Onay tamam** (ADR-0021): `evomem endorse <id>` bir insanın notu okuyup
+sahiplendiğini kaydediyor. `tainted` kalkıyor, `transcribed` kalıyor — ikisi
+farklı iddia ve bir okuma yalnızca birini çözüyor. İddia silinmiyor:
+`was_tainted` ve `endorsed_at` metadata'da, `origin` yerinde kalıyor. MCP
+aracı değil (ADR-0008 salt-okunur), geri alınamıyor.
 
 **Silme tamam** (ADR-0020): `DELETE /notes/{id}` satırı siliyor, aynı
 işlemde mezar taşı yazıyor (PostgreSQL aynasına taşıyan şey o) ve notun ses

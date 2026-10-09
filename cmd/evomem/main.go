@@ -45,6 +45,7 @@ usage:
   evomem delete <id>
   evomem projects
   evomem review [-accept <id> | -reject <id>] [-status ]
+  evomem endorse <id> [-dry-run]
   evomem mcp    [-quiet]
   evomem serve  [-addr <host:port>]
   evomem sync   [-once] [-init-remote] [-interval <d>]
@@ -58,6 +59,11 @@ The mcp command speaks the Model Context Protocol on stdin and stdout; it is
 what a coding agent starts, not something to run by hand. An agent can propose
 a note through it, and review is where a person accepts or turns one down:
 nothing an agent proposes is in memory until then.
+
+Anything an adapter wrote is marked as coming from outside, and the MCP tools
+tell a model so. endorse is how a person says they have read one and stand
+behind it: the mark goes, the note records that it was there, and a machine
+transcription stays marked as one. It cannot be undone.
 
 The store is $EVOMEM_DB, or ~/.evomem/evomem.db.
 
@@ -122,6 +128,8 @@ func run(args []string, out io.Writer, in io.Reader) error {
 		return cmdSyncStatus(rest, out)
 	case "transcribe":
 		return cmdTranscribe(rest, out)
+	case "endorse":
+		return cmdEndorse(rest, out)
 	case "sync":
 		return cmdSync(rest, out)
 	case "pull":

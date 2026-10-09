@@ -1691,3 +1691,60 @@ taşıdığını doğruluyor.
   pending" diyor, yani mezar taşı PostgreSQL'e gitmeyi bekliyor
 - Reddedilenler, canlı: ikinci silme 404, olmayan not 404, bozuk id 400,
   yanlış token 401
+
+---
+
+## 2026-10-09 (devam) — Onay akışı (ADR-0021)
+
+ADR-0016 "ayrı bir karar" diye bırakmıştı. Üç soru soruldu, üçünde de önerim
+seçildi. Go testleri 276 → **292**.
+
+### Kodda zaten duran emsal
+
+`AcceptProposal` aynı sorunu öneri akışında çözmüş: bir insan kabul edince not
+tainted işaretlenmiyor, ama iddia `proposed_tainted` ve `proposed_by` olarak
+metadata'da kalıyor. Yani evin kalıbı belli — **işareti kaldır, iddiayı başka
+bir anahtarla sakla.** ADR-0021 bunu adaptörden gelen notlara uyguladı.
+
+### Kararlar
+
+1. **`tainted` kalkar, `transcribed` kalır.** İkisi farklı iddia: birincisi
+   "bunu kimse okumadı, üçüncü taraf yazdı" diyor ve bir insanın okuyup evet
+   demesi tam olarak o işaretin yokluğunu temsil ettiği şey. İkincisi "bunu
+   kimse yazmadı, bir model sesten tahmin etti" diyor ve okumadan sonra da
+   doğru kalıyor. Saklananlar: `was_tainted`, `endorsed_at`, ve `origin`
+   yerinde — uyarı bir durumdu, köken bir olgu.
+2. **Her tainted not**, yalnızca dökümler değil. Tek fiil: "okudum ve
+   sahipleniyorum". Kararın rahatsız edici yarısı bu ve bilinçli: bir Jira
+   açıklaması gerçekten üçüncü taraf metni ve ADR-0009 tam onun talimat
+   taşıyabileceği için var. Koruma kodda bir kural değil, eylemin bir insana
+   ait ve tek seferde tek not olması.
+3. **`evomem endorse <id>`, MCP aracı değil.** ADR-0008 bütün araçları
+   salt-okunur tutuyor; yazan tek şey `propose_note` ve o not değil öneri
+   yazıyor. Ajanın kendi okuduğu metni endorse etmesi, ADR-0013'ün "kararı
+   insan verir" kuralını da sessizce boşa çıkarırdı — ajan hem öneren hem
+   onaylayan olurdu.
+
+Komut kararı vermeden **içeriği yazdırıyor**: okumadan onaylamak bu komutun
+engelleyemeyeceği tek şey, yapabildiği şey kelimeleri göstermek. Geri alma
+yok ve çıktı bunu söylüyor; yanlışı düzeltmek notu silip adaptörün yeniden
+getirmesi demek (yanlış bir dökümün düzeltilme yolu da bu).
+
+Tainted olmayan nota onay **hata değil**: kişi notun zaten içinde olduğu bir
+durumu istedi, komut bunu söyleyip sıfırla çıkıyor.
+
+### Doğrulama
+
+- 292 Go testi, `./scripts/ci.sh` tam yeşil
+- **Uçtan uca, derlenmiş ikiliyle**: sahte bir Telegram + döküm servisiyle
+  sesli not dökümü yazıldı → MCP iki uyarı satırı gösterdi → `endorse -dry-run`
+  hiçbir şeyi değiştirmedi → `endorse` işareti kaldırdı → MCP artık **tek**
+  satır gösteriyor (makine dökümü), metadata'da `was_tainted: true` ve
+  `endorsed_at` duruyor, `structuredContent` içinde `tainted` yok ama
+  `endorsed: true` var → ikinci kez onay "nothing to endorse" dedi
+
+### Açık kalan
+
+Toplu onay yok: ADR-0021 `-project` bayrağını bilinçli dışarıda bıraktı,
+sürtünmeyi koruma sayarak. Bunun tiyatro mu gerçek koruma mı olduğu kullanımla
+anlaşılacak; öyle çıkarsa küçük bir değişiklik ve kendi kararı.

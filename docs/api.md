@@ -157,6 +157,40 @@ whatever reads it next. Nothing here can stop that text being stored; the mark
 is so the reader knows what it is holding. See
 [ADR-0009](adr/0009-tainted-content.md).
 
+### A person can take the mark off
+
+`evomem endorse <id>` is how somebody says they have read a note that came
+from outside and stand behind it — see
+[ADR-0021](adr/0021-endorsing-a-note.md). It prints the content first, because
+endorsing without reading is the one thing it cannot prevent:
+
+```sh
+$ evomem endorse 01M4F8YT90HGXXMKMHT2TZ1PAG
+01M4F8YT90HGXXMKMHT2TZ1PAG  evomem  telegram
+  came from telegram
+  machine transcription of audio; this mark stays
+
+tünel önce ayakta olmalı
+
+endorsed: the untrusted mark is gone, and the note records that it was there
+It is still marked as a machine transcription, which a reading does not change.
+There is no way to undo this. To take it back, delete the note.
+```
+
+Afterwards the MCP tools show one line instead of two, and the metadata keeps
+what was claimed:
+
+```text
+01M4F8YT90HGXXMKMHT2TZ1PAG  evomem  telegram  2026-10-09 02:47
+  [machine transcription of audio; words may be wrong where the model misheard]
+metadata: {"endorsed_at":"2026-10-09T02:48:05Z","origin":"telegram","was_tainted":true, …}
+```
+
+Two claims, and a reading settles one of them. `tainted` says nobody has read
+this; `transcribed` says a model guessed at the words from audio, which is
+still true after the reading. `-dry-run` shows the note and changes nothing.
+Endorsing a note that was not marked says so and exits zero.
+
 ## PUT /notes/{id} — change what a note says
 
 Served only with `EVOMEM_API_TOKEN`, under that same token. It replaces the

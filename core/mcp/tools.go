@@ -201,6 +201,13 @@ type noteView struct {
 	// has not been transcribed — how long it was, what the caption said —
 	// and not what is in it.
 	AwaitingTranscription bool `json:"awaiting_transcription,omitempty"`
+
+	// Endorsed says a person read this content and stood behind it, which
+	// is why it carries no untrusted warning although an adapter wrote it
+	// (ADR-0021). Carried for a client; no line is added to the text,
+	// because the text says what a reader has to be careful about and this
+	// is the absence of a reason to be.
+	Endorsed bool `json:"endorsed,omitempty"`
 }
 
 func viewOf(n *models.Note) noteView {
@@ -222,6 +229,7 @@ func viewOf(n *models.Note) noteView {
 	}
 	v.Transcribed = n.Transcribed()
 	v.AwaitingTranscription = n.AwaitingTranscription()
+	v.Endorsed = n.Endorsed()
 	return v
 }
 
