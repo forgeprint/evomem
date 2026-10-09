@@ -1868,3 +1868,66 @@ Düzeltmenin kendisi iki hata daha doğurdu ve testler ikisini de yakaladı:
 
 Tarayıcıda **ses kaydı** çalışmayacak: `record`'un web desteği var ama kaydın
 yazıldığı yolu `path_provider` veriyor ve onun web uygulaması yok.
+
+---
+
+## 2026-10-09 (devam) — Kümeler (ADR-0023)
+
+Sıralamayı ben seçtim: önce bu, sonra tarayıcıda ses kaydı, en son sunucudan
+telefona silme. Gerekçe: kullanıcının görmek istediği şey bu, diğer ikisi ona
+tabi. Go testleri 292 → **353**.
+
+### Kararı şekillendiren şey yeni bir fikir değildi
+
+Üç karar zaten vardı ve cevabı neredeyse onlar verdi: evomem model
+barındırmaz (ADR-0002, ADR-0016), MCP araçları salt-okunur (ADR-0008), ve
+ajanın önerdiği bir şey insan kabul etmeden hafızaya girmez (ADR-0013).
+
+Kullanıcı üç soruda da öneriyi seçti: **ajan MCP üzerinden gruplar**, **küme
+kendi tablosunda durur**, **gruplama onay istemez**.
+
+### ADR-0013'ten bilinçli ilk sapma
+
+Gruplama öneri kuyruğundan geçmiyor. Gerekçe: ADR-0013 bir notun **içerik
+olarak hafızaya girmesi** için var — model onu "kullanıcının söylediği" diye
+okur, o yüzden insan karar verir. Küme içerik değil: zaten orada olan notların
+üstüne konan bir etiket, hiçbir notun ne söylediğini değiştirmiyor ve silinince
+geri alınıyor. Beş yüz notu organize etmek beş yüz karar isteseydi, kimsenin
+kullanmadığı bir özellik hiçbir şeyi korumazdı.
+
+**Bedeli ADR'de saklanmadı:** bir ajan artık deponun görünüşünü kimse evet
+demeden değiştirebiliyor. Değiştiremediği şey bir notun ne söylediği — not
+araçları hâlâ salt-okunur ve `propose_note` hâlâ kuyruğa yazıyor. `evomem
+clusters` bunun denetlenebilmesi için var: yalnızca ajanın görebildiği bir
+değişiklik, kimsenin denetleyemeyeceği bir değişikliktir.
+
+### Yazılanlar
+
+- Şema **4**: `clusters` ve `cluster_notes`. Üyelik **iki yönlü cascade** —
+  not silinince üyelik gidiyor, küme silinince not kalıyor. Bir not birden
+  fazla kümede olabiliyor; `metadata`'ya koymak bunu imkânsız kılar ve bir
+  yeniden adlandırma bütün notları yeniden yazmak olurdu.
+- Beş MCP aracı. `update_cluster`'ın her alanı opsiyonel: not eklemek, adı
+  yeniden söylemeyi gerektirmiyor.
+- `evomem clusters` (liste, `-show`, `-delete`).
+
+### Doğrulama
+
+- 353 Go testi, `./scripts/ci.sh` tam yeşil
+- **Gerçek MCP sunucusuna karşı**, ajanın yapacağının birebir aynısı: dört not
+  yazıldı, iki küme oluşturuldu, `evomem clusters` ikisini de boyutlarıyla
+  gösterdi, `-show` içindeki notları listeledi
+- **İki cascade canlıda**: kümedeki bir not silinince üyelik 2'den 1'e düştü;
+  küme silinince not sayısı 3'te kaldı
+
+Seed'imde bir karışıklık oldu — `evomem list` en yeniyi başa koyduğu için
+küme içerikleri benim beklediğimden farklı notlar aldı. Kodun değil benim
+varsayımımın hatasıydı; mekanizma doğru çalıştı.
+
+### Bıraktığı iş, ve bunu ADR'de yazdım
+
+**Kümeleri tarayıcı göremiyor.** Ajan MCP ile Go ikilisinin deposuna
+konuşuyor, Flutter uygulamasının kendi deposu ayrı, senkronizasyon tek yönlü
+(tarayıcı → Go). Yani bir ajanın yaptığı gruplama, tam da denenmek istenen
+yerde görünmüyor. Flutter'ın zaten HTTP ile konuştuğu sunucuya bir okuma yolu
+en küçük adım gibi duruyor; ayrı bir karar.

@@ -46,6 +46,7 @@ usage:
   evomem projects
   evomem review [-accept <id> | -reject <id>] [-status ]
   evomem endorse <id> [-dry-run]
+  evomem clusters [-project <id>] [-show <id>] [-delete <id>]
   evomem mcp    [-quiet]
   evomem serve  [-addr <host:port>]
   evomem sync   [-once] [-init-remote] [-interval <d>]
@@ -59,6 +60,10 @@ The mcp command speaks the Model Context Protocol on stdin and stdout; it is
 what a coding agent starts, not something to run by hand. An agent can propose
 a note through it, and review is where a person accepts or turns one down:
 nothing an agent proposes is in memory until then.
+
+clusters shows what an agent has grouped through the MCP tools. A grouping is
+a label over notes that are already stored: it changes nothing a note says,
+and deleting it takes the label off and leaves the notes.
 
 Anything an adapter wrote is marked as coming from outside, and the MCP tools
 tell a model so. endorse is how a person says they have read one and stand
@@ -130,6 +135,8 @@ func run(args []string, out io.Writer, in io.Reader) error {
 		return cmdTranscribe(rest, out)
 	case "endorse":
 		return cmdEndorse(rest, out)
+	case "clusters":
+		return cmdClusters(rest, out)
 	case "sync":
 		return cmdSync(rest, out)
 	case "pull":

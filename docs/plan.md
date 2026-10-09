@@ -94,3 +94,9 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 - [ ] Sunucuda silinen notun telefondan da silinmesi (`pull` mezar taşı okumuyor)
 - [x] Not silindiğinde ses dosyasının da silinmesi (archive ve restore dahil) → ADR-0018
 - [x] Dökümü onaylayıp `tainted`'ı temizleyen akış: `evomem endorse` → ADR-0021
+
+## Plan dışı: yapay zekâ ile organize etme
+- [x] Kümeler: `clusters` + `cluster_notes` tabloları (şema 4), beş MCP aracı,
+      `evomem clusters` komutu → ADR-0023
+- [ ] Kümelerin tarayıcıda görünmesi (Flutter kendi deposunu okuyor, ajan Go'nunkine yazıyor)
+- [ ] Kümelerin senkronize olması (ADR-0012 yalnızca not ve mezar taşı taşıyor)

@@ -408,6 +408,8 @@ func TestListTools(t *testing.T) {
 	want := map[string]bool{
 		"search_notes": false, "get_note": false, "propose_note": false,
 		"get_project_context": false, "list_projects": false,
+		"create_cluster": false, "update_cluster": false, "delete_cluster": false,
+		"list_clusters": false, "get_cluster": false,
 	}
 	for _, raw := range tools {
 		tool := raw.(map[string]any)
@@ -1099,8 +1101,9 @@ func TestToolSetWithPropose(t *testing.T) {
 	for _, raw := range d.Result["tools"].([]any) {
 		names = append(names, raw.(map[string]any)["name"].(string))
 	}
-	if len(names) != 5 {
-		t.Errorf("%d tools, want 5: %v", len(names), names)
+	// Six read, one proposes, three write a grouping (ADR-0023).
+	if len(names) != 10 {
+		t.Errorf("%d tools, want 10: %v", len(names), names)
 	}
 
 	found := false
@@ -1157,5 +1160,139 @@ func TestEndorsedNoteLosesTheUntrustedLine(t *testing.T) {
 	// And what was claimed is readable in the metadata rather than erased.
 	if !strings.Contains(after, "was_tainted") {
 		t.Errorf("the metadata does not record the warning that was there: %s", after)
+	}
+}
+
+// The grouping tools write, and that is the one place ADR-0013's rule is
+// deliberately not applied (ADR-0023). What must stay true is that nothing
+// here changes what a note says.
+func TestClusterToolsGroupWithoutTouchingTheNotes(t *testing.T) {
+	s, db := newTestServer(t)
+	first := addNote(t, db, "evomem", "the tunnel has to be running", models.SourceManual)
+	second := addNote(t, db, "evomem", "the webhook needs a secret", models.SourceManual)
+
+	result, isError := callTool(t, s, "create_cluster",
+		`{"project_id":"evomem","name":"Deployment","summary":"how it is served","note_ids":["`+first+`","`+second+`"]}`)
+	if isError {
+		t.Fatalf("create_cluster: %s", toolText(t, result))
+	}
+	created := result["structuredContent"].(map[string]any)
+	id, _ := created["id"].(string)
+	if id == "" {
+		t.Fatalf("no id came back: %v", created)
+	}
+	// It took effect rather than queueing: a person reads it now.
+	if !strings.Contains(toolText(t, result), "evomem clusters") {
+		t.Errorf("the reply does not say how a person sees it: %q", toolText(t, result))
+	}
+
+	result, isError = callTool(t, s, "get_cluster", `{"id":"`+id+`"}`)
+	if isError {
+		t.Fatalf("get_cluster: %s", toolText(t, result))
+	}
+	text := toolText(t, result)
+	for _, want := range []string{"Deployment", "the tunnel has to be running", "the webhook needs a secret"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("get_cluster does not show %q: %s", want, text)
+		}
+	}
+
+	// The notes themselves are as they were.
+	for _, noteID := range []string{first, second} {
+		note, err := db.Get(context.Background(), noteID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if note.Metadata["cluster"] != nil {
+			t.Errorf("the grouping was written into the note: %v", note.Metadata)
+		}
+	}
+}
+
+func TestUpdateClusterChangesOnlyWhatItIsGiven(t *testing.T) {
+	s, db := newTestServer(t)
+	first := addNote(t, db, "evomem", "one", models.SourceManual)
+	second := addNote(t, db, "evomem", "two", models.SourceManual)
+
+	result, _ := callTool(t, s, "create_cluster",
+		`{"project_id":"evomem","name":"Deployment","note_ids":["`+first+`"]}`)
+	id := result["structuredContent"].(map[string]any)["id"].(string)
+
+	result, isError := callTool(t, s, "update_cluster",
+		`{"id":"`+id+`","add_note_ids":["`+second+`"]}`)
+	if isError {
+		t.Fatalf("update_cluster: %s", toolText(t, result))
+	}
+	view := result["structuredContent"].(map[string]any)
+	if view["name"] != "Deployment" {
+		t.Errorf("an add changed the name to %v", view["name"])
+	}
+	if view["size"].(float64) != 2 {
+		t.Errorf("size is %v, want 2", view["size"])
+	}
+}
+
+// Deleting a grouping takes the label off and nothing else.
+func TestDeleteClusterKeepsTheNotes(t *testing.T) {
+	s, db := newTestServer(t)
+	noteID := addNote(t, db, "evomem", "the tunnel has to be running", models.SourceManual)
+
+	result, _ := callTool(t, s, "create_cluster",
+		`{"project_id":"evomem","name":"Deployment","note_ids":["`+noteID+`"]}`)
+	id := result["structuredContent"].(map[string]any)["id"].(string)
+
+	result, isError := callTool(t, s, "delete_cluster", `{"id":"`+id+`"}`)
+	if isError {
+		t.Fatalf("delete_cluster: %s", toolText(t, result))
+	}
+	if !strings.Contains(toolText(t, result), "untouched") {
+		t.Errorf("the reply does not say the notes survive: %q", toolText(t, result))
+	}
+	if _, err := db.Get(context.Background(), noteID); err != nil {
+		t.Errorf("deleting a grouping took its note: %v", err)
+	}
+}
+
+func TestListClustersSaysWhatIsThereAndHowBig(t *testing.T) {
+	s, db := newTestServer(t)
+	noteID := addNote(t, db, "evomem", "one", models.SourceManual)
+
+	result, _ := callTool(t, s, "list_clusters", `{"project_id":"evomem"}`)
+	if !strings.Contains(toolText(t, result), "No groupings") {
+		t.Errorf("an empty project does not say so: %q", toolText(t, result))
+	}
+
+	callTool(t, s, "create_cluster", `{"project_id":"evomem","name":"Deployment","note_ids":["`+noteID+`"]}`)
+	result, _ = callTool(t, s, "list_clusters", `{"project_id":"evomem"}`)
+	text := toolText(t, result)
+	// The size is the part worth reading: a cluster of one and a cluster of
+	// everything are both usually mistakes.
+	if !strings.Contains(text, "1 note(s)") || !strings.Contains(text, "Deployment") {
+		t.Errorf("listing: %q", text)
+	}
+}
+
+func TestClusterToolsRefuseWhatTheyCannotActOn(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	for name, args := range map[string]string{
+		"get_cluster":    `{"id":"01M4D3H3HNMFM69N4MHNAYBZ1Z"}`,
+		"delete_cluster": `{"id":"01M4D3H3HNMFM69N4MHNAYBZ1Z"}`,
+		"update_cluster": `{"id":"01M4D3H3HNMFM69N4MHNAYBZ1Z","name":"x"}`,
+	} {
+		result, isError := callTool(t, s, name, args)
+		if !isError {
+			t.Errorf("%s accepted a cluster that does not exist: %s", name, toolText(t, result))
+		}
+	}
+
+	// A grouping nobody could find again, and one naming a note that is not
+	// there.
+	if result, isError := callTool(t, s, "create_cluster", `{"project_id":"evomem","name":"  "}`); !isError {
+		t.Errorf("a nameless cluster was accepted: %s", toolText(t, result))
+	}
+	if result, isError := callTool(t, s, "create_cluster",
+		`{"project_id":"evomem","name":"Deployment","note_ids":["01M4D3H3HNMFM69N4MHNAYBZ1Z"]}`); !isError {
+		t.Errorf("a cluster naming a missing note was accepted: %s", toolText(t, result))
 	}
 }

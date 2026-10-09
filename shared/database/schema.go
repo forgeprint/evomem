@@ -11,7 +11,7 @@ import (
 // Unlike a derived index, this file is the only copy of the user's notes: a
 // version it does not recognise is an error the caller has to see, never a
 // reason to start again.
-const schemaVersion = 3
+const schemaVersion = 4
 
 // The schema. Two things in it are worth explaining.
 //
@@ -123,6 +123,31 @@ CREATE TABLE IF NOT EXISTS proposals (
 
 CREATE INDEX IF NOT EXISTS idx_proposals_pending
 	ON proposals(status, proposed_at DESC);
+
+-- A grouping an agent made over notes that are already there (ADR-0023).
+-- Not a field on a note: a note belongs to as many clusters as make sense,
+-- and a rename here touches one row rather than every member.
+CREATE TABLE IF NOT EXISTS clusters (
+	id         TEXT PRIMARY KEY,
+	project_id TEXT NOT NULL,
+	name       TEXT NOT NULL,
+	summary    TEXT NOT NULL DEFAULT '',
+	created_at DATETIME NOT NULL,
+	updated_at DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_clusters_project ON clusters(project_id, updated_at DESC);
+
+-- Membership, cascading both ways: deleting a note takes its memberships
+-- with it, and a cluster cannot name a note that is gone.
+CREATE TABLE IF NOT EXISTS cluster_notes (
+	cluster_id TEXT NOT NULL REFERENCES clusters(id) ON DELETE CASCADE,
+	note_id    TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+	added_at   DATETIME NOT NULL,
+	PRIMARY KEY (cluster_id, note_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cluster_notes_note ON cluster_notes(note_id);
 `
 
 // migrate creates the schema if it is absent, brings an older file forward,
@@ -169,8 +194,38 @@ func (d *DB) migrate(ctx context.Context) error {
 // an obvious place, and so that the version number and the steps cannot drift
 // apart silently.
 var migrations = []func(context.Context, *sql.Tx) error{
-	nil, // 1 -> 2
-	nil, // 2 -> 3
+	nil,         // 1 -> 2
+	nil,         // 2 -> 3
+	addClusters, // 3 -> 4
+}
+
+// addClusters creates the tables ADR-0023 introduced. The statements are the
+// ones in schemaSQL, so a store created at 4 and one upgraded to it are the
+// same store.
+func addClusters(ctx context.Context, tx *sql.Tx) error {
+	for _, statement := range []string{
+		`CREATE TABLE IF NOT EXISTS clusters (
+			id         TEXT PRIMARY KEY,
+			project_id TEXT NOT NULL,
+			name       TEXT NOT NULL,
+			summary    TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL,
+			updated_at DATETIME NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_clusters_project ON clusters(project_id, updated_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS cluster_notes (
+			cluster_id TEXT NOT NULL REFERENCES clusters(id) ON DELETE CASCADE,
+			note_id    TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+			added_at   DATETIME NOT NULL,
+			PRIMARY KEY (cluster_id, note_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_cluster_notes_note ON cluster_notes(note_id)`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // upgrade runs every migration from the file's version up to this build's,

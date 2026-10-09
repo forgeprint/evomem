@@ -34,12 +34,19 @@ const (
 	toolCacheTTLMillis = 300000
 )
 
-// Four tools read, and one proposes. Nothing here writes to memory.
+// Six tools read, one proposes, and three write a grouping.
 //
 // propose_note puts a suggestion in a queue that only `evomem review` reads;
 // a person accepting it is what creates the note. The alternative — letting a
 // model write directly — would mean a store whose contents a person never
 // chose, feeding a store a person is asked to trust. See ADR-0013.
+//
+// The cluster tools do write, and that is the one place ADR-0013's rule is
+// deliberately not applied (ADR-0023). A cluster is a label over notes that
+// are already there: it changes nothing a note says and deleting it undoes
+// it, so putting five hundred groupings through a review queue would buy a
+// feature nobody uses. What stays true is that no tool here changes a note's
+// content.
 //
 // Descriptions lead with what the tool does, because a client is free to
 // truncate them and the first clause is the part that always survives.
@@ -56,6 +63,9 @@ func (s *Server) listTools() map[string]any {
 	}
 	integer := func(desc string) map[string]any {
 		return map[string]any{"type": "integer", "description": desc}
+	}
+	list := func(items map[string]any) map[string]any {
+		return map[string]any{"type": "array", "items": items}
 	}
 
 	return map[string]any{
@@ -103,6 +113,53 @@ func (s *Server) listTools() map[string]any {
 				}, "project_id", "content"),
 			},
 			{
+				"name":        "create_cluster",
+				"title":       "Group notes together",
+				"description": "Create a named group over notes that already exist, optionally putting notes in it. A cluster is a label: it changes nothing a note says, and deleting it undoes the grouping. Unlike `propose_note` this takes effect immediately — a person sees it with `evomem clusters`.",
+				"inputSchema": object(map[string]any{
+					"project_id": str("The project this grouping belongs to. `list_projects` says what exists."),
+					"name":       str("What to call it. Short enough to read in a list, specific enough to tell from its neighbours."),
+					"summary":    str("What the notes in it have in common, in a sentence. Shown to a person deciding whether the grouping was any good."),
+					"note_ids":   list(str("A note id, as the other tools printed it.")),
+				}, "project_id", "name"),
+			},
+			{
+				"name":        "update_cluster",
+				"title":       "Change a group",
+				"description": "Rename a cluster, change its summary, or add and remove notes. Everything is optional: pass only what changes, so adding a note does not mean restating the name.",
+				"inputSchema": object(map[string]any{
+					"id":              str("The cluster id, as `list_clusters` printed it."),
+					"name":            str("A new name."),
+					"summary":         str("A new summary."),
+					"add_note_ids":    list(str("Notes to put in it. One already there is not added twice.")),
+					"remove_note_ids": list(str("Notes to take out. The notes themselves are untouched.")),
+				}, "id"),
+			},
+			{
+				"name":        "delete_cluster",
+				"title":       "Remove a group",
+				"description": "Delete a grouping. The notes in it are untouched: this takes the label off, which is how a grouping that turned out wrong is undone.",
+				"inputSchema": object(map[string]any{
+					"id": str("The cluster id."),
+				}, "id"),
+			},
+			{
+				"name":        "list_clusters",
+				"title":       "List groups",
+				"description": "List a project's groupings, most recently changed first, with how many notes are in each. A size is worth reading: a cluster of one and a cluster of everything are both usually mistakes.",
+				"inputSchema": object(map[string]any{
+					"project_id": str("The project to list. Omit for every project."),
+				}),
+			},
+			{
+				"name":        "get_cluster",
+				"title":       "Read a group",
+				"description": "Read one grouping and the notes in it, newest first.",
+				"inputSchema": object(map[string]any{
+					"id": str("The cluster id."),
+				}, "id"),
+			},
+			{
 				"name":        "list_projects",
 				"title":       "List projects",
 				"description": "List every project that has notes, with how many and when the newest was written. Call this first when the project id is not already known.",
@@ -145,6 +202,16 @@ func (s *Server) callTool(raw json.RawMessage) (map[string]any, *rpcError) {
 		text, structured, err = s.toolGetProjectContext(p.Arguments)
 	case "propose_note":
 		text, structured, err = s.toolProposeNote(p.Arguments)
+	case "create_cluster":
+		text, structured, err = s.toolCreateCluster(p.Arguments)
+	case "update_cluster":
+		text, structured, err = s.toolUpdateCluster(p.Arguments)
+	case "delete_cluster":
+		text, structured, err = s.toolDeleteCluster(p.Arguments)
+	case "list_clusters":
+		text, structured, err = s.toolListClusters(p.Arguments)
+	case "get_cluster":
+		text, structured, err = s.toolGetCluster(p.Arguments)
 	case "list_projects":
 		text, structured, err = s.toolListProjects()
 	default:

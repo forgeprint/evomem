@@ -30,19 +30,19 @@ shared/models      Note, açık uçlu source_type, metadata uzatma noktası,
                    elde yazılmış ULID, tainted işareti
 shared/audio       nota ait kayıtların dosya deposu, silme dahil
 shared/database    tek yazıcılı iki havuz, FTS5 arama, delta izleme,
-                   tombstone, öneriler, arşivleme
-core/mcp           stdio JSON-RPC, spec'e göre yazılmış, iki protokol dönemi
+                   tombstone, öneriler, kümeler, arşivleme
+core/mcp           stdio JSON-RPC, 10 araç (6 okur, 1 önerir, 3 gruplar)
 core/api           POST /ingest, /ingest/audio, PUT + DELETE /notes/{id},
                    Telegram ve Jira webhook'ları
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
-cmd/evomem         16 alt komut (mcp, serve, pull, restore, transcribe, endorse dahil)
+cmd/evomem         17 alt komut (mcp, serve, pull, restore, transcribe, endorse dahil)
 apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
                    mobil şema v6: notes.remote_id/remote_updated_at, deletions.remote_id
                    record 7.1.1 + path_provider 2.1.6 (ses kaydı)
                    sqflite_common_ffi_web 1.2.0 (tarayıcı deposu)
 ```
 
-Şema sürümü **3**. Kayıtlar şemada değil, veritabanının yanındaki `audio/`
+Şema sürümü **4**. Kayıtlar şemada değil, veritabanının yanındaki `audio/`
 dizininde. Bağımlılıklar: `modernc.org/sqlite`, `jackc/pgx/v5`,
 ikisi de vendor'lı ve saf Go.
 
@@ -67,13 +67,16 @@ evomem archive -dry-run               # ne temizlenecek
 evomem transcribe -dry-run            # hangi kayıt dökülecek
 evomem transcribe                     # kuyruğu işle (servis yoksa kapalı)
 evomem endorse <id>                   # dışarıdan gelen notu sahiplen
+evomem clusters                       # ajan neyi nasıl gruplamış
+evomem clusters -show <id>            # bir kümenin içi
+evomem clusters -delete <id>          # gruplamayı geri al (notlar kalır)
 ```
 
 ## Neyin doğrulandığı, neyin doğrulanmadığı
 
 **Gerçekten çalıştığı görüldü:**
 
-- SQLite deposu, FTS5 arama, eşzamanlı yazma — 219 test
+- SQLite deposu, FTS5 arama, eşzamanlı yazma — 353 Go testi
 - MCP, iki protokol dönemi de, derlenmiş ikiliyle gerçek JSON-RPC satırlarıyla
 - HTTP girişinin üç yolu, `curl` ile, kimlik doğrulama hataları dahil
 - PostgreSQL transportu, Docker'da gerçek PostgreSQL 17'ye karşı 10 test
@@ -134,7 +137,14 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-0. **Tarayıcıda ses kaydı çalışmıyor.** `record`'un web desteği var ama kaydı
+0. **Kümeleri tarayıcı göremiyor — ADR-0023'ün bıraktığı iş.** Ajan MCP ile
+   **Go ikilisinin** deposuna konuşuyor; Flutter uygulamasının kendi deposu
+   ayrı ve senkronizasyon tek yönlü (tarayıcı/telefon → Go). Yani bir ajanın
+   yaptığı gruplama, tam da denenmek istenen yerde görünmüyor. Flutter'ın
+   zaten HTTP ile konuştuğu sunucuya bir okuma yolu (`GET /clusters`) en
+   küçük adım gibi duruyor; ayrı karar.
+
+1. **Tarayıcıda ses kaydı çalışmıyor.** `record`'un web desteği var ama kaydı
    yazdığımız yolu `path_provider` veriyor ve onun web uygulaması yok.
    Tarayıcının tam bir test yüzeyi olmasının önündeki sıradaki engel.
 
@@ -144,12 +154,20 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    ama **gerçek bir mikrofonla hiç denenmedi ve bu dosyalar olmadan
    denenemez**. `record` 7.1.1'in istediği minSdk 23 ve iOS 12 de yazılacak
    bir yer bulamadı (manifest ve Info.plist'e yorum olarak düşüldü).
-2. **Toplu onay yok.** `evomem endorse` tek notu alıyor; proje ya da kaynak
+3. **Toplu onay yok.** `evomem endorse` tek notu alıyor; proje ya da kaynak
    bazında onay ADR-0021'de bilinçli olarak dışarıda bırakıldı (sürtünme
    koruma sayıldı). Bunun tiyatro mu koruma mı olduğu kullanımla anlaşılacak.
-3. **Sunucuda silinen not telefonda kalıyor.** `evomem pull` notları okuyor,
+4. **Sunucuda silinen not telefonda kalıyor.** `evomem pull` notları okuyor,
    mezar taşlarını okumuyor. Diğer yön; pull tarafının `deletions` tablosunu
    da okuması gerekiyor. ADR-0020 kapsam dışı bıraktı.
+
+**Kümeleme tamam** (ADR-0023, Go tarafı): ajan MCP ile notları gruplayabiliyor.
+Beş yeni araç (`create_cluster`, `update_cluster`, `delete_cluster`,
+`list_clusters`, `get_cluster`), iki yeni tablo (`clusters`, `cluster_notes`,
+şema **4**), ve `evomem clusters` — ajanın yaptığını insanın ajan olmadan
+görebilmesi için. Gruplama **öneri kuyruğundan geçmiyor**: ADR-0013'ten
+bilinçli ilk sapma, gerekçesi ADR-0023'te. Hiçbir araç bir notun ne
+söylediğini değiştirmiyor.
 
 **Web artık gerçekten çalışıyor** (ADR-0022): depo `NotesStore` portunun
 arkasında, `DatabaseHelper` `kIsWeb` olduğunda `sqflite_common_ffi_web`'e
