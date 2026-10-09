@@ -35,14 +35,14 @@ core/mcp           stdio JSON-RPC, 10 araç (6 okur, 1 önerir, 3 gruplar)
 core/api           POST /ingest, /ingest/audio, PUT + DELETE /notes/{id},
                    GET /notes + /clusters, CORS, Telegram ve Jira webhook'ları
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
-cmd/evomem         17 alt komut (mcp, serve, pull, restore, transcribe, endorse dahil)
+cmd/evomem         19 alt komut (mcp, serve, pull, restore, transcribe, endorse dahil)
 apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
                    mobil şema v6: notes.remote_id/remote_updated_at, deletions.remote_id
                    record 7.1.1 + path_provider 2.1.6 (ses kaydı)
                    sqflite_common_ffi_web 1.2.0 (tarayıcı deposu)
 ```
 
-Şema sürümü **4**. Kayıtlar şemada değil, veritabanının yanındaki `audio/`
+Şema sürümü **5**. Kayıtlar şemada değil, veritabanının yanındaki `audio/`
 dizininde. Bağımlılıklar: `modernc.org/sqlite`, `jackc/pgx/v5`,
 ikisi de vendor'lı ve saf Go.
 
@@ -70,13 +70,16 @@ evomem endorse <id>                   # dışarıdan gelen notu sahiplen
 evomem clusters                       # ajan neyi nasıl gruplamış
 evomem clusters -show <id>            # bir kümenin içi
 evomem clusters -delete <id>          # gruplamayı geri al (notlar kalır)
+evomem connect                        # bağlı kaynaklar ve son durumları
+evomem connect -add jira …            # kaynak bağla (token stdin'den)
+evomem pull-sources                   # bağlı kaynakların API'sinden çek
 ```
 
 ## Neyin doğrulandığı, neyin doğrulanmadığı
 
 **Gerçekten çalıştığı görüldü:**
 
-- SQLite deposu, FTS5 arama, eşzamanlı yazma — 353 Go testi
+- SQLite deposu, FTS5 arama, eşzamanlı yazma — 384 Go testi
 - MCP, iki protokol dönemi de, derlenmiş ikiliyle gerçek JSON-RPC satırlarıyla
 - HTTP girişinin üç yolu, `curl` ile, kimlik doğrulama hataları dahil
 - PostgreSQL transportu, Docker'da gerçek PostgreSQL 17'ye karşı 10 test
@@ -141,11 +144,9 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-0. **Üçüncü taraf kaynaklar için çekme bağlayıcıları yok.** Jira ve Telegram
-   bugün **webhook** ile geliyor — onlar bize itiyor. İstenen ise platformun
-   kendi API'lerini çağırması: "web'de sync'e bas, o kaynaktan çek". Kaynak
-   başına kimlik bilgisi, kaynak başına imleç ve bir tetikleyici gerekiyor —
-   panelin API anahtarının duracağı yer de burası. Kendi kararını istiyor.
+0. **Panel yok.** Bağlantılar komut satırından kuruluyor; "web'de sync'e bas"
+   için bir arayüz ve bunu tetikleyen bir endpoint gerekiyor. Sunucu tarafı
+   model API anahtarı (ADR-0023'ün değişikliği) da aynı keyring'e oturacak.
 
 1. **Uygulama tek projeye sabit.** `currentProjectProvider` her zaman
    `default` dönüyor, yani başka bir projedeki notlar ve kümeler arayüzde
@@ -175,6 +176,15 @@ her açılışta sunucuya soruluyor (ADR-0024). Yapılandırılmamış / ulaşı
 okunamayan durumları ayrı ayrı açıklanıyor, çünkü boş ekranın üç ayrı anlamı
 var. Detayda her notun **kaynağı** ve işaretleri (dışarıdan, makine dökümü,
 onaylı) gösteriliyor.
+
+**Çekme bağlayıcıları tamam** (ADR-0025): `evomem connect` bir kaynağı
+bağlıyor, `evomem pull-sources` onların API'sini çağırıyor. İlk bağlayıcı
+**Jira** — Atlassian'ın kendi referansından doğrulanmış
+`GET /rest/api/3/search/jql`, e-posta:token Basic auth, `nextPageToken`
+sayfalaması. Token **mühürlü** saklanıyor (AES-256-GCM, anahtar
+`EVOMEM_SECRET_KEY`'den): çalınmış bir `evomem.db` tek başına yetmiyor.
+Çekilen her not **tainted** — kimsenin okumadığı üçüncü taraf metni.
+Şema **5**: `connections`.
 
 **Okuma yolu açıldı** (ADR-0024): `GET /notes`, `GET /clusters`,
 `GET /clusters/{id}` — hepsi aynı token'ın arkasında, token yoksa endpoint de

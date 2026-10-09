@@ -47,6 +47,8 @@ usage:
   evomem review [-accept <id> | -reject <id>] [-status ]
   evomem endorse <id> [-dry-run]
   evomem clusters [-project <id>] [-show <id>] [-delete <id>]
+  evomem connect [-add jira -project <id> -url <base> -account <email> -query <jql>]
+  evomem pull-sources
   evomem mcp    [-quiet]
   evomem serve  [-addr <host:port>]
   evomem sync   [-once] [-init-remote] [-interval <d>]
@@ -81,6 +83,11 @@ serve reads its secrets from the environment, never from a flag:
   EVOMEM_JIRA_PROJECT     overrides the issue's own project key
   EVOMEM_ADDR             address to listen on
   EVOMEM_CORS_ORIGIN      origins a browser may call from; unset allows none
+
+connect and pull-sources are the other direction of sync: a source somebody
+else owns is pulled by calling their API, rather than waiting for a webhook.
+A token is read from stdin and kept sealed in the store:
+  EVOMEM_SECRET_KEY       32 bytes; what seals the stored tokens
 
 sync reads its connection string from the environment for the same reason:
   EVOMEM_POSTGRES_DSN     postgres://user:password@host:5432/db
@@ -138,6 +145,10 @@ func run(args []string, out io.Writer, in io.Reader) error {
 		return cmdEndorse(rest, out)
 	case "clusters":
 		return cmdClusters(rest, out)
+	case "connect":
+		return cmdConnect(rest, out, in)
+	case "pull-sources":
+		return cmdPullSources(rest, out)
 	case "sync":
 		return cmdSync(rest, out)
 	case "pull":

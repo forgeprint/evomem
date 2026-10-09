@@ -11,7 +11,7 @@ import (
 // Unlike a derived index, this file is the only copy of the user's notes: a
 // version it does not recognise is an error the caller has to see, never a
 // reason to start again.
-const schemaVersion = 4
+const schemaVersion = 5
 
 // The schema. Two things in it are worth explaining.
 //
@@ -148,6 +148,26 @@ CREATE TABLE IF NOT EXISTS cluster_notes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cluster_notes_note ON cluster_notes(note_id);
+
+-- A source somebody else owns, and what it takes to call it (ADR-0025).
+-- secret holds ciphertext sealed with a key from the environment, never the
+-- token: a stolen copy of this file is not enough on its own.
+CREATE TABLE IF NOT EXISTS connections (
+	id             TEXT PRIMARY KEY,
+	source_type    TEXT NOT NULL,
+	project_id     TEXT NOT NULL,
+	base_url       TEXT NOT NULL,
+	account        TEXT NOT NULL DEFAULT '',
+	secret         BLOB NOT NULL,
+	query          TEXT NOT NULL DEFAULT '',
+	cursor         TEXT NOT NULL DEFAULT '',
+	last_pulled_at DATETIME,
+	last_error     TEXT NOT NULL DEFAULT '',
+	created_at     DATETIME NOT NULL,
+	updated_at     DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_connections_source ON connections(source_type, project_id);
 `
 
 // migrate creates the schema if it is absent, brings an older file forward,
@@ -194,9 +214,36 @@ func (d *DB) migrate(ctx context.Context) error {
 // an obvious place, and so that the version number and the steps cannot drift
 // apart silently.
 var migrations = []func(context.Context, *sql.Tx) error{
-	nil,         // 1 -> 2
-	nil,         // 2 -> 3
-	addClusters, // 3 -> 4
+	nil,            // 1 -> 2
+	nil,            // 2 -> 3
+	addClusters,    // 3 -> 4
+	addConnections, // 4 -> 5
+}
+
+// addConnections creates the table ADR-0025 introduced.
+func addConnections(ctx context.Context, tx *sql.Tx) error {
+	for _, statement := range []string{
+		`CREATE TABLE IF NOT EXISTS connections (
+			id             TEXT PRIMARY KEY,
+			source_type    TEXT NOT NULL,
+			project_id     TEXT NOT NULL,
+			base_url       TEXT NOT NULL,
+			account        TEXT NOT NULL DEFAULT '',
+			secret         BLOB NOT NULL,
+			query          TEXT NOT NULL DEFAULT '',
+			cursor         TEXT NOT NULL DEFAULT '',
+			last_pulled_at DATETIME,
+			last_error     TEXT NOT NULL DEFAULT '',
+			created_at     DATETIME NOT NULL,
+			updated_at     DATETIME NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_connections_source ON connections(source_type, project_id)`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // addClusters creates the tables ADR-0023 introduced. The statements are the

@@ -2031,3 +2031,75 @@ ama bu gerçek bir sınır: **uygulama tek projeye sabit** ve hafızanın birden
 yüklemediği için küme listesi eskide kaldı; ekranın kendi yenileme düğmesi
 (`ref.invalidate`) doğru sonucu getirdi. İstenen davranış, ama listenin
 kendiliğinden tazelenmediğini bilmek gerekiyor.
+
+---
+
+## 2026-10-09 (devam) — Çekme bağlayıcıları (ADR-0025)
+
+Senkronizasyonun eksik yarısı: kaynak benimse iter, başkasınınsa platform
+çeker. Go testleri 353 → **384**.
+
+### Kayıtlı bir duruşla tartışmak gerekti
+
+ADR-0010 "sırlar ortamdan gelir, asla bir bayraktan" diyor — gerekçesi
+bayrağın `ps`'te görünmesi. Ama o gerekçe *süreç argümanları* hakkındaydı ve
+tek bir operatörün sunucuyu başlatmadan önce yapılandırdığını varsayıyordu.
+Panelden her kaynak için token giren bir kişi böyle çalışamaz: sunucu zaten
+çalışıyor ve sonraki kaynak yeniden başlatılmadan ekleniyor.
+
+**Çözüm:** token satırda **şifreli** duruyor (AES-256-GCM, standart
+kütüphane), mühürleyen anahtar `EVOMEM_SECRET_KEY`'den — yani ortamdan,
+ADR-0010'un istediği gibi. Ne aldığımız ve ne almadığımız ADR'de açık:
+çalınmış bir `evomem.db` tek başına yetmiyor, ama makineye sahip olan birine
+karşı koruma **değil** — onda ortam da var. Cevapladığı tehdit kopyalanmış
+bir dosya, bir yedek, senkronize bir klasör.
+
+### Jira, Atlassian'ın kendi referansından
+
+`GET /rest/api/3/search/jql`, `jql`/`nextPageToken`/`maxResults`/`fields`
+sorgu parametreleriyle; yanıtta `issues`, `isLast`, `nextPageToken`. Kimlik
+doğrulama **Basic**, kullanıcı konumunda **e-posta**, parola konumunda **API
+token** (sayfa parola kimlik doğrulamasının kullanımdan kaldırıldığını
+söylüyor). Eski `/rest/api/3/search` hâlâ listede ve kullanılmıyor.
+
+Geliştiricilerin bildirdiği ama referansın yazmadığı iki şeye karşı
+**güvenmek yerine korudum**: ilk istekte `nextPageToken` göndermek geçersiz
+sayılabiliyor (ilk çağrı onu hiç göndermiyor), ve `isLast` her zaman güvenilir
+değil, token tekrarlayabiliyor (döngü; token yoksa, tekrarlıyorsa ve sayfa
+sınırında duruyor). Üçünün de testi var.
+
+Açıklama alanı Atlassian Document Format — bir ağaç, dize değil. Yalnızca
+metin yaprakları alınıyor: başkasının belge modelini yeniden kurmak yerine
+aranabilir bir metin.
+
+### Kararlar
+
+- **Çekilen her not tainted.** Kimsenin okumadığı üçüncü taraf metni; işaret
+  tam bunun için var (ADR-0009).
+- **Bir kaynaktaki hata koşuyu durdurmuyor.** Sebep o bağlantıya yazılıyor ve
+  sıradakine geçiliyor; biri token'ının süresi geçmesine izin verdi diye
+  bütün kaynakların senkronsuz kalması yanlış takas.
+- **İmleç opak.** Kaynağın kendi "nerede kaldık"ı; bu kodun yorumladığı bir
+  imleç, satıcı değiştirince bozulan bir imleç.
+- **Zamanlayıcı yok.** İstenen "sync'e bas"tı; kimse yokken koşan bir
+  bağlayıcı, insanlar uyurken onların API kotasını yakan bir bağlayıcıdır.
+
+### Doğrulama
+
+- 384 Go testi, `./scripts/ci.sh` tam yeşil
+- **Uçtan uca, sahte bir Jira'ya karşı, derlenmiş ikiliyle**: iki sayfa
+  çekildi, Jira'nın gördüğü istekler doğrulandı — ilk istekte
+  `nextPageToken` **yok**, ikincide `page-2` var, path ve `fields` doğru,
+  Basic başlığı yerinde. İki issue not oldu, `tainted`/`origin: jira` ve
+  Jira metadata'sıyla; ADF açıklaması düz metne indi.
+- **Mühür**: `strings evomem.db | grep the-api-token` → 0. Anahtarsız komut
+  bunu açıkça söylüyor; yanlış anahtar bağlantıya "this key does not open
+  that secret" olarak yazılıyor.
+
+### gitleaks bir şey yakaladı ve haklıydı
+
+Test anahtarı sabiti (`const testKey = "0123..."`) gerçekten anahtar
+şeklindeydi. Allowlist eklemek yerine sabiti anahtar gibi görünmekten
+çıkardım: `strings.Repeat("evomem-test-key-", 2)`. Yüksek entropili bir
+literal, bir tarayıcı için de bir okuyucu için de sızdırılmış olandan
+ayırt edilemez.
