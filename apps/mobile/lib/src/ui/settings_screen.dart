@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:evomem_mobile/l10n/app_localizations.dart';
+import 'package:evomem_mobile/src/audio/recording_store.dart';
 import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
 import 'package:evomem_mobile/src/sync/sync_service.dart';
@@ -65,6 +66,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             apiToken: _apiToken!,
             notesDao: ref.read(notesDaoProvider),
             dbHelper: ref.read(databaseHelperProvider),
+            recordings: ref.read(recordingStoreProvider),
           );
     }
 

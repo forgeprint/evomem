@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-09 (on altıncı oturum) · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-09 (on yedinci oturum) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -111,7 +111,7 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi — 101 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi — 108 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
   sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve
@@ -123,6 +123,10 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
   gördü (Bearer, model adı, system+user, `json_object`,
   `max_completion_tokens`, `max_tokens` yok) → üç not tek kümeye girdi.
   Uydurulmuş id düştü; anahtar veritabanında düz metin değil.
+- **Tarayıcıda ses kaydının altyapısı** (ADR-0029): `blob:` URL hem `fetch`
+  hem `XMLHttpRequest` ile okunuyor ve `content-type`'ı veriyor — gerçek
+  tarayıcıda ölçüldü, yani `package:http` yetiyor. Yükleme artık gerçek
+  medya tipini gönderiyor. **Mikrofonla gerçek kayıt denenmedi.**
 - **Sunucu PostgreSQL'de, uçtan uca**: üç not `/ingest` ile yazıldı,
   PostgreSQL'de 8 tablo ve notlar orada, sunucunun volume'unda SQLite dosyası
   **yok**. Arama konteynerden gerçek depoya karşı: `veritabani` → `veritabanı`,
@@ -190,9 +194,9 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    konuşturmak için önüne bir uyum katmanı gerekir. `Grouper` arayüzü buna
    kapalı değil (ADR-0027).
 
-2. **Tarayıcıda ses kaydı çalışmıyor.** `record`'un web desteği var ama kaydı
-   yazdığımız yolu `path_provider` veriyor ve onun web uygulaması yok.
-   Tarayıcının tam bir test yüzeyi olmasının önündeki sıradaki engel.
+2. **Mikrofonla gerçek bir kayıt hiç alınmadı** — ne tarayıcıda ne telefonda.
+   Zincirin geri kalanının testi var, ama mikrofon izni gerektiren adımı
+   otomatik bir koşu vermemeli; bunu elle denemek gerekiyor (ADR-0029).
 
 1. **Android/iOS derleme dosyaları yok.** `android/` ve `ios/` ağaçlarında ne
    `build.gradle`, ne `settings.gradle`, ne `Podfile`, ne `Runner.xcodeproj`
@@ -206,6 +210,15 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 5. **Sunucuda silinen not telefonda kalıyor.** `evomem pull` notları okuyor,
    mezar taşlarını okumuyor. Diğer yön; pull tarafının `deletions` tablosunu
    da okuması gerekiyor. ADR-0020 kapsam dışı bıraktı.
+
+**Tarayıcıda ses kaydı** (ADR-0029): depolama `RecordingStore` portunun
+arkasında — telefonda dosya, tarayıcıda `blob:`. Paket kaynağından okundu:
+web'de `start`'ın yolu yok sayılıyor ve `stop()` bir blob URL döndürüyor, yani
+oradaki her `File(path)` hiç yazılmamış bir şeye uzanıyordu. Medya tipi artık
+baytlarla birlikte geziyor; sunucu `audio/webm`'i zaten kabul ediyordu, ama
+istemci yalan söylemeyi bırakana kadar bu tesadüftü. **Bedeli**: tarayıcıdaki
+bir kayıt sayfa yenilenirse gider — sessizce değil, notun
+`awaiting_transcription`'ı kalkıp `recording_lost` konuyor.
 
 **Kümeler tarayıcıda görünüyor**: `lib/src/clusters/` (model, HTTP servisi,
 sağlayıcılar) ve iki ekran — liste ve detay. Kümeler yerelde saklanmıyor,

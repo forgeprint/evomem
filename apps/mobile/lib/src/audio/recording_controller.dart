@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 
+import 'package:evomem_mobile/src/audio/recording_store.dart';
 import 'package:evomem_mobile/src/audio/voice_recorder.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 /// Metadata keys a recording puts on its note. The server reads the first two
 /// (ADR-0016); the third is this device's own business.
@@ -14,9 +12,17 @@ const metaAwaitingTranscription = 'awaiting_transcription';
 /// How long the recording ran, in whole seconds.
 const metaDurationSeconds = 'duration_seconds';
 
-/// Where the file is on this phone. Not sent anywhere: the server names the
-/// recording by the note it belongs to.
+/// How to find the recording on this device: a file path on a phone, a
+/// `blob:` URL in a browser (ADR-0029). Not sent anywhere — the server names
+/// the recording by the note it belongs to.
 const metaLocalPath = 'local_audio_path';
+
+/// Set when the bytes a note stands for are gone and cannot come back.
+///
+/// In a browser a recording does not survive a reload (ADR-0029). A note
+/// left waiting forever for audio nobody has is worse than one that says the
+/// audio is gone, so the upload marks it and takes the waiting flag off.
+const metaRecordingLost = 'recording_lost';
 
 /// Why a recording did not start.
 enum RecordingProblem {
@@ -62,13 +68,6 @@ final voiceRecorderProvider = Provider<VoiceRecorder>(
   (ref) => PackageVoiceRecorder(),
 );
 
-/// Where recordings are written. A test overrides it with a temporary
-/// directory, because `path_provider` needs a platform to answer.
-final recordingsDirectoryProvider = Provider<Future<Directory>>((ref) async {
-  final documents = await getApplicationDocumentsDirectory();
-  return Directory(p.join(documents.path, 'recordings'));
-});
-
 /// Starts and stops recordings, and turns a finished one into a note.
 ///
 /// A recording becomes a note whose content *describes* it — `Voice note,
@@ -77,6 +76,7 @@ final recordingsDirectoryProvider = Provider<Future<Directory>>((ref) async {
 /// after the recording has been uploaded (ADR-0016, ADR-0018).
 class RecordingController extends Notifier<RecordingState> {
   VoiceRecorder get _recorder => ref.read(voiceRecorderProvider);
+  RecordingStore get _store => ref.read(recordingStoreProvider);
 
   String? _path;
 
@@ -101,15 +101,9 @@ class RecordingController extends Notifier<RecordingState> {
       return RecordingProblem.noPermission;
     }
 
-    final directory = await ref.read(recordingsDirectoryProvider);
-    await directory.create(recursive: true);
-    // Named by when it was made, which is unique enough on one device and
-    // readable in a file listing. The note's own identifier is not available
-    // yet: it is minted when the recording stops.
-    final path = p.join(
-      directory.path,
-      'note-${DateTime.now().millisecondsSinceEpoch}$recordingExtension',
-    );
+    // On a phone this is where the file goes. In a browser the recorder
+    // ignores it and hands back its own handle when it stops (ADR-0029).
+    final path = await _store.newTarget();
 
     try {
       await _recorder.start(path);
@@ -138,13 +132,14 @@ class RecordingController extends Notifier<RecordingState> {
       return RecordingProblem.recorderFailed;
     }
 
-    final file = path == null ? null : File(path);
-    if (file == null || !file.existsSync() || await file.length() == 0) {
-      // Nothing was captured. The empty file, if there is one, goes rather
-      // than being left for an upload that would be refused.
-      if (file != null && file.existsSync()) {
-        await file.delete();
-      }
+    // What the recorder returned is the handle from here on: a path on a
+    // phone, a blob URL in a browser. Claiming it is also where the browser
+    // reads the bytes out, so the URL's own lifetime stops mattering.
+    final size = path == null ? null : await _store.claim(path);
+    if (path == null || size == null || size == 0) {
+      // Nothing was captured. Whatever was left behind goes rather than
+      // waiting for an upload that would be refused.
+      if (path != null) await _store.remove(path);
       _path = null;
       state = const RecordingState.failed(RecordingProblem.nothingRecorded);
       return RecordingProblem.nothingRecorded;
@@ -178,10 +173,7 @@ class RecordingController extends Notifier<RecordingState> {
       // Nothing left to do about it; the state still has to go back.
     }
     final path = _path;
-    if (path != null) {
-      final file = File(path);
-      if (file.existsSync()) await file.delete();
-    }
+    if (path != null) await _store.remove(path);
     _path = null;
     state = const RecordingState.idle();
   }

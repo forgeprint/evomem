@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:evomem_mobile/src/audio/recording_controller.dart';
+import 'package:evomem_mobile/src/audio/recording_store.dart';
+import 'package:evomem_mobile/src/audio/recording_store_io.dart';
 import 'package:evomem_mobile/src/audio/voice_recorder.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
@@ -81,7 +83,9 @@ void main() {
         voiceRecorderProvider.overrideWithValue(recorder),
         // path_provider has no platform to answer here, so the directory is
         // supplied rather than looked up.
-        recordingsDirectoryProvider.overrideWithValue(Future.value(recordings)),
+        recordingStoreProvider.overrideWithValue(
+          FileRecordingStore(directory: Future.value(recordings)),
+        ),
       ],
     );
     addTearDown(container.dispose);

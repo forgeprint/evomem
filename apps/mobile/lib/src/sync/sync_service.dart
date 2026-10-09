@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:evomem_mobile/src/audio/recording_controller.dart';
-import 'package:evomem_mobile/src/audio/voice_recorder.dart';
+import 'package:evomem_mobile/src/audio/recording_store.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
 import 'package:evomem_mobile/src/storage/notes_store.dart';
@@ -116,6 +115,7 @@ class SyncService {
     required this.config,
     required this._notesDao,
     required this._dbHelper,
+    required this._recordings,
   });
 
   /// What this service was configured with.
@@ -123,6 +123,10 @@ class SyncService {
 
   final NotesStore _notesDao;
   final DatabaseHelper _dbHelper;
+
+  /// Where a note's recording lives on this device. A port, because a phone
+  /// has a file and a browser has a blob (ADR-0029).
+  final RecordingStore _recordings;
 
   static const String _cursorKey = 'sync_cursor_notes';
 
@@ -348,14 +352,17 @@ class SyncService {
   /// first; see ADR-0018. Nothing is sent for a note with no recording,
   /// which is almost all of them.
   Future<void> _uploadRecording(http.Client client, Note note) async {
-    final path = note.metadata[metaLocalPath];
-    if (path is! String || path.isEmpty) return;
+    final handle = note.metadata[metaLocalPath];
+    if (handle is! String || handle.isEmpty) return;
     if (note.metadata[metaAwaitingTranscription] != true) return;
 
-    final file = File(path);
-    if (!file.existsSync()) {
-      // Recorded on this phone and since removed, or restored from a backup
-      // that did not carry the file. Nothing to send and nothing to fix.
+    final recording = await _recordings.read(handle);
+    if (recording == null) {
+      // Removed since it was made, restored from a backup that did not
+      // carry it, or recorded in a browser that has since been reloaded
+      // (ADR-0029). Marked rather than left: a note waiting forever for
+      // audio nobody has is worse than one that says the audio is gone.
+      await _markRecordingLost(note);
       return;
     }
 
@@ -364,10 +371,13 @@ class SyncService {
     );
     final request = http.Request('POST', uri)
       ..headers.addAll({
-        'Content-Type': recordingMediaType,
+        // What the bytes actually are, not what this app asked the encoder
+        // for: a browser that cannot encode AAC records webm instead, and
+        // the server decides how to store it by this header (ADR-0029).
+        'Content-Type': recording.mediaType,
         'Authorization': 'Bearer ${config.apiToken}',
       })
-      ..bodyBytes = await file.readAsBytes();
+      ..bodyBytes = recording.bytes;
 
     try {
       final response = await client.send(request).timeout(config.timeout);
@@ -378,6 +388,35 @@ class SyncService {
       // store the note, and the transcription queue on the server already
       // says this note is waiting for audio.
       return;
+    }
+  }
+
+  /// Records that a note's audio is gone, so nothing waits for it again.
+  ///
+  /// The waiting flag comes off and the reason goes on. Only local: the
+  /// server never received these bytes, so there is nothing there to
+  /// correct.
+  Future<void> _markRecordingLost(Note note) async {
+    final metadata = Map<String, dynamic>.from(note.metadata)
+      ..remove(metaAwaitingTranscription)
+      ..[metaRecordingLost] = true;
+    try {
+      await _notesDao.update(
+        Note(
+          id: note.id,
+          projectId: note.projectId,
+          content: note.content,
+          sourceType: note.sourceType,
+          createdAt: note.createdAt,
+          updatedAt: note.updatedAt,
+          metadata: metadata,
+          remoteId: note.remoteId,
+          remoteUpdatedAt: note.remoteUpdatedAt,
+        ),
+      );
+    } on Exception {
+      // The upload is already not happening; failing the whole push over
+      // a note that cannot be annotated would lose the notes that did go.
     }
   }
 
@@ -508,6 +547,7 @@ class SyncServiceNotifier extends Notifier<SyncServiceState> {
     required String apiToken,
     required NotesStore notesDao,
     required DatabaseHelper dbHelper,
+    required RecordingStore recordings,
     int batchSize = 200,
     Duration timeout = const Duration(seconds: 30),
   }) {
@@ -522,6 +562,7 @@ class SyncServiceNotifier extends Notifier<SyncServiceState> {
       config: config,
       notesDao: notesDao,
       dbHelper: dbHelper,
+      recordings: recordings,
     );
 
     state = state.copyWith(config: config, isInitialized: true);

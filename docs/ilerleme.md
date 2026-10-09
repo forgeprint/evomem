@@ -2527,3 +2527,61 @@ HTTP tarafı: `GET /notes` ve `GET /clusters` 200 ve CORS başlığıyla;
 `core/sync` ve `evomem_notes` olduğu gibi duruyor: bir dizüstünün yerel
 SQLite'ını uzak bir PostgreSQL'e aynalaması hâlâ anlamlı, ve sunucunun
 deposuyla karışmıyor çünkü artık iki ayrı değişken.
+
+
+## On yedinci oturum — tarayıcıda ses kaydı (ADR-0029)
+
+`durum.md` bunu "`path_provider`'ın web uygulaması yok" diye kaydediyordu.
+Doğruydu ama eksikti; paketin kaynağını okuyunca iki şey daha çıktı.
+
+### Pakettten okunan (record_web 2.1.3, 2026-10-09)
+
+- Web'de `start(config, path:)` **yolu yok sayıyor**.
+- `stop()` bir dosya yolu değil, `URL.createObjectURL(blob)` döndürüyor.
+- Kaydedilen biçim tarayıcının `MediaRecorder`'ının kabul ettiği şey. Paket
+  AAC için önce `audio/mp4;codecs=mp4a` deniyor; desteklenmezse başka bir
+  şeye düşüyor. Yükleme ise her şeye `audio/m4a` diyordu.
+
+Yani denetleyicideki ve yüklemedeki her `File(path)`, hiç yazılmamış bir
+şeye uzanıyordu.
+
+### Ne yazıldı
+
+`RecordingStore` portu — nereye kaydedilecek, bitmiş kaydın baytları, ve
+unut. İki uygulama: `FileRecordingStore` (path_provider + dart:io) ve
+`BlobRecordingStore` (tarayıcı). Koşullu import seçiyor, böylece bu
+satırın üstünde hiçbir şey `dart:io` import etmiyor.
+
+**Medya tipi baytlarla birlikte geziyor.** Yükleme artık sabit yerine gerçek
+tipi gönderiyor. Sunucu zaten `audio/webm`'i kabul ediyor ve `;codecs=`'i
+kesiyor — yani sunucuda hiçbir şey değişmedi, ama istemci tip konusunda
+yalan söylemeyi bırakana kadar bu yalnızca tesadüfen çalışıyordu.
+
+### Gerçek tarayıcıda ölçülenler
+
+- `blob:` URL hem `fetch`'e hem **`XMLHttpRequest`'e** 200 dönüyor, baytları
+  aynen veriyor ve `content-type`'ta blob'un kendi tipini taşıyor. XHR'ı ayrı
+  denedim çünkü `package:http` onu kullanıyor — yani tarayıcı interop'u, yeni
+  bağımlılık gerekmiyor.
+- `MediaRecorder.isTypeSupported`: `audio/mp4;codecs=mp4a` **false**,
+  `audio/mp4;codecs=mp4a.40.2` **true**, `audio/webm;codecs=opus` **true**.
+  Yani paketin AAC için ilk tercihi burada tutmuyor, ikincisi tutuyor. Başka
+  tarayıcı başka cevap verir; tipi taşımanın sebebi tam bu.
+
+### Bedeli, saklanmadan
+
+Tarayıcıda alınan bir kayıt **sayfa yenilenirse gider**. Baytlar durdurma
+anında belleğe okunuyor, yani blob URL'in ömrü oturum içinde sorun değil;
+ama yenileme onu da götürür. Bu olduğunda **sessiz kalmıyor**: yükleme
+baytları bulamazsa notun `awaiting_transcription` işareti kalkıyor ve
+`recording_lost` konuyor. Sonsuza kadar olmayan sesi bekleyen bir not,
+sesin gittiğini söyleyen bir nottan kötüdür.
+
+Kalıcı olması IndexedDB ister; ADR-0029 bunu açıkça karar dışı bıraktı.
+
+### Doğrulanmayan
+
+**Gerçek bir kayıt alınmadı.** Mikrofon izni gerektiriyor ve bunu otomatik
+bir koşunun vermesi doğru olmaz. Mikrofonun üstündeki zincirin testi var
+(sahte kaydediciye karşı); mikrofonun kendisi tarayıcıda da telefonda da
+hâlâ denenmedi.

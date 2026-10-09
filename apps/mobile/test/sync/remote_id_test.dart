@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:evomem_mobile/src/audio/recording_store_io.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
 import 'package:evomem_mobile/src/storage/notes_dao.dart';
@@ -140,6 +141,12 @@ void main() {
           apiToken: 'tok',
           notesDao: dao,
           dbHelper: helper,
+          // No note here has a recording, so the store is only there to
+          // satisfy the constructor; a temp directory keeps path_provider
+          // out of a test that has no platform to answer it.
+          recordings: FileRecordingStore(
+            directory: Future.value(Directory.systemTemp.createTempSync()),
+          ),
         );
     return await container.read(syncServiceProvider.notifier).push();
   }

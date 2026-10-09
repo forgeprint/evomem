@@ -117,3 +117,4 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 - [x] 3. Arama: `tsvector` + GIN, ADR-0003'ün davranışıyla kıyaslanarak
 - [x] 4. Kümeler, bağlantılar, öneriler, mezar taşları (3. aşamayla birlikte geçti)
 - [x] 5. Sunucu PostgreSQL'de; `core/sync` ve `evomem_notes` ayna olarak kaldı
+- [x] Tarayıcıda ses kaydının altyapısı → ADR-0029 (mikrofon hâlâ denenmedi)
