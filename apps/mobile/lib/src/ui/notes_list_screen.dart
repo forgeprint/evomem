@@ -97,6 +97,11 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             onPressed: () => context.go(const ClustersRoute().location),
           ),
           IconButton(
+            tooltip: 'Log',
+            icon: const Icon(Icons.receipt_long_outlined),
+            onPressed: () => context.go(const LogRoute().location),
+          ),
+          IconButton(
             tooltip: l10n.settings,
             icon: const Icon(Icons.settings),
             onPressed: () => context.go(const SettingsRoute().location),

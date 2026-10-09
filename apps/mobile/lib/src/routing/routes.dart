@@ -70,6 +70,18 @@ class SourcesRoute {
   String get location => path;
 }
 
+/// What the app has been doing, for when something did not work.
+class LogRoute {
+  /// Creates the route to the log.
+  const new();
+
+  /// The pattern `GoRouter` matches on.
+  static const String path = '/log';
+
+  /// Where to send `context.go`.
+  String get location => path;
+}
+
 /// The groupings the server made over this project's notes.
 class ClustersRoute {
   /// Creates the route to the list of groupings.

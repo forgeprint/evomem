@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-09 (on yedinci oturum) · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-09 (on sekizinci oturum) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -111,7 +111,7 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi — 108 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük — 115 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
   sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve
@@ -210,6 +210,13 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 5. **Sunucuda silinen not telefonda kalıyor.** `evomem pull` notları okuyor,
    mezar taşlarını okumuyor. Diğer yön; pull tarafının `deletions` tablosunu
    da okuması gerekiyor. ADR-0020 kapsam dışı bıraktı.
+
+**Günlük var**: `Logbook` bellekte son 300 girdiyi tutuyor, `/log` ekranı
+gösteriyor, "Copy all" panoya alıyor. Diske yazılmıyor. Sebebi: bu
+uygulamanın koştuğu iki yerin de kimsenin bakacağı bir konsolu yok. Yol
+boyunca bir hata bulundu — **`on Exception`, tarayıcı interop'undan gelen
+`Error`'ı yakalamıyor**, yani bir kayıt hatası handler'dan kaçıp okunacak
+hiçbir şey bırakmıyordu. Kayıt yolundaki her yakalama artık `on Object`.
 
 **Tarayıcıda ses kaydı** (ADR-0029): depolama `RecordingStore` portunun
 arkasında — telefonda dosya, tarayıcıda `blob:`. Paket kaynağından okundu:

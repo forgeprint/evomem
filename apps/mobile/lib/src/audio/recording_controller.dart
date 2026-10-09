@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:evomem_mobile/src/audio/recording_store.dart';
 import 'package:evomem_mobile/src/audio/voice_recorder.dart';
+import 'package:evomem_mobile/src/log/log.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -77,6 +78,7 @@ final voiceRecorderProvider = Provider<VoiceRecorder>(
 class RecordingController extends Notifier<RecordingState> {
   VoiceRecorder get _recorder => ref.read(voiceRecorderProvider);
   RecordingStore get _store => ref.read(recordingStoreProvider);
+  Logbook get _log => ref.read(logbookProvider.notifier);
 
   String? _path;
 
@@ -91,12 +93,18 @@ class RecordingController extends Notifier<RecordingState> {
 
     final bool allowed;
     try {
+      // Object, not Exception. A failure that comes up through browser
+      // interop arrives as an Error, which `on Exception` does not catch —
+      // so it escaped this handler, took the app's generic message with it
+      // and left nothing anywhere to read.
       allowed = await _recorder.hasPermission();
-    } on Exception {
+    } on Object catch (e, stack) {
+      _log.error('recording', 'asking for the microphone failed', e, stack);
       state = const RecordingState.failed(RecordingProblem.recorderFailed);
       return RecordingProblem.recorderFailed;
     }
     if (!allowed) {
+      _log.warn('recording', 'the microphone was refused');
       state = const RecordingState.failed(RecordingProblem.noPermission);
       return RecordingProblem.noPermission;
     }
@@ -107,11 +115,13 @@ class RecordingController extends Notifier<RecordingState> {
 
     try {
       await _recorder.start(path);
-    } on Exception {
+    } on Object catch (e, stack) {
+      _log.error('recording', 'the recorder would not start', e, stack);
       state = const RecordingState.failed(RecordingProblem.recorderFailed);
       return RecordingProblem.recorderFailed;
     }
 
+    _log.info('recording', 'started, into $path');
     _path = path;
     state = RecordingState.recording(DateTime.now());
     return null;
@@ -127,7 +137,8 @@ class RecordingController extends Notifier<RecordingState> {
     final String? path;
     try {
       path = await _recorder.stop();
-    } on Exception {
+    } on Object catch (e, stack) {
+      _log.error('recording', 'the recorder would not stop', e, stack);
       state = const RecordingState.failed(RecordingProblem.recorderFailed);
       return RecordingProblem.recorderFailed;
     }
@@ -137,6 +148,7 @@ class RecordingController extends Notifier<RecordingState> {
     // reads the bytes out, so the URL's own lifetime stops mattering.
     final size = path == null ? null : await _store.claim(path);
     if (path == null || size == null || size == 0) {
+      _log.warn('recording', 'nothing was captured', 'handle=$path size=$size');
       // Nothing was captured. Whatever was left behind goes rather than
       // waiting for an upload that would be refused.
       if (path != null) await _store.remove(path);
@@ -159,6 +171,7 @@ class RecordingController extends Notifier<RecordingState> {
           },
         );
 
+    _log.info('recording', 'kept $seconds second(s) as a note');
     _path = null;
     state = const RecordingState.idle();
     return null;
@@ -169,8 +182,11 @@ class RecordingController extends Notifier<RecordingState> {
     if (!state.isRecording) return;
     try {
       await _recorder.cancel();
-    } on Exception {
-      // Nothing left to do about it; the state still has to go back.
+    } on Object catch (e) {
+      // Nothing left to do about it; the state still has to go back. Said
+      // out loud, because a recorder that will not cancel is usually one
+      // that will not start next time either.
+      _log.warn('recording', 'the recorder would not cancel', e);
     }
     final path = _path;
     if (path != null) await _store.remove(path);

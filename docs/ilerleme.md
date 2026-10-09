@@ -2585,3 +2585,41 @@ Kalıcı olması IndexedDB ister; ADR-0029 bunu açıkça karar dışı bırakt�
 bir koşunun vermesi doğru olmaz. Mikrofonun üstündeki zincirin testi var
 (sahte kaydediciye karşı); mikrofonun kendisi tarayıcıda da telefonda da
 hâlâ denenmedi.
+
+## On sekizinci oturum — günlük altyapısı
+
+Tarayıcıda kayıt denendi ve olmadı. Konsolda kayıtla ilgili **hiçbir şey**
+yoktu — çünkü kod her istisnayı yutuyordu. Şikâyet tam da buydu.
+
+### İki ayrı sorun olduğu ortaya çıktı
+
+1. **Görülecek bir yer yoktu.** Bu uygulamanın koştuğu iki yerin de
+   kimsenin bakacağı bir konsolu yok: tarayıcı onu devtools'un arkasına
+   saklıyor, telefonda hiç yok. Arayüz üç genel mesajdan birini gösterip
+   sebebi atıyordu.
+2. **`on Exception` yanlış şeyi yakalıyor.** Tarayıcı interop'undan gelen
+   bir başarısızlık `Error` olarak geliyor ve `on Exception` onu **tutmaz**.
+   Yani handler'dan kaçıyor, uygulamanın genel mesajını da beraberinde
+   götürüyor ve okunacak hiçbir şey bırakmıyordu. Testi var:
+   `StateError('NotAllowedError')` fırlatan bir kaydediciyle.
+
+### Ne yazıldı
+
+`lib/src/log/log.dart` — `Logbook`, bellekte son 300 girdi, yenisi başta.
+Her girdi `dart:developer`'a da gidiyor, yani `flutter run` ve tarayıcı
+konsolu da görüyor. **Diske yazılmıyor**: oturumdan uzun yaşayan bir günlük
+yönetilecek ikinci bir depo demek, ve bu girdilerin detayında sunucu adresi
+ya da not içeriği olabiliyor.
+
+`message` ile `detail` ayrı: biri ne yapacağına karar veren insan için,
+diğeri düzeltecek olan için. Ekranda ikisi de var, "Copy all" hepsini
+panoya alıyor.
+
+`/log` ekranı ve uygulama çubuğunda girişi. Kayıt yolundaki her yakalama
+artık `on Object` ve hepsi günlüğe yazıyor — izin istemek, başlatmak,
+durdurmak, iptal etmek, ve "hiçbir şey yakalanmadı".
+
+### Sırada
+
+Kullanıcının tarayıcıda Record'a basıp `/log`'a bakması. Artık hata
+görünecek.
