@@ -25,10 +25,12 @@ package database
 //     query is a string range. Worth revisiting once the behaviour is
 //     equal, not during the move.
 //
-//   - **No full-text objects.** FTS5 is a virtual table and three triggers;
-//     PostgreSQL wants a tsvector and a GIN index, and ADR-0003's recorded
-//     behaviour has to be measured against it rather than assumed. That is
-//     its own step and it is not this one.
+//   - **Full text is a configuration and a GIN index, not a virtual table.**
+//     FTS5 is a virtual table and three triggers kept in step by hand;
+//     PostgreSQL indexes an expression over `notes.content`, so there is
+//     nothing to keep in step and nothing that can go stale. What the
+//     configuration does, and where it differs from FTS5, is measured and
+//     recorded beside it below.
 var postgresSchema = []string{
 	`CREATE TABLE IF NOT EXISTS meta (
 		key   TEXT PRIMARY KEY,
@@ -116,4 +118,55 @@ var postgresSchema = []string{
 		updated_at     TEXT NOT NULL
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_connections_source ON connections(source_type, project_id)`,
+}
+
+// postgresSearchSchema builds the full-text objects.
+//
+// Separate from the tables because it is the one part that needs a privilege
+// an ordinary user may not have — CREATE EXTENSION — and a store that cannot
+// create it should say so about search rather than fail to open at all.
+//
+// `unaccent` ships with the official PostgreSQL image: `pg_available_extensions`
+// lists it at 1.1 on postgres:17-alpine (checked 2026-10-09). It is contrib,
+// not a Turkish dictionary, so the image stays stock — the thing ADR-0028
+// said to avoid.
+//
+// The configuration exists because the obvious spelling does not work, and
+// that was measured rather than assumed: both `unaccent(text)` and
+// `unaccent(regdictionary, text)` are declared STABLE, so neither can appear
+// in an index expression — PostgreSQL refuses with "functions in index
+// expression must be marked IMMUTABLE". A text search configuration can,
+// because `to_tsvector(regconfig, text)` is immutable, so the folding moves
+// into a dictionary mapping instead of a function call.
+//
+// COPY = simple means no stemming, which is what FTS5 does too: ADR-0003
+// records that `kilitlendi` does not find `kilitlenmek` and that stays true
+// here. PostgreSQL has no built-in Turkish dictionary, so `simple` is also
+// the only honest choice.
+var postgresSearchSchema = []string{
+	// In public so one extension serves every schema, rather than one per
+	// schema in a database that holds several.
+	`CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public`,
+
+	// CREATE TEXT SEARCH CONFIGURATION has no IF NOT EXISTS, so opening a
+	// store that already has one has to be a no-op rather than an error.
+	//
+	// Both exceptions, because the one it actually raises is not the
+	// obvious one: a configuration whose name is taken comes back as
+	// unique_violation on pg_ts_config_cfgname_index, not duplicate_object.
+	// Measured, after catching only duplicate_object failed on the second
+	// open.
+	`DO $$ BEGIN
+		CREATE TEXT SEARCH CONFIGURATION evomem (COPY = simple);
+	EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL;
+	END $$`,
+
+	// Unqualified, so it lands in and resolves from whatever schema the
+	// search_path puts first. The index below and every query that uses
+	// it resolve the same way, so they cannot disagree.
+	`ALTER TEXT SEARCH CONFIGURATION evomem
+		ALTER MAPPING FOR hword, hword_part, word WITH unaccent, simple`,
+
+	`CREATE INDEX IF NOT EXISTS idx_notes_search
+		ON notes USING GIN (to_tsvector('evomem', content))`,
 }

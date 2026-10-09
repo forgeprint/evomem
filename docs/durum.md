@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-09 (on dördüncü oturum) · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-09 (on beşinci oturum) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -186,12 +186,13 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    konuşturmak için önüne bir uyum katmanı gerekir. `Grouper` arayüzü buna
    kapalı değil (ADR-0027).
 
-1. **ADR-0028'in göçü: 2/5 aşama bitti.** Depo PostgreSQL'e açılıyor ve
-   aynı suite iki arka uca karşı koşuyor — SQLite'ta 116 geçiyor,
-   PostgreSQL'de 95 geçiyor 21 atlanıyor (18'i arama, 3'ü tasarımı gereği
-   SQLite'a özgü). Sırada 3. aşama: `tsvector` + GIN, ADR-0003'ün
-   davranışıyla kıyaslanarak. **Sunucu PostgreSQL'e o aşamadan önce
-   bağlanmayacak**: aramasız bir sunucu yayına almak olurdu.
+1. **ADR-0028'in göçü: 4/5 aşama bitti.** Depo PostgreSQL'de tam çalışıyor,
+   arama dahil — SQLite'ta 117 geçiyor 0 atlanıyor, PostgreSQL'de 113
+   geçiyor 4 atlanıyor (hepsi tasarımı gereği SQLite'a özgü: WAL pragma'sı,
+   ADR-0004'ün tek yazıcısı, VACUUM, düşemeyen indeks). Kalan 5. aşama:
+   `core/sync` ile `evomem_notes`'un akıbeti, ve **sunucunun gerçekten
+   PostgreSQL'e çevrilmesi** — compose'daki `EVOMEM_POSTGRES_DSN` hâlâ
+   `serve` tarafından okunmuyor.
 
 2. **Tarayıcıda ses kaydı çalışmıyor.** `record`'un web desteği var ama kaydı
    yazdığımız yolu `path_provider` veriyor ve onun web uygulaması yok.
@@ -346,8 +347,9 @@ döküm, dağıtım ve gerçek dünya denemeleri.
 
 ## Bilinen sınırlar (hata değil, karar)
 
-- **Türkçe aramada `ı` → `i` katlanmıyor.** `veritabani` yazınca
-  `veritabanı` bulunmuyor. ğ/ş/ç/ö/ü katlanıyor. Gövdeleme (stemming) hiç
+- **Türkçe aramada `ı` → `i` katlanmıyor — SQLite'ta.** `veritabani` yazınca
+  `veritabanı` bulunmuyor. PostgreSQL'de **katlanıyor** (`unaccent`), ve bu
+  fark ADR-0003'ün değişiklik notunda yazılı. ğ/ş/ç/ö/ü katlanıyor. Gövdeleme (stemming) hiç
   yok. Düzeltmesi Türkçe-farkında tokenizer = yeni bağımlılık. → ADR-0003
 - **Jira imzasında replay penceresi yok.** Yakalanmış bir teslim, gizli
   anahtar değişene kadar tekrar oynatılabilir. → ADR-0010

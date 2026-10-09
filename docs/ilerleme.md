@@ -2423,3 +2423,63 @@ her atlama nedenini söylüyor:
 
 Sunucu hâlâ PostgreSQL'e **bağlanmadı** ve bilerek: arama çalışmadan sunucuyu
 oraya çevirmek, aramasız bir sunucu yayına almak olurdu.
+
+
+## On beşinci oturum — göçün 3. aşaması: arama
+
+PostgreSQL'de tam metin araması çalışıyor. Hiçbir şey ezberden yazılmadı;
+her adım o veritabanına sorularak ölçüldü.
+
+### Ölçülenler
+
+- `unaccent` **resmî imajda var**: `pg_available_extensions` postgres:17-alpine'da
+  1.1 listeliyor. contrib, Türkçe sözlük değil — yani imaj stok kalıyor,
+  ADR-0028'in kaçınmak istediği şey olmuyor.
+- **`unaccent('veritabanı')` = `veritabani`.** Yani PostgreSQL `ı`'yı
+  katlıyor; SQLite katlamıyor (ADR-0003). Gerçek bir fark.
+- **Her iki `unaccent` biçimi de STABLE**, ikisi de indeks ifadesinde
+  kullanılamıyor — PostgreSQL "functions in index expression must be marked
+  IMMUTABLE" diyor. Bu yüzden katlama bir fonksiyon çağrısı değil, bir
+  **metin arama yapılandırmasının sözlük eşlemesi** oldu:
+  `to_tsvector(regconfig, text)` immutable.
+- `COPY = simple` gövdeleme yapmıyor — FTS5 de yapmıyor, yani bu fark değil.
+
+### Ne yazıldı
+
+- `postgresSearchSchema`: extension, yapılandırma, GIN indeksi.
+- `searchTerms` ortak: kullanıcının yazdığı hiçbir şey iki sorgu diline de
+  sözdizimi olarak ulaşmıyor. `sqliteSearch` ve `postgresSearch` ayrı
+  kuruyor; `&` to_tsquery'nin AND'i, `:*` öneki.
+- `ts_rank_cd` zaten büyük-daha-iyi, bm25 değil — `Score` çağıran için iki
+  arka uçta da aynı yönde.
+- **`RebuildIndex` PostgreSQL'de no-op**, ve bu kestirme değil: FTS5 burada
+  üç tetikleyiciyle elde tutulan harici içerikli bir tablo (ADR-0005), yani
+  adımdan düşebilir. GIN indeksi `notes.content` üzerindeki bir ifadenin
+  üstünde, sunucu onu yazmanın parçası olarak tutuyor — tabloyla
+  anlaşamayacağı bir durum yok.
+
+### Üç hata, üçü de gerçek koşuda
+
+1. **Yanlış istisna yakalanıyordu.** Adı alınmış bir arama yapılandırması
+   `duplicate_object` değil, `pg_ts_config_cfgname_index` üzerinde
+   `unique_violation` fırlatıyor.
+2. **Test admin bağlantısı migration koşturuyordu.** `openTemp` şemayı
+   yaratmak için `OpenPostgres` kullanıyordu; bu `public`'e de şema kuruyor
+   ve testler arasında yapılandırma çakışmasına yol açıyordu. Düz bir
+   `sql.Open` oldu.
+3. **`search_path` public'i dışarıda bırakıyordu**, o yüzden `unaccent`
+   sözlüğü çözülemiyordu. Artık `<şema>,public`.
+
+### Nerede duruyor
+
+SQLite: **117 geçiyor, 0 atlanıyor.** PostgreSQL: **113 geçiyor, 4
+atlanıyor** — WAL pragma'sı, ADR-0004'ün tek yazıcısı, VACUUM, ve düşemeyeceği
+için yeniden kurulamayan indeks. Hepsi tasarımı gereği SQLite'a özgü.
+
+ADR-0003'e değişiklik notu düşüldü: `ı` katlaması artık arka uca bağlı ve
+`TestSearchFoldsDotlessIOnlyOnPostgres` ikisini de sabitliyor.
+
+4. aşama (kümeler, bağlantılar, öneriler, mezar taşları) **kendiliğinden
+bitmiş durumda**: hepsinin testi PostgreSQL'de geçiyor. Kalan tek aşama 5 —
+`core/sync` ve `evomem_notes`'un akıbeti, ve sunucunun gerçekten
+PostgreSQL'e çevrilmesi.

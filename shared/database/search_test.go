@@ -9,7 +9,6 @@ import (
 )
 
 func TestSearchFindsAWord(t *testing.T) {
-	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -38,7 +37,6 @@ func TestSearchFindsAWord(t *testing.T) {
 // Two words mean both words. An OR here would make every search return
 // everything.
 func TestSearchTermsAreAnded(t *testing.T) {
-	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -59,7 +57,6 @@ func TestSearchTermsAreAnded(t *testing.T) {
 }
 
 func TestSearchFilters(t *testing.T) {
-	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -97,7 +94,6 @@ func TestSearchFilters(t *testing.T) {
 // The index is an external content table, which SQLite does not keep in step
 // on its own. These three tests are what prove the triggers are there.
 func TestSearchSeesANewNote(t *testing.T) {
-	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -114,7 +110,6 @@ func TestSearchSeesANewNote(t *testing.T) {
 }
 
 func TestSearchFollowsAnUpdate(t *testing.T) {
-	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -145,7 +140,6 @@ func TestSearchFollowsAnUpdate(t *testing.T) {
 }
 
 func TestSearchForgetsADeletedNote(t *testing.T) {
-	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -170,7 +164,6 @@ func TestSearchForgetsADeletedNote(t *testing.T) {
 // valid in that query language and would be a syntax error, a wrong answer, or
 // a column filter if it were passed through.
 func TestSearchSurvivesFTSSyntax(t *testing.T) {
-	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -204,7 +197,6 @@ func TestSearchSurvivesFTSSyntax(t *testing.T) {
 // A search for punctuation alone has nothing to look for. That is an empty
 // result, not an error, and must not reach SQLite as an empty MATCH.
 func TestSearchEmptyQuery(t *testing.T) {
-	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -223,7 +215,6 @@ func TestSearchEmptyQuery(t *testing.T) {
 }
 
 func TestSearchPrefix(t *testing.T) {
-	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -251,7 +242,6 @@ func TestSearchPrefix(t *testing.T) {
 // The tokenizer folds a diacritic onto its base letter, so a Turkish note is
 // findable from a keyboard that is not set up for one.
 func TestSearchFoldsDiacritics(t *testing.T) {
-	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -269,13 +259,16 @@ func TestSearchFoldsDiacritics(t *testing.T) {
 	}
 }
 
-// What the fold does not reach: ı is its own letter in Unicode, not an i
-// carrying a mark, so nothing decomposes and "veritabani" does not find
-// "veritabanı". Fixing it means a Turkish-aware tokenizer, which unicode61 is
-// not; this test is here so the limit is known rather than discovered by a
-// user. See docs/adr/0003-turkish-text-search.md.
-func TestSearchDoesNotFoldDotlessI(t *testing.T) {
-	skipUntilPostgresSearch(t)
+// The one place the two backends genuinely disagree, and it is measured
+// here rather than left for somebody to report as a bug.
+//
+// On SQLite, ı is its own letter in Unicode — not an i carrying a mark — so
+// unicode61 decomposes nothing and "veritabani" does not find "veritabanı"
+// (ADR-0003). On PostgreSQL, unaccent's rules do map ı to i, so the same
+// search finds it. That is the better answer for Turkish and it costs
+// nothing, so it is kept rather than crippled to match; ADR-0028 records
+// the difference.
+func TestSearchFoldsDotlessIOnlyOnPostgres(t *testing.T) {
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -295,6 +288,12 @@ func TestSearchDoesNotFoldDotlessI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if onPostgres() {
+		if len(hits) != 1 {
+			t.Errorf("i did not match ı; unaccent folds it, so the configuration has changed")
+		}
+		return
+	}
 	if len(hits) != 0 {
 		t.Errorf("i matched ı, which unicode61 does not do; the fold has changed")
 	}
@@ -303,7 +302,6 @@ func TestSearchDoesNotFoldDotlessI(t *testing.T) {
 // A better match comes first, and the score a caller compares is the right way
 // round.
 func TestSearchRanksAndScores(t *testing.T) {
-	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -331,7 +329,6 @@ func TestSearchRanksAndScores(t *testing.T) {
 }
 
 func TestSearchPaging(t *testing.T) {
-	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -366,7 +363,7 @@ func TestSearchPaging(t *testing.T) {
 // The index is derived, so it can always be thrown away and rebuilt. This is
 // the escape hatch if it ever disagrees with the table.
 func TestRebuildIndex(t *testing.T) {
-	skipUntilPostgresSearch(t)
+	skipOnPostgres(t, "there is no index to rebuild: the GIN index is over an expression on notes.content, so it cannot fall out of step the way an FTS5 external-content table can")
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -389,26 +386,70 @@ func TestRebuildIndex(t *testing.T) {
 	}
 }
 
-func TestFTSExpression(t *testing.T) {
-	skipUntilPostgresSearch(t)
+// What a person typed becomes terms, in both query languages. The point is
+// that nothing a chat message can contain reaches either one as syntax: an
+// unbalanced quote, a NEAR, a colon, an apostrophe are all just characters
+// to drop.
+func TestSearchTerms(t *testing.T) {
 	cases := []struct {
-		in     string
-		prefix bool
-		want   string
+		in   string
+		want []string
 	}{
-		{"gateway", false, `"gateway"`},
-		{"two words", false, `"two" "words"`},
-		{"two words", true, `"two" "words"*`},
-		{`it's a "trap"`, false, `"it" "s" "a" "trap"`},
-		{"NEAR(a b)", false, `"NEAR" "a" "b"`},
-		{"", false, ""},
-		{"!!! ???", false, ""},
-		{"EVO-12", false, `"EVO" "12"`},
-		{"düğüm", false, `"düğüm"`},
+		{"gateway", []string{"gateway"}},
+		{"two words", []string{"two", "words"}},
+		{`it's a "trap"`, []string{"it", "s", "a", "trap"}},
+		{"NEAR(a b)", []string{"NEAR", "a", "b"}},
+		{"", nil},
+		{"!!! ???", nil},
+		{"EVO-12", []string{"EVO", "12"}},
+		{"düğüm", []string{"düğüm"}},
+		// A colon is to_tsquery's prefix marker and would be syntax
+		// if it got through.
+		{"a:*", []string{"a"}},
 	}
 	for _, c := range cases {
-		if got := ftsExpression(c.in, c.prefix); got != c.want {
-			t.Errorf("ftsExpression(%q, %v) = %q, want %q", c.in, c.prefix, got, c.want)
+		got := searchTerms(c.in)
+		if len(got) != len(c.want) {
+			t.Errorf("searchTerms(%q) = %q, want %q", c.in, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("searchTerms(%q) = %q, want %q", c.in, got, c.want)
+				break
+			}
 		}
 	}
+}
+
+// The expressions each builder makes out of those terms. Checked as strings
+// because the difference between the two query languages is the thing this
+// step is about, and a shape that drifts is a query that stops using its
+// index or stops meaning AND.
+func TestTheTwoQueryLanguages(t *testing.T) {
+	terms := []string{"iki", "kelime"}
+
+	sqlite, _ := sqliteSearch(terms, SearchQuery{})
+	if !strings.Contains(sqlite, "notes_fts MATCH ?") {
+		t.Errorf("the FTS5 query lost its MATCH:\n%s", sqlite)
+	}
+
+	postgres, args := postgresSearch(terms, SearchQuery{})
+	if !strings.Contains(postgres, "to_tsquery('evomem', ?)") {
+		t.Errorf("the PostgreSQL query lost its tsquery:\n%s", postgres)
+	}
+	// The index is over to_tsvector('evomem', content) and PostgreSQL
+	// only uses an index when the expression matches exactly.
+	if !strings.Contains(postgres, "to_tsvector('evomem', n.content) @@") {
+		t.Errorf("the PostgreSQL query would not use its index:\n%s", postgres)
+	}
+	if args[1] != "iki & kelime" {
+		t.Errorf("terms are not ANDed: %q", args[1])
+	}
+
+	withPrefix, prefixArgs := postgresSearch(terms, SearchQuery{Prefix: true})
+	if prefixArgs[1] != "iki & kelime:*" {
+		t.Errorf("prefix marks the wrong thing: %q", prefixArgs[1])
+	}
+	_ = withPrefix
 }

@@ -587,7 +587,6 @@ func TestArchiveKeepsUnsyncedTombstones(t *testing.T) {
 // Archiving removes rows, and the full-text index has to shrink with them or
 // a search keeps finding notes that are gone.
 func TestArchiveShrinksTheSearchIndex(t *testing.T) {
-	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 

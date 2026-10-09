@@ -114,6 +114,6 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 - [x] Sunucunun deposunun PostgreSQL olması kararı → ADR-0028
 - [x] 1. Lehçe ayrımı ve yer tutucu yeniden yazımı (SQLite suite yeşil kaldı)
 - [x] 2. PostgreSQL şeması ve migration'ları, suite iki arka uca karşı
-- [ ] 3. Arama: `tsvector` + GIN, ADR-0003'ün davranışıyla kıyaslanarak
-- [ ] 4. Kümeler, bağlantılar, öneriler, mezar taşları
+- [x] 3. Arama: `tsvector` + GIN, ADR-0003'ün davranışıyla kıyaslanarak
+- [x] 4. Kümeler, bağlantılar, öneriler, mezar taşları (3. aşamayla birlikte geçti)
 - [ ] 5. `core/sync` ve `evomem_notes`'un akıbeti

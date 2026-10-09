@@ -45,6 +45,7 @@ echo "==> the store, on PostgreSQL"
 EVOMEM_TEST_POSTGRES_DSN="$dsn" go test ./shared/database/ "$@"
 
 echo
-echo "Tests that cannot run here say so and why: the full-text search is"
-echo "still FTS5-only (ADR-0028 step 3), and a handful assert things that are"
-echo "true of a SQLite file and not of a server. Run with -v to read them."
+echo "Four tests are skipped here, each saying why: they assert things that"
+echo "are true of a SQLite file and not of a server — the WAL pragma, the"
+echo "single-writer pool, VACUUM, and rebuilding an index that cannot fall"
+echo "out of step. Run with -v to read them."

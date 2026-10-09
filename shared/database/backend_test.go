@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -65,17 +66,24 @@ func openTemp(t *testing.T) *DB {
 	schema := "t" + models.NewULID()
 	ctx := context.Background()
 
-	admin, err := OpenPostgres(ctx, dsn)
+	// A plain handle, not OpenPostgres: this connection exists only to
+	// create and drop the schema. Opening the store here would run the
+	// migrations against public as well, which is both wasted work and —
+	// found the hard way — the thing that made the text search
+	// configuration collide between tests.
+	admin, err := sql.Open(postgresDriver, dsn)
 	if err != nil {
-		t.Fatalf("%s is set but the server did not answer: %v", testPostgresDSN, err)
+		t.Fatalf("%s is set but could not be used: %v", testPostgresDSN, err)
 	}
-	if _, err := admin.write.ExecContext(ctx, `CREATE SCHEMA `+schema); err != nil {
+	if _, err := admin.ExecContext(ctx, `CREATE SCHEMA `+schema); err != nil {
 		admin.Close()
-		t.Fatal(err)
+		t.Fatalf("%s is set but the server did not answer: %v", testPostgresDSN, err)
 	}
 
 	// search_path in the DSN is what puts this test's tables in its own
-	// schema without a single query having to name one.
+	// schema without a single query having to name one. public stays on
+	// the path behind it, because the unaccent extension lives there and
+	// one extension serves every schema.
 	db, err := OpenPostgres(ctx, withSearchPath(dsn, schema))
 	if err != nil {
 		admin.Close()
@@ -83,7 +91,7 @@ func openTemp(t *testing.T) *DB {
 	}
 	t.Cleanup(func() {
 		db.Close()
-		if _, err := admin.write.ExecContext(ctx, `DROP SCHEMA `+schema+` CASCADE`); err != nil {
+		if _, err := admin.ExecContext(ctx, `DROP SCHEMA `+schema+` CASCADE`); err != nil {
 			t.Logf("could not drop %s: %v", schema, err)
 		}
 		admin.Close()
@@ -100,9 +108,9 @@ func withSearchPath(dsn, schema string) string {
 	}
 	if !containsRune(dsn, ':') || !containsRune(dsn, '/') {
 		// A keyword/value DSN ("host=… dbname=…") rather than a URL.
-		return fmt.Sprintf("%s search_path=%s", dsn, schema)
+		return fmt.Sprintf("%s search_path=%s,public", dsn, schema)
 	}
-	return fmt.Sprintf("%s%ssearch_path=%s", dsn, sep, schema)
+	return fmt.Sprintf("%s%ssearch_path=%s,public", dsn, sep, schema)
 }
 
 func containsRune(s string, r rune) bool {

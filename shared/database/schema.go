@@ -222,6 +222,15 @@ func (d *DB) createSchema(ctx context.Context) error {
 				return fmt.Errorf("database: creating the schema: %w\n%s", err, stmt)
 			}
 		}
+		for _, stmt := range postgresSearchSchema {
+			if _, err := d.write.ExecContext(ctx, stmt); err != nil {
+				// Named separately because the first of these
+				// needs a privilege the rest do not, and a
+				// store that opened but cannot search is worth
+				// saying out loud.
+				return fmt.Errorf("database: creating the search index: %w\n%s", err, stmt)
+			}
+		}
 		return nil
 	}
 	if _, err := d.write.ExecContext(ctx, schemaSQL); err != nil {
@@ -346,7 +355,18 @@ func (d *DB) SchemaVersion(ctx context.Context) (int, error) {
 // RebuildIndex rebuilds the full-text index from notes. The index is derived,
 // so this is always safe; it is what to run if a search ever disagrees with
 // the table.
+//
+// On PostgreSQL there is nothing to rebuild and that is not a shortcut. FTS5
+// here is an external-content table kept in step by three triggers
+// (ADR-0005), so it can fall out of step and this is the way back. The GIN
+// index is over an expression on notes.content, so the server maintains it
+// as part of the write and there is no state that can disagree with the
+// table. A REINDEX would be a maintenance operation, not a repair, and this
+// is not the call for it.
 func (d *DB) RebuildIndex(ctx context.Context) error {
+	if d.write.dialect == dialectPostgres {
+		return nil
+	}
 	_, err := d.write.ExecContext(ctx, `INSERT INTO notes_fts(notes_fts) VALUES('rebuild')`)
 	if err != nil {
 		return fmt.Errorf("database: rebuilding the index: %w", err)

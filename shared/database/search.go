@@ -58,31 +58,21 @@ const (
 
 // Search runs a full-text query over the notes, best match first.
 func (d *DB) Search(ctx context.Context, q SearchQuery) ([]SearchHit, error) {
-	expr := ftsExpression(q.Text, q.Prefix)
-	if expr == "" {
-		// Nothing searchable was given. An empty FTS5 expression is a
-		// syntax error, and a search for nothing is not an error.
+	terms := searchTerms(q.Text)
+	if len(terms) == 0 {
+		// Nothing searchable was given. An empty expression is a
+		// syntax error in both query languages, and a search for
+		// nothing is not an error.
 		return nil, nil
 	}
 
-	query := `
-		SELECT n.id, n.project_id, n.content, n.source_type, n.created_at, n.updated_at, n.metadata,
-		       snippet(notes_fts, 0, ?, ?, '…', ?), bm25(notes_fts)
-		FROM notes_fts
-		JOIN notes n ON n.rowid = notes_fts.rowid
-		WHERE notes_fts MATCH ?`
-	args := []any{SnippetOpen, SnippetClose, snippetTokens, expr}
-
-	if q.ProjectID != "" {
-		query += ` AND n.project_id = ?`
-		args = append(args, q.ProjectID)
+	var query string
+	var args []any
+	if d.read.dialect == dialectPostgres {
+		query, args = postgresSearch(terms, q)
+	} else {
+		query, args = sqliteSearch(terms, q)
 	}
-	if q.SourceType != "" {
-		query += ` AND n.source_type = ?`
-		args = append(args, string(q.SourceType))
-	}
-	query += ` ORDER BY bm25(notes_fts), n.created_at DESC LIMIT ? OFFSET ?`
-	args = append(args, clampLimit(q.Limit), max(0, q.Offset))
 
 	rows, err := d.read.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -99,10 +89,10 @@ func (d *DB) Search(ctx context.Context, q SearchQuery) ([]SearchHit, error) {
 			updated    string
 			metadata   string
 			snippet    string
-			bm25       float64
+			rank       float64
 		)
 		if err := rows.Scan(&n.ID, &n.ProjectID, &n.Content, &sourceType,
-			&created, &updated, &metadata, &snippet, &bm25); err != nil {
+			&created, &updated, &metadata, &snippet, &rank); err != nil {
 			return nil, fmt.Errorf("database: searching for %q: %w", q.Text, err)
 		}
 
@@ -117,7 +107,14 @@ func (d *DB) Search(ctx context.Context, q SearchQuery) ([]SearchHit, error) {
 			return nil, err
 		}
 
-		out = append(out, SearchHit{Note: &n, Snippet: snippet, Score: -bm25})
+		// Score is higher-is-better for the caller. SQLite's bm25 is
+		// smaller-is-better and is negated; ts_rank_cd is already the
+		// right way round.
+		score := rank
+		if d.read.dialect != dialectPostgres {
+			score = -rank
+		}
+		out = append(out, SearchHit{Note: &n, Snippet: snippet, Score: score})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("database: searching for %q: %w", q.Text, err)
@@ -125,33 +122,98 @@ func (d *DB) Search(ctx context.Context, q SearchQuery) ([]SearchHit, error) {
 	return out, nil
 }
 
-// ftsExpression turns what a person typed into an FTS5 expression.
+// searchTerms turns what a person typed into words that are safe to put in a
+// query language.
 //
-// FTS5 MATCH takes a query language, not a string: AND, OR, NOT, NEAR, column
-// filters, parentheses and quotes all mean something in it, and an unbalanced
-// quote or a trailing OR is a syntax error that comes back as a failed query.
-// Text from a chat message or a webhook will contain those characters sooner
-// or later, so none of it is passed through. Every run of word characters
-// becomes one double-quoted term and everything else is dropped; the terms are
-// joined by FTS5's implicit AND, so all of them have to appear.
+// Neither MATCH nor to_tsquery takes a string: AND, OR, NOT, parentheses,
+// quotes and colons all mean something in one or both, and an unbalanced
+// quote or a trailing operator comes back as a failed query. Text from a chat
+// message or a webhook will contain those characters sooner or later, so none
+// of it is passed through — every run of letters and digits is one term and
+// everything else is dropped.
 //
-// The cost is that a user cannot write an FTS5 expression even deliberately.
+// The cost is that a user cannot write a search expression even deliberately.
 // That is the right way round: the alternative is a search box that throws
-// errors at apostrophes.
-func ftsExpression(text string, prefix bool) string {
-	var terms []string
-	for _, field := range strings.FieldsFunc(text, func(r rune) bool {
+// errors at apostrophes. It is also what makes the two builders below safe,
+// since a term here cannot carry syntax into either language.
+func searchTerms(text string) []string {
+	return strings.FieldsFunc(text, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
-	}) {
-		terms = append(terms, `"`+field+`"`)
+	})
+}
+
+// sqliteSearch builds the FTS5 query (ADR-0005).
+//
+// Terms are double-quoted and joined by FTS5's implicit AND, so all of them
+// have to appear.
+func sqliteSearch(terms []string, q SearchQuery) (string, []any) {
+	quoted := make([]string, len(terms))
+	for i, term := range terms {
+		quoted[i] = `"` + term + `"`
 	}
-	if len(terms) == 0 {
-		return ""
-	}
-	if prefix {
+	if q.Prefix {
 		// Only the last term: the earlier ones are words the user
 		// finished typing.
-		terms[len(terms)-1] += `*`
+		quoted[len(quoted)-1] += `*`
 	}
-	return strings.Join(terms, " ")
+
+	query := `
+		SELECT n.id, n.project_id, n.content, n.source_type, n.created_at, n.updated_at, n.metadata,
+		       snippet(notes_fts, 0, ?, ?, '…', ?), bm25(notes_fts)
+		FROM notes_fts
+		JOIN notes n ON n.rowid = notes_fts.rowid
+		WHERE notes_fts MATCH ?`
+	args := []any{SnippetOpen, SnippetClose, snippetTokens, strings.Join(quoted, " ")}
+
+	query, args = narrow(query, args, q)
+	query += ` ORDER BY bm25(notes_fts), n.created_at DESC LIMIT ? OFFSET ?`
+	return query, append(args, clampLimit(q.Limit), max(0, q.Offset))
+}
+
+// postgresSearch builds the tsquery (ADR-0028).
+//
+// `&` is to_tsquery's AND, so this matches FTS5's implicit one: all the terms
+// have to appear. `:*` is its prefix marker.
+//
+// The configuration is named in every call rather than left to
+// default_text_search_config, because the GIN index was built over
+// `to_tsvector('evomem', content)` and an index is only used when the
+// expression matches exactly.
+func postgresSearch(terms []string, q SearchQuery) (string, []any) {
+	joined := strings.Join(terms, " & ")
+	if q.Prefix {
+		joined += ":*"
+	}
+
+	// MinWords=1 so a one-word note still produces a headline, and
+	// HighlightAll=false so a long note is cut rather than returned whole.
+	const headlineOptions = "StartSel=" + SnippetOpen + ",StopSel=" + SnippetClose +
+		",MaxWords=32,MinWords=1,ShortWord=0,HighlightAll=false"
+
+	query := `
+		SELECT n.id, n.project_id, n.content, n.source_type, n.created_at, n.updated_at, n.metadata,
+		       ts_headline('evomem', n.content, q.q, ?),
+		       ts_rank_cd(to_tsvector('evomem', n.content), q.q)
+		FROM notes n, to_tsquery('evomem', ?) AS q(q)
+		WHERE to_tsvector('evomem', n.content) @@ q.q`
+	args := []any{headlineOptions, joined}
+
+	query, args = narrow(query, args, q)
+	// DESC: ts_rank_cd is higher-is-better, the opposite of bm25.
+	query += ` ORDER BY ts_rank_cd(to_tsvector('evomem', n.content), q.q) DESC,
+		n.created_at DESC LIMIT ? OFFSET ?`
+	return query, append(args, clampLimit(q.Limit), max(0, q.Offset))
+}
+
+// narrow adds the filters both builders share.
+func narrow(query string, args []any, q SearchQuery) (string, []any) {
+	if q.ProjectID != "" {
+		query += ` AND n.project_id = ?`
+		args = append(args, q.ProjectID)
+	}
+	if q.SourceType != "" {
+		query += ` AND n.source_type = ?`
+		args = append(args, string(q.SourceType))
+	}
+	return query, args
 }
