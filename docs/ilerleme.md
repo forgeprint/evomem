@@ -2678,3 +2678,27 @@ Tam bu projenin tekrar tekrar yakaladığı sınıf: "bende çalışıyor".
 `pubspec.lock` artık commit'li. Gerekçe `.gitignore`'a yazıldı: bu bir
 kütüphane değil uygulama, kilit dosyası derlemeyi tekrarlanabilir yapan şey.
 Düzeltmeden sonra ikisi de temiz ağaçtan derlendi.
+
+### nginx loglarından çıkan bir hata daha
+
+Kullanıcı nginx erişim loglarını yapıştırdı. İçinde şu vardı:
+
+```
+"GET /favicon.ico HTTP/1.1" 200 578
+```
+
+`favicon.ico` o dizinde yok. 578 bayt, gzip'lenmiş `index.html`'in boyutu —
+yani **eksik dosyaya index.html dönüyordu**. Denedim:
+`/does-not-exist.js` → `200 text/html`.
+
+Sebebi benim yazdığım `try_files $uri $uri/ /index.html` geri dönüşü. Bedeli
+şu: `main.dart.js` bir gün kaybolsa tarayıcı JavaScript yerine HTML alır,
+ayrıştıramaz, ve erişim logu **başarı** gösterir — iki dünyanın da kötüsü.
+
+Üstelik bu geri dönüş yönlendirme için gerekli bile değil: uygulama
+fragment üzerinde (`#/sources`) yönleniyor, o sunucuya hiç ulaşmıyor.
+
+Düzeltme: uzantısı olan her yol bir varlıktır ve yoksa 404 der. Doğrulandı —
+gerçek dosyalar 200 ve doğru tiple, `/favicon.ico` ve
+`/does-not-exist.js` 404, `/sources` hâlâ 200 HTML, `index.html`'in
+`no-cache` başlığı yerinde.
