@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 )
 
 // schemaVersion is the version this build writes and the only one it reads.
@@ -174,18 +175,22 @@ CREATE INDEX IF NOT EXISTS idx_connections_source ON connections(source_type, pr
 // and refuses a file written by a version this build does not know.
 func (d *DB) migrate(ctx context.Context) error {
 	// Every object is CREATE ... IF NOT EXISTS, so this both creates a
-	// fresh file and adds whatever a later version introduced. A step
+	// fresh store and adds whatever a later version introduced. A step
 	// that has to touch existing rows goes in migrations below instead.
-	if _, err := d.write.ExecContext(ctx, schemaSQL); err != nil {
-		return fmt.Errorf("database: creating the schema: %w", err)
+	if err := d.createSchema(ctx); err != nil {
+		return err
 	}
 
 	var version int
 	err := d.write.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&version)
 	switch {
 	case err == sql.ErrNoRows:
+		// The column is TEXT and the value goes in as text. SQLite
+		// would coerce an int; PostgreSQL refuses to guess, and
+		// being explicit is right for both.
 		_, err := d.write.ExecContext(ctx,
-			`INSERT INTO meta(key, value) VALUES('schema_version', ?)`, schemaVersion)
+			`INSERT INTO meta(key, value) VALUES('schema_version', ?)`,
+			strconv.Itoa(schemaVersion))
 		if err != nil {
 			return fmt.Errorf("database: recording the schema version: %w", err)
 		}
@@ -203,6 +208,26 @@ func (d *DB) migrate(ctx context.Context) error {
 	}
 
 	return d.upgrade(ctx, version)
+}
+
+// createSchema runs the declarative schema for whichever SQL this store
+// speaks (ADR-0028).
+//
+// SQLite takes the whole thing in one call; pgx sends one statement per
+// message, so PostgreSQL's is a list and each statement goes on its own.
+func (d *DB) createSchema(ctx context.Context) error {
+	if d.write.dialect == dialectPostgres {
+		for _, stmt := range postgresSchema {
+			if _, err := d.write.ExecContext(ctx, stmt); err != nil {
+				return fmt.Errorf("database: creating the schema: %w\n%s", err, stmt)
+			}
+		}
+		return nil
+	}
+	if _, err := d.write.ExecContext(ctx, schemaSQL); err != nil {
+		return fmt.Errorf("database: creating the schema: %w", err)
+	}
+	return nil
 }
 
 // migrations holds the steps that have to touch existing rows. Index i brings
@@ -297,7 +322,7 @@ func (d *DB) upgrade(ctx context.Context, from int) error {
 			}
 		}
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE meta SET value = ? WHERE key = 'schema_version'`, version+1); err != nil {
+			`UPDATE meta SET value = ? WHERE key = 'schema_version'`, strconv.Itoa(version+1)); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("database: recording schema %d: %w", version+1, err)
 		}

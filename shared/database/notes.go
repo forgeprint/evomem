@@ -276,7 +276,9 @@ func (d *DB) Delete(ctx context.Context, id string) error {
 	// before — possible after a restore — moves the tombstone forward
 	// rather than failing on the primary key.
 	if _, err := tx.ExecContext(ctx,
-		`INSERT OR REPLACE INTO deletions (id, project_id, deleted_at) VALUES (?, ?, ?)`,
+		tx.dialect.insertOrReplace("deletions",
+			"id, project_id, deleted_at", "?, ?, ?",
+			"id", "project_id = EXCLUDED.project_id, deleted_at = EXCLUDED.deleted_at"),
 		id, projectID, formatTime(time.Now().UTC())); err != nil {
 		return fmt.Errorf("database: recording the deletion of %s: %w", id, err)
 	}
@@ -471,7 +473,7 @@ func (d *DB) GetAllNotes(ctx context.Context, limit, offset int) ([]*models.Note
 // is `= 1` because SQLite's JSON true is the integer 1.
 func (d *DB) AwaitingTranscription(ctx context.Context, limit int) ([]*models.Note, error) {
 	rows, err := d.read.QueryContext(ctx, `SELECT `+noteColumns+` FROM notes
-		WHERE json_extract(metadata, '$.`+models.MetaAwaitingTranscription+`') = 1
+		WHERE `+d.read.dialect.metadataIsTrue(models.MetaAwaitingTranscription)+`
 		ORDER BY created_at ASC, id ASC LIMIT ?`, clampLimit(limit))
 	if err != nil {
 		return nil, fmt.Errorf("database: listing notes awaiting transcription: %w", err)
@@ -496,7 +498,7 @@ func (d *DB) AwaitingTranscription(ctx context.Context, limit int) ([]*models.No
 func (d *DB) AwaitingTranscriptionCount(ctx context.Context) (int, error) {
 	var n int
 	if err := d.read.QueryRowContext(ctx, `SELECT COUNT(*) FROM notes
-		WHERE json_extract(metadata, '$.`+models.MetaAwaitingTranscription+`') = 1`).Scan(&n); err != nil {
+		WHERE `+d.read.dialect.metadataIsTrue(models.MetaAwaitingTranscription)).Scan(&n); err != nil {
 		return 0, fmt.Errorf("database: counting notes awaiting transcription: %w", err)
 	}
 	return n, nil

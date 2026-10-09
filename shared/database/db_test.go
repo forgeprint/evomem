@@ -6,19 +6,6 @@ import (
 	"testing"
 )
 
-// openTemp opens a store in a file rather than in memory. The locking and
-// journal behaviour this package is built around only exists for a file, so
-// the tests that care about it must use one.
-func openTemp(t *testing.T) *DB {
-	t.Helper()
-	db, err := Open(filepath.Join(t.TempDir(), "evomem.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return db
-}
-
 func TestOpenCreatesSchema(t *testing.T) {
 	db := openTemp(t)
 
@@ -34,6 +21,7 @@ func TestOpenCreatesSchema(t *testing.T) {
 // WAL is what allows a read while an ingestion write is in flight. It is set
 // in the DSN, so a change there would silently drop it.
 func TestOpenUsesWAL(t *testing.T) {
+	skipOnPostgres(t, "WAL is a SQLite journal mode; PostgreSQL has its own write-ahead log and no PRAGMA")
 	db := openTemp(t)
 
 	var mode string
@@ -56,6 +44,7 @@ func TestOpenUsesWAL(t *testing.T) {
 // would not fail any other test; it would just make concurrent ingestion
 // flaky in production.
 func TestWritePoolIsSingleConnection(t *testing.T) {
+	skipOnPostgres(t, "ADR-0004 caps the writer because a second one gets SQLITE_BUSY; a PostgreSQL server handles concurrency itself")
 	db := openTemp(t)
 
 	if got := db.write.Stats().MaxOpenConnections; got != 1 {

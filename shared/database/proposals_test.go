@@ -40,6 +40,7 @@ func TestProposeFillsInTheBlanks(t *testing.T) {
 // The whole point: a proposal is not memory. Nothing that reads notes may
 // see it.
 func TestAProposalIsNotANote(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -187,6 +188,7 @@ func TestProposalQueueIsBounded(t *testing.T) {
 }
 
 func TestAcceptProposal(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 

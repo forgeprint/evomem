@@ -2374,3 +2374,52 @@ geri alındı.
 ### Sırada
 
 2. aşama: PostgreSQL şeması ve migration'ları, suite iki arka uca karşı.
+
+
+## On dördüncü oturum — göçün 2. aşaması: şema ve iki arka uç
+
+`shared/database` artık PostgreSQL'e de açılıyor ve **aynı suite** iki arka
+uca karşı koşuyor.
+
+### Ne yazıldı
+
+- `postgresSchema`: aynı tablolar, PostgreSQL'in SQL'iyle. Tek dize değil
+  **liste**, çünkü pgx genişletilmiş protokolde mesaj başına bir ifade
+  gönderiyor; noktalı virgülden bölmek, içinde noktalı virgül geçen ilk
+  ifadeye kadar çalışırdı.
+- `OpenPostgres`. Tek yazıcılı havuz **yok**: ADR-0004 SQLite'ta yazıcıyı
+  tek bağlantıya kısıyor çünkü ikincisi `SQLITE_BUSY` alıyor; PostgreSQL
+  eşzamanlılığı kendi hallediyor ve tek bağlantı olmayan bir soruna icat
+  edilmiş darboğaz olurdu.
+- `openTemp` iki arka ucu da açıyor. `EVOMEM_TEST_POSTGRES_DSN` varsa
+  PostgreSQL, her test **kendi şemasında** (`search_path` DSN'de), sonunda
+  `DROP SCHEMA … CASCADE`. İkinci bir test kopyası değil tek anahtar:
+  deponun iki arka uçta aynı davrandığını bilmenin tek yolu aynı iddiaları
+  ikisine de sormak.
+- `scripts/test-postgres.sh` artık hem sync transportunu hem depoyu koşuyor.
+  `ci.sh` çevrimdışı ve SQLite'a karşı kalıyor (ADR-0028 §3).
+
+### Üç şey gerçek koşuda ortaya çıktı
+
+1. **`tx.PrepareContext` yeniden yazımı atlıyordu.** Promoted bir metottu ve
+   gölgelenmemişti; çağrı yerinde doğru bir çağrıdan **ayırt edilemez**
+   görünüyor, yani ne gözden geçirme ne de kaynak taraması yakalayabilir.
+   `CreateBatch` bu yüzden PostgreSQL'e `?` gönderiyordu. Yapısal düzeltme:
+   sorgu taşıyan **her** metot gölgelendi (`Prepare`, `Exec`, `Query`,
+   `QueryRow` ve bağlamlı eşleri).
+2. **Şema sürümü TEXT sütuna `int` olarak gidiyordu.** SQLite zorluyor,
+   PostgreSQL reddediyor. Açıkça `strconv.Itoa` — ikisi için de doğrusu bu.
+3. **`INSERT OR REPLACE/IGNORE` ve `json_extract`** lehçeye bağlandı
+   (`dialect.insertOrReplace`, `insertOrIgnore`, `metadataIsTrue`).
+
+### Nerede duruyor
+
+SQLite: **116 test geçiyor**. PostgreSQL: **95 geçiyor, 21 atlanıyor** — ve
+her atlama nedenini söylüyor:
+
+- 18'i arama: FTS5 hâlâ tek uygulama, PostgreSQL'in `tsvector`'ı 3. aşama.
+- 3'ü tasarımı gereği SQLite'a özgü: WAL PRAGMA'sı, ADR-0004'ün tek yazıcısı,
+  VACUUM ve etrafındaki dosya boyutları.
+
+Sunucu hâlâ PostgreSQL'e **bağlanmadı** ve bilerek: arama çalışmadan sunucuyu
+oraya çevirmek, aramasız bir sunucu yayına almak olurdu.

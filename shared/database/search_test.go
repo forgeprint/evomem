@@ -9,6 +9,7 @@ import (
 )
 
 func TestSearchFindsAWord(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -37,6 +38,7 @@ func TestSearchFindsAWord(t *testing.T) {
 // Two words mean both words. An OR here would make every search return
 // everything.
 func TestSearchTermsAreAnded(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -57,6 +59,7 @@ func TestSearchTermsAreAnded(t *testing.T) {
 }
 
 func TestSearchFilters(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -94,6 +97,7 @@ func TestSearchFilters(t *testing.T) {
 // The index is an external content table, which SQLite does not keep in step
 // on its own. These three tests are what prove the triggers are there.
 func TestSearchSeesANewNote(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -110,6 +114,7 @@ func TestSearchSeesANewNote(t *testing.T) {
 }
 
 func TestSearchFollowsAnUpdate(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -140,6 +145,7 @@ func TestSearchFollowsAnUpdate(t *testing.T) {
 }
 
 func TestSearchForgetsADeletedNote(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -164,6 +170,7 @@ func TestSearchForgetsADeletedNote(t *testing.T) {
 // valid in that query language and would be a syntax error, a wrong answer, or
 // a column filter if it were passed through.
 func TestSearchSurvivesFTSSyntax(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -197,6 +204,7 @@ func TestSearchSurvivesFTSSyntax(t *testing.T) {
 // A search for punctuation alone has nothing to look for. That is an empty
 // result, not an error, and must not reach SQLite as an empty MATCH.
 func TestSearchEmptyQuery(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -215,6 +223,7 @@ func TestSearchEmptyQuery(t *testing.T) {
 }
 
 func TestSearchPrefix(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -242,6 +251,7 @@ func TestSearchPrefix(t *testing.T) {
 // The tokenizer folds a diacritic onto its base letter, so a Turkish note is
 // findable from a keyboard that is not set up for one.
 func TestSearchFoldsDiacritics(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -265,6 +275,7 @@ func TestSearchFoldsDiacritics(t *testing.T) {
 // not; this test is here so the limit is known rather than discovered by a
 // user. See docs/adr/0003-turkish-text-search.md.
 func TestSearchDoesNotFoldDotlessI(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -292,6 +303,7 @@ func TestSearchDoesNotFoldDotlessI(t *testing.T) {
 // A better match comes first, and the score a caller compares is the right way
 // round.
 func TestSearchRanksAndScores(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -319,6 +331,7 @@ func TestSearchRanksAndScores(t *testing.T) {
 }
 
 func TestSearchPaging(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -353,6 +366,7 @@ func TestSearchPaging(t *testing.T) {
 // The index is derived, so it can always be thrown away and rebuilt. This is
 // the escape hatch if it ever disagrees with the table.
 func TestRebuildIndex(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -376,6 +390,7 @@ func TestRebuildIndex(t *testing.T) {
 }
 
 func TestFTSExpression(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	cases := []struct {
 		in     string
 		prefix bool

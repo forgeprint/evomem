@@ -93,7 +93,8 @@ func addMembers(ctx context.Context, tx *txn, clusterID string, noteIDs []string
 			return fmt.Errorf("database: %q is not a note id: %w", raw, err)
 		}
 		if _, err := tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO cluster_notes (cluster_id, note_id, added_at) VALUES (?, ?, ?)`,
+			tx.dialect.insertOrIgnore("cluster_notes",
+				"cluster_id, note_id, added_at", "?, ?, ?"),
 			clusterID, noteID, formatTime(at),
 		); err != nil {
 			return fmt.Errorf("database: adding %s to cluster %s: %w", noteID, clusterID, err)

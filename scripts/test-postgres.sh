@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Runs the PostgreSQL transport's tests against a throwaway database.
+# Runs everything that needs a real PostgreSQL, against a throwaway database.
+#
+# Two things: the sync transport (ADR-0012), and the store itself against the
+# PostgreSQL backend (ADR-0028). The second is the same suite ci.sh runs
+# against SQLite — one set of assertions, both backends, because the only way
+# to know the store behaves the same on each is to ask it the same questions.
 #
 # Deliberately not in ci.sh: that has to stay runnable offline on any machine,
 # and this needs a container runtime and a network to pull the image.
@@ -29,6 +34,17 @@ for _ in $(seq 1 60); do
 	sleep 1
 done
 
-echo "==> go test"
-EVOMEM_TEST_POSTGRES_DSN="postgres://postgres:test@127.0.0.1:${port}/evomem_test?sslmode=disable" \
-	go test ./core/sync/ "$@"
+dsn="postgres://postgres:test@127.0.0.1:${port}/evomem_test?sslmode=disable"
+
+echo "==> the sync transport"
+EVOMEM_TEST_POSTGRES_DSN="$dsn" go test ./core/sync/ "$@"
+
+echo "==> the store, on PostgreSQL"
+# Each test gets a schema of its own and drops it afterwards, so these run in
+# one database without seeing each other.
+EVOMEM_TEST_POSTGRES_DSN="$dsn" go test ./shared/database/ "$@"
+
+echo
+echo "Tests that cannot run here say so and why: the full-text search is"
+echo "still FTS5-only (ADR-0028 step 3), and a handful assert things that are"
+echo "true of a SQLite file and not of a server. Run with -v to read them."

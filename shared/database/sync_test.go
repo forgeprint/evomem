@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -77,7 +78,8 @@ func TestRefusesANewerFile(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := db.write.ExecContext(ctx,
-		`UPDATE meta SET value = ? WHERE key = 'schema_version'`, schemaVersion+1); err != nil {
+		`UPDATE meta SET value = ? WHERE key = 'schema_version'`,
+		strconv.Itoa(schemaVersion+1)); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.migrate(ctx); err == nil {
@@ -585,6 +587,7 @@ func TestArchiveKeepsUnsyncedTombstones(t *testing.T) {
 // Archiving removes rows, and the full-text index has to shrink with them or
 // a search keeps finding notes that are gone.
 func TestArchiveShrinksTheSearchIndex(t *testing.T) {
+	skipUntilPostgresSearch(t)
 	db := openTemp(t)
 	ctx := context.Background()
 
@@ -614,6 +617,7 @@ func TestArchiveShrinksTheSearchIndex(t *testing.T) {
 // implicit rowid, and the index is joined to notes by rowid. If this test
 // ever finds the wrong note, that decision was undone.
 func TestVacuumKeepsTheIndexAligned(t *testing.T) {
+	skipOnPostgres(t, "VACUUM and the file sizes around it are SQLite; PostgreSQL reclaims space on its own schedule")
 	db := openTemp(t)
 	ctx := context.Background()
 

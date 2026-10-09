@@ -74,7 +74,7 @@ today it holds the mirror, and the server still keeps a SQLite file.
 ./scripts/test.sh    # gofmt, go vet, go test
 ./scripts/ci.sh      # everything CI runs
 
-./scripts/test-postgres.sh   # the sync transport, against a throwaway database
+./scripts/test-postgres.sh   # the sync transport and the store, on PostgreSQL
 ```
 
 Go 1.26 or newer. Nothing else: dependencies are vendored, so a build needs no

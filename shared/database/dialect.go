@@ -80,3 +80,43 @@ func rewritePlaceholders(query string, d dialect) string {
 	}
 	return b.String()
 }
+
+// insertOrIgnore is "store this unless it is already there".
+//
+// SQLite spells it as a conflict clause on INSERT; PostgreSQL spells it at
+// the end. The caller gives the columns and values and gets whichever this
+// store speaks, because the alternative is the same statement written twice
+// a few lines apart.
+func (d dialect) insertOrIgnore(table, columns, values string) string {
+	if d == dialectPostgres {
+		return "INSERT INTO " + table + " (" + columns + ") VALUES (" + values + ") ON CONFLICT DO NOTHING"
+	}
+	return "INSERT OR IGNORE INTO " + table + " (" + columns + ") VALUES (" + values + ")"
+}
+
+// insertOrReplace is "store this, overwriting what is there".
+//
+// PostgreSQL has to be told which columns identify the row it is replacing
+// and which ones to set; SQLite infers both. So this takes the key and the
+// columns to overwrite, and SQLite simply ignores them.
+func (d dialect) insertOrReplace(table, columns, values, key, update string) string {
+	if d == dialectPostgres {
+		return "INSERT INTO " + table + " (" + columns + ") VALUES (" + values + ") " +
+			"ON CONFLICT (" + key + ") DO UPDATE SET " + update
+	}
+	return "INSERT OR REPLACE INTO " + table + " (" + columns + ") VALUES (" + values + ")"
+}
+
+// metadataIsTrue is the predicate for a flag kept in the metadata JSON.
+//
+// The flags live there rather than in a column because they are a passing
+// state of one source's notes and not a pillar of the schema (CLAUDE.md).
+// Reading one is where the two databases differ most bluntly: SQLite has
+// json_extract and returns the integer 1 for JSON true; PostgreSQL casts to
+// jsonb and ->> gives the text 'true'.
+func (d dialect) metadataIsTrue(key string) string {
+	if d == dialectPostgres {
+		return "(metadata::jsonb ->> '" + key + "') = 'true'"
+	}
+	return "json_extract(metadata, '$." + key + "') = 1"
+}

@@ -12,8 +12,15 @@ import (
 // the way out, once, here (ADR-0028).
 //
 // The embedded *sql.DB keeps everything else — Close, Ping, SetMaxOpenConns —
-// reachable without naming it again. The three methods below shadow the
-// promoted ones on purpose: those are exactly the ones that carry a query.
+// reachable without naming it again. The methods below shadow the promoted
+// ones on purpose, and they are *every* method that carries a query.
+//
+// Every one matters, not just the obvious three. A promoted method that is
+// not shadowed here looks exactly like a correct call at the call site —
+// `tx.PrepareContext(…)` reads the same whether or not it rewrites — so
+// nothing in review or in the source scan can tell them apart. The first run
+// against a real PostgreSQL found precisely that: CreateBatch prepared its
+// statement through the promoted PrepareContext and sent a `?`.
 type pool struct {
 	*sql.DB
 	dialect dialect
@@ -29,6 +36,26 @@ func (p pool) QueryContext(ctx context.Context, query string, args ...any) (*sql
 
 func (p pool) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	return p.DB.QueryRowContext(ctx, rewritePlaceholders(query, p.dialect), args...)
+}
+
+func (p pool) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
+	return p.DB.PrepareContext(ctx, rewritePlaceholders(query, p.dialect))
+}
+
+func (p pool) Exec(query string, args ...any) (sql.Result, error) {
+	return p.DB.Exec(rewritePlaceholders(query, p.dialect), args...)
+}
+
+func (p pool) Query(query string, args ...any) (*sql.Rows, error) {
+	return p.DB.Query(rewritePlaceholders(query, p.dialect), args...)
+}
+
+func (p pool) QueryRow(query string, args ...any) *sql.Row {
+	return p.DB.QueryRow(rewritePlaceholders(query, p.dialect), args...)
+}
+
+func (p pool) Prepare(query string) (*sql.Stmt, error) {
+	return p.DB.Prepare(rewritePlaceholders(query, p.dialect))
 }
 
 // BeginTx returns a transaction that rewrites the same way.
@@ -61,4 +88,24 @@ func (t *txn) QueryContext(ctx context.Context, query string, args ...any) (*sql
 
 func (t *txn) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	return t.Tx.QueryRowContext(ctx, rewritePlaceholders(query, t.dialect), args...)
+}
+
+func (t *txn) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
+	return t.Tx.PrepareContext(ctx, rewritePlaceholders(query, t.dialect))
+}
+
+func (t *txn) Exec(query string, args ...any) (sql.Result, error) {
+	return t.Tx.Exec(rewritePlaceholders(query, t.dialect), args...)
+}
+
+func (t *txn) Query(query string, args ...any) (*sql.Rows, error) {
+	return t.Tx.Query(rewritePlaceholders(query, t.dialect), args...)
+}
+
+func (t *txn) QueryRow(query string, args ...any) *sql.Row {
+	return t.Tx.QueryRow(rewritePlaceholders(query, t.dialect), args...)
+}
+
+func (t *txn) Prepare(query string) (*sql.Stmt, error) {
+	return t.Tx.Prepare(rewritePlaceholders(query, t.dialect))
 }

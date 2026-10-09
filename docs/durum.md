@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-09 (on üçüncü oturum) · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-09 (on dördüncü oturum) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -68,7 +68,7 @@ aynası. ADR-0028 bunu değiştiriyor, göç henüz başlamadı.
 
 ```sh
 ./scripts/ci.sh              # CI'ın çalıştırdığı her şey
-./scripts/test-postgres.sh   # sync transportu, tek kullanımlık veritabanıyla
+./scripts/test-postgres.sh   # sync transportu + depo, PostgreSQL'e karşı
 ./scripts/build.sh           # dist/evomem
 
 evomem add -project <id> <metin>      # not yaz
@@ -186,10 +186,12 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    konuşturmak için önüne bir uyum katmanı gerekir. `Grouper` arayüzü buna
    kapalı değil (ADR-0027).
 
-1. **ADR-0028'in göçü: 1/5 aşama bitti.** Lehçe ayrımı ve yer tutucu
-   yeniden yazımı yerinde, davranış değişmedi. Sırada 2. aşama: PostgreSQL
-   şeması ve migration'ları, suite iki arka uca karşı. Bu hâlâ kalan işlerin
-   en büyüğü.
+1. **ADR-0028'in göçü: 2/5 aşama bitti.** Depo PostgreSQL'e açılıyor ve
+   aynı suite iki arka uca karşı koşuyor — SQLite'ta 116 geçiyor,
+   PostgreSQL'de 95 geçiyor 21 atlanıyor (18'i arama, 3'ü tasarımı gereği
+   SQLite'a özgü). Sırada 3. aşama: `tsvector` + GIN, ADR-0003'ün
+   davranışıyla kıyaslanarak. **Sunucu PostgreSQL'e o aşamadan önce
+   bağlanmayacak**: aramasız bir sunucu yayına almak olurdu.
 
 2. **Tarayıcıda ses kaydı çalışmıyor.** `record`'un web desteği var ama kaydı
    yazdığımız yolu `path_provider` veriyor ve onun web uygulaması yok.
