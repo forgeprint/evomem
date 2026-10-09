@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 /// Database version.
 ///
@@ -44,6 +45,36 @@ class DatabaseHelper {
   }
 
   Future<Database> _initDatabase() async {
+    // sqflite has no web implementation: its own pubspec declares android,
+    // ios and macos. On the web the store is sqlite3 compiled to wasm over
+    // IndexedDB instead, behind the same sqflite API, so everything above
+    // this line is unchanged — including the migrations. See ADR-0022.
+    //
+    // NoWebWorker, not the default factory. The shared-worker one failed in
+    // the browser this was tested in: openDatabase resolved to null, which
+    // sqflite_common reports as "unsupported result null", and neither
+    // sqflite_sw.js nor sqlite3.wasm was ever fetched — it gave up before
+    // loading either. The main-thread factory opens the same database, and
+    // the IndexedDB file it writes survives a reload.
+    //
+    // The cost is named in ADR-0022: sqlite runs on the UI isolate, and two
+    // tabs on the same origin each hold their own connection to one virtual
+    // filesystem that does no locking.
+    //
+    // The database is tied to the origin, port included, so a browser served
+    // on another port sees an empty store.
+    if (kIsWeb) {
+      databaseFactory = databaseFactoryFfiWebNoWebWorker;
+      return await databaseFactory.openDatabase(
+        databasePathOverride ?? _databaseName,
+        options: OpenDatabaseOptions(
+          version: _databaseVersion,
+          onCreate: _onCreate,
+          onUpgrade: _onUpgrade,
+        ),
+      );
+    }
+
     final documentsDirectory = await getDatabasesPath();
     final dbPath =
         databasePathOverride ?? path.join(documentsDirectory, _databaseName);

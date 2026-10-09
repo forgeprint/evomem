@@ -39,6 +39,7 @@ cmd/evomem         16 alt komut (mcp, serve, pull, restore, transcribe, endorse 
 apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
                    mobil şema v6: notes.remote_id/remote_updated_at, deletions.remote_id
                    record 7.1.1 + path_provider 2.1.6 (ses kaydı)
+                   sqflite_common_ffi_web 1.2.0 (tarayıcı deposu)
 ```
 
 Şema sürümü **3**. Kayıtlar şemada değil, veritabanının yanındaki `audio/`
@@ -86,7 +87,7 @@ evomem endorse <id>                   # dışarıdan gelen notu sahiplen
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı — 75 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı — 77 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **`remote_id`**: yerel bir HTTP sunucusuna karşı; dönen id saklanıyor,
   `updated_at` oynamıyor, ikinci push hiç istek atmıyor, yarıda kalan batch
@@ -133,15 +134,9 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-0. **Flutter web hiçbir şeyi kaydetmiyor — yukarıdaki yönün önündeki engel.**
-   Uygulama tarayıcıda açılıyor ve not eklemek "Note saved" diyor, ama
-   yenileyince not yok. Neden paketlerin kendi `pubspec`'lerinde yazılı:
-   `sqflite` yalnızca `android, ios, macos`, `path_provider` yalnızca
-   `android, ios, linux, macos, windows` — ikisinde de web yok. Yazma
-   patlıyor; `NotesNotifier` iyimser güncelleme yaptığı için arayüz olmamış
-   bir başarıyı gösteriyor. (`record`'un web desteği **var**.)
-   Depo katmanı web uygulaması olan bir şeye geçmeli ya da arayüz arkasına
-   alınmalı — ikincisi "genişletilebilir mimari" isteğiyle aynı iş.
+0. **Tarayıcıda ses kaydı çalışmıyor.** `record`'un web desteği var ama kaydı
+   yazdığımız yolu `path_provider` veriyor ve onun web uygulaması yok.
+   Tarayıcının tam bir test yüzeyi olmasının önündeki sıradaki engel.
 
 1. **Android/iOS derleme dosyaları yok.** `android/` ve `ios/` ağaçlarında ne
    `build.gradle`, ne `settings.gradle`, ne `Podfile`, ne `Runner.xcodeproj`
@@ -155,6 +150,21 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 3. **Sunucuda silinen not telefonda kalıyor.** `evomem pull` notları okuyor,
    mezar taşlarını okumuyor. Diğer yön; pull tarafının `deletions` tablosunu
    da okuması gerekiyor. ADR-0020 kapsam dışı bıraktı.
+
+**Web artık gerçekten çalışıyor** (ADR-0022): depo `NotesStore` portunun
+arkasında, `DatabaseHelper` `kIsWeb` olduğunda `sqflite_common_ffi_web`'e
+geçiyor — şema ve bütün migration'lar aynı kalıyor. Tarayıcıda yazılan not
+yenilemeden sağ çıkıyor, elle doğrulandı. **`databaseFactoryFfiWebNoWebWorker`
+kullanılıyor**: paketin varsayılan shared-worker fabrikası burada açılışta
+null döndü ve wasm'ı hiç indirmedi. Maliyeti ADR'de: sqlite UI isolate'inde
+koşuyor, ve aynı origin'deki iki sekme kilitlemesiz bir sanal dosya sistemine
+yazabiliyor.
+
+**Açılışta not okuma düzeltildi** (ADR-0022): `loadNotes()` hiçbir yerden
+başlangıçta çağrılmıyordu — **her platformda** her açılış dolu bir
+veritabanının üstünde boş liste gösteriyordu. Hiçbir test yakalamamıştı,
+çünkü her test notlarını kendi oturumunda ekleyip yine kendi oturumunda
+doğruluyor.
 
 **Onay tamam** (ADR-0021): `evomem endorse <id>` bir insanın notu okuyup
 sahiplendiğini kaydediyor. `tainted` kalkıyor, `transcribed` kalıyor — ikisi

@@ -4,6 +4,7 @@ import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/rules/note_rules.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
 import 'package:evomem_mobile/src/storage/notes_dao.dart';
+import 'package:evomem_mobile/src/storage/notes_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// The notes list for a project, and the only thing allowed to change it.
@@ -22,34 +23,56 @@ final databaseHelperProvider = Provider<DatabaseHelper>(
 );
 
 /// Notes DAO provider.
-final notesDaoProvider = Provider<NotesDao>(
+/// Where notes are kept, as the port rather than the implementation: nothing
+/// above this line knows that today's answer is sqflite (ADR-0022).
+final notesDaoProvider = Provider<NotesStore>(
   (ref) => NotesDao(ref.watch(databaseHelperProvider)),
 );
 
 /// Holds the list. Every decision it makes comes from `lib/src/rules`; this
 /// class applies them and owns the identifiers, nothing else.
 class NotesNotifier extends Notifier<List<Note>> {
-  late final NotesDao _dao;
+  late final NotesStore _dao;
   late final String _projectId;
+
+  /// Counts the changes made in memory.
+  ///
+  /// A read started before a change must not land after it: the startup read
+  /// and the optimistic add race, and without this the note somebody typed a
+  /// moment after launch is wiped by a query that ran before they typed it.
+  int _revision = 0;
 
   @override
   List<Note> build() {
     _dao = ref.read(notesDaoProvider);
     _projectId = ref.read(currentProjectProvider);
 
-    // Return empty initially; use loadNotes to load from database
+    // The store is read here and nowhere else at startup. Without this the
+    // list is empty on every launch while the rows sit in the database, and
+    // no widget test catches it: each one adds its notes inside the session
+    // it then asserts on.
+    //
+    // build() cannot wait, so the first frame is the empty list and the
+    // notes arrive when the read returns.
+    unawaited(loadNotes());
     return const [];
   }
 
   /// Loads notes from database. Call this after build or when needed.
   Future<void> loadNotes() async {
+    final startedAt = _revision;
     try {
       final notes = await _dao.listByProject(
         projectId: _projectId,
         limit: 1000,
       );
+      // Dropped when the notifier is gone or something changed while this
+      // was in flight: a read that lands late is either addressed to nobody
+      // or already out of date.
+      if (!ref.mounted || _revision != startedAt) return;
       state = notes;
     } on Exception {
+      if (!ref.mounted || _revision != startedAt) return;
       // A read that fails leaves the screen empty rather than stale.
       state = const [];
     }
@@ -80,6 +103,7 @@ class NotesNotifier extends Notifier<List<Note>> {
       metadata: metadata,
     );
 
+    _revision++;
     // Optimistic update
     state = [...state, note];
 
@@ -90,7 +114,8 @@ class NotesNotifier extends Notifier<List<Note>> {
           await _dao.insert(note);
         } on Exception {
           // The note never reached the database, so take it back out of the
-          // list the screen is showing.
+          // list the screen is showing — unless nobody is showing it any more.
+          if (!ref.mounted) return;
           state = state.where((n) => n.id != note.id).toList();
         }
       }),
@@ -112,6 +137,7 @@ class NotesNotifier extends Notifier<List<Note>> {
       DateTime.now(),
     );
 
+    _revision++;
     // Optimistic update
     state = [
       for (final note in state)
@@ -126,6 +152,7 @@ class NotesNotifier extends Notifier<List<Note>> {
         } on Exception {
           // The database still holds the old content; show that instead of
           // the edit that did not land.
+          if (!ref.mounted) return;
           await loadNotes();
         }
       }),
@@ -144,6 +171,7 @@ class NotesNotifier extends Notifier<List<Note>> {
       }
     }
 
+    _revision++;
     // Optimistic update
     state = state.where((note) => note.id != id).toList();
 
@@ -154,6 +182,7 @@ class NotesNotifier extends Notifier<List<Note>> {
           await _dao.delete(id);
         } on Exception {
           // The row is still there, so put the note back in the list.
+          if (!ref.mounted) return;
           if (deletedNote != null) {
             state = [...state, deletedNote];
           }
@@ -181,6 +210,7 @@ class NotesNotifier extends Notifier<List<Note>> {
       metadata: newMetadata,
     );
 
+    _revision++;
     // Optimistic update
     state = [
       for (final n in state)
@@ -194,6 +224,7 @@ class NotesNotifier extends Notifier<List<Note>> {
           await _dao.update(updatedNote);
         } on Exception {
           // The pin did not land; show what the database holds.
+          if (!ref.mounted) return;
           await loadNotes();
         }
       }),
@@ -202,6 +233,7 @@ class NotesNotifier extends Notifier<List<Note>> {
 
   /// Replaces the entire list (used when loading from local DB or sync).
   Future<void> replaceAll(List<Note> notes) async {
+    _revision++;
     state = notes;
     await _dao.replaceAllForProject(_projectId, notes);
   }

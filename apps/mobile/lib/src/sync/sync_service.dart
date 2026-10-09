@@ -6,7 +6,7 @@ import 'package:evomem_mobile/src/audio/recording_controller.dart';
 import 'package:evomem_mobile/src/audio/voice_recorder.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
-import 'package:evomem_mobile/src/storage/notes_dao.dart';
+import 'package:evomem_mobile/src/storage/notes_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:sqflite/sqflite.dart';
@@ -121,7 +121,7 @@ class SyncService {
   /// What this service was configured with.
   final SyncConfig config;
 
-  final NotesDao _notesDao;
+  final NotesStore _notesDao;
   final DatabaseHelper _dbHelper;
 
   static const String _cursorKey = 'sync_cursor_notes';
@@ -506,7 +506,7 @@ class SyncServiceNotifier extends Notifier<SyncServiceState> {
   void initialize({
     required String serverUrl,
     required String apiToken,
-    required NotesDao notesDao,
+    required NotesStore notesDao,
     required DatabaseHelper dbHelper,
     int batchSize = 200,
     Duration timeout = const Duration(seconds: 30),

@@ -3,10 +3,15 @@ import 'dart:convert';
 
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
+import 'package:evomem_mobile/src/storage/notes_store.dart';
 import 'package:sqflite/sqflite.dart';
 
 /// Data Access Object for notes table.
-class NotesDao {
+///
+/// The sqflite implementation of [NotesStore]. Which database it talks to is
+/// [DatabaseHelper]'s business, and on the web that is sqlite3 compiled to
+/// wasm over IndexedDB rather than a file.
+class NotesDao implements NotesStore {
   /// Reads and writes notes through the helper's connection.
   new(this._dbHelper);
 
@@ -54,6 +59,7 @@ class NotesDao {
   }
 
   /// Inserts a new note.
+  @override
   Future<void> insert(Note note) async {
     final db = await _db;
     await db.insert('notes', {
@@ -70,6 +76,7 @@ class NotesDao {
   }
 
   /// Updates an existing note.
+  @override
   Future<void> update(Note note) async {
     final db = await _db;
     await db.update(
@@ -89,6 +96,7 @@ class NotesDao {
   /// Written on its own rather than through [update], which moves
   /// `updated_at` forward: this changes nothing about the note, and bumping
   /// the timestamp would push it back over the sync cursor it just crossed.
+  @override
   Future<void> setRemoteId(
     String localId,
     String remoteId,
@@ -111,6 +119,7 @@ class NotesDao {
   /// Written on its own for the same reason as [setRemoteId]: going through
   /// [update] would move `updated_at` forward and push the note back over the
   /// cursor it just crossed.
+  @override
   Future<void> setRemoteUpdatedAt(String localId, DateTime at) async {
     final db = await _db;
     await db.update(
@@ -128,6 +137,7 @@ class NotesDao {
   /// transaction as the delete so the two cannot come apart. One it has never
   /// seen leaves none: there would be nothing to ask the server to remove,
   /// and it could only answer 404 (ADR-0020).
+  @override
   Future<void> delete(String id) async {
     final db = await _db;
     final note = await getById(id);
@@ -145,6 +155,7 @@ class NotesDao {
   }
 
   /// The deletions waiting to be told to the mirror, oldest first.
+  @override
   Future<List<Deletion>> pendingDeletions(int limit) async {
     final db = await _db;
     final maps = await db.query(
@@ -168,12 +179,14 @@ class NotesDao {
   /// `deletions` is a queue, not a log: keeping a row after the server has
   /// acted on it would mean every sync re-sending every deletion this phone
   /// has ever made (ADR-0020).
+  @override
   Future<void> forgetDeletion(String localId) async {
     final db = await _db;
     await db.delete('deletions', where: 'id = ?', whereArgs: [localId]);
   }
 
   /// Gets a note by id.
+  @override
   Future<Note?> getById(String id) async {
     final db = await _db;
     final maps = await db.query(
@@ -187,6 +200,7 @@ class NotesDao {
   }
 
   /// Lists notes for a project, newest first.
+  @override
   Future<List<Note>> listByProject({
     required String projectId,
     String? sourceType,
@@ -236,6 +250,7 @@ class NotesDao {
   }
 
   /// Searches notes by content (simple LIKE search).
+  @override
   Future<List<Note>> search({
     required String query,
     required String projectId,
@@ -263,6 +278,7 @@ class NotesDao {
   }
 
   /// Replaces all notes for a project (used for initial load/sync).
+  @override
   Future<void> replaceAllForProject(String projectId, List<Note> notes) async {
     final db = await _db;
     await db.transaction((txn) async {
@@ -299,6 +315,7 @@ class NotesDao {
   }
 
   /// Gets notes updated after a cursor (for delta sync).
+  @override
   Future<List<Note>> getNotesAfterCursor(
     String cursorUpdatedAt,
     String cursorId,

@@ -1803,3 +1803,68 @@ Kullanıcının istediği "tarayıcıda dene" yolu, depo katmanı web'de çalı�
 mümkün değil. Bu, 1. maddeden (sunucuda silinen notun telefona ulaşması) daha
 öncelikli hale geldi ve `durum.md`'ye 0. madde olarak yazıldı. Nasıl
 çözüleceği bir mimari karar ve kullanıcıya sorulacak.
+
+---
+
+## 2026-10-09 (devam) — Tarayıcı gerçek bir test yüzeyi oldu (ADR-0022)
+
+Kullanıcının yönü: web önce. Üç engel vardı ve ikisi bilinmiyordu.
+
+### 1. Web hiç açılmıyordu (ayrı commit'te düzeltildi)
+
+`web/index.html` eski bootstrap kalıbındaydı. CI haftalardır yeşildi çünkü
+`flutter build web --release` yalnızca derlemeyi kanıtlıyor ve sayfayı kimse
+açmıyor.
+
+### 2. Hiçbir şey kaydedilmiyordu
+
+Paketlerin kendi `pubspec`'leri: `sqflite` → android/ios/macos, `path_provider`
+→ web yok, `record` → web **var**. `NotesNotifier` iyimser güncelleme yaptığı
+için arayüz olmamış bir başarıyı gösteriyordu.
+
+**Çözüm:** depo `NotesStore` portunun arkasına alındı (kullanıcının
+"genişletilebilir mimari" isteği), ve web'e **ikinci bir uygulama değil**,
+aynı sqflite API'sinin altında farklı bir motor kondu
+(`sqflite_common_ffi_web`). Böylece şema ve bütün migration'lar tek yerde
+kalıyor — ikinci bir uygulama iki şema ve iki migration seti demekti, bir
+platformda v6 diğerinde v4 böyle doğuyor.
+
+**Ölçerek seçildi, varsayarak değil:** paketin varsayılan shared-worker
+fabrikası bu tarayıcıda çalışmadı — `openDatabase` null döndü
+(`Unsupported operation: unsupported result null`) ve `sqflite_sw.js` ile
+`sqlite3.wasm` **hiç istenmedi**, yani yüklemeye varmadan vazgeçti.
+`databaseFactoryFfiWebNoWebWorker` ile aynı veritabanı açılıyor, wasm
+iniyor, IndexedDB'ye gerçek dosya yazılıyor (`blocks: 36, files: 1`) ve not
+yenilemeden sağ çıkıyor. Maliyetleri ADR'de: sqlite UI isolate'inde koşuyor,
+ve iki sekme kilitlemesiz tek bir sanal dosya sistemine yazabiliyor.
+
+### 3. Açılışta veritabanı hiç okunmuyordu — her platformda
+
+İlk ikisini kovalarken çıktı: `loadNotes()` yalnızca iki geri alma yolundan
+çağrılıyordu. **Uygulama açıldığında depo hiç okunmuyordu**, yani her açılış
+dolu bir veritabanının üstünde boş liste gösteriyordu. Hiçbir test
+yakalamamıştı çünkü her test notlarını kendi oturumunda ekleyip yine kendi
+oturumunda doğruluyor. Bunu gösteren bir test yazıldı (ikinci bir
+`ProviderContainer` = ikinci bir açılış) ve o testin düzeltme olmadan
+düştüğü, düzeltmeyle geçtiği görüldü.
+
+Düzeltmenin kendisi iki hata daha doğurdu ve testler ikisini de yakaladı:
+
+- **Yarış:** açılış okuması, hemen sonra eklenen notu siliyordu (sorgu
+  yazmadan önce koşup sonra iniyordu). Bir **revision sayacı** eklendi: uçuşta
+  başlayan bir okuma, kendisinden sonra olan bir değişikliğin üstüne yazmıyor.
+- **Atılmış notifier:** okuma container atıldıktan sonra inince Riverpod
+  patlıyordu. Her geç `state` yazımından önce **`ref.mounted`** kontrolü
+  kondu; aynı tehlike geri alma yollarında zaten vardı, açılış okuması onu
+  görünür kıldı.
+
+### Doğrulama
+
+- 77 Flutter testi (iki koşu), analyze/format temiz, Go tarafı 9 paket yeşil
+- **Tarayıcıda elle**: not yazıldı → listede göründü → **sayfa yenilendi** →
+  not duruyor. IndexedDB'de gerçek dosya; `sqlite3.wasm` indirilmiş.
+
+### Sıradaki engel
+
+Tarayıcıda **ses kaydı** çalışmayacak: `record`'un web desteği var ama kaydın
+yazıldığı yolu `path_provider` veriyor ve onun web uygulaması yok.
