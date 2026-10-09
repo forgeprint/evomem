@@ -29,14 +29,15 @@ void main() {
         .read(notesProvider.notifier)
         .add(
           rawContent: 'from telegram',
-          projectId: 'telegram-proj',
+          // The project on screen: the list only shows what belongs to it.
+          projectId: defaultProjectId,
           sourceType: 'telegram',
           metadata: {'telegram_chat_id': '12345'},
         );
     expect(problem, isNull);
     final note = container.read(notesProvider).single;
     expect(note.content, 'from telegram');
-    expect(note.projectId, 'telegram-proj');
+    expect(note.projectId, defaultProjectId);
     expect(note.sourceType, 'telegram');
     expect(note.metadata['telegram_chat_id'], '12345');
   });

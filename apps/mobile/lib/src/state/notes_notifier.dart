@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/rules/note_rules.dart';
+import 'package:evomem_mobile/src/state/project_memory.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
 import 'package:evomem_mobile/src/storage/notes_dao.dart';
 import 'package:evomem_mobile/src/storage/notes_store.dart';
@@ -26,10 +27,45 @@ final currentSourceProvider = Provider<String>(
   (ref) => kIsWeb ? defaultSourceType : 'mobile',
 );
 
-/// Current project ID filter.
-/// Using a simple provider since the app currently supports a single project.
-/// For multi-project support, this would become a StateProvider or similar.
-final currentProjectProvider = Provider<String>((ref) => 'default');
+/// What a project is called when nobody has chosen one.
+const defaultProjectId = 'default';
+
+/// Which project the app is looking at.
+///
+/// Everything project-scoped reads this: the note list, the clusters screen,
+/// a note being written and a recording being filed. Changing it rebuilds
+/// [notesProvider], which is what makes the switch take effect.
+///
+/// The choice is remembered, because a project somebody picked and lost on
+/// reload is a project they have to pick again every time.
+final currentProjectProvider = NotifierProvider<CurrentProject, String>(
+  CurrentProject.new,
+);
+
+/// Holds the chosen project and remembers it.
+class CurrentProject extends Notifier<String> {
+  @override
+  String build() {
+    unawaited(_restore());
+    return defaultProjectId;
+  }
+
+  Future<void> _restore() async {
+    final remembered = await ref.read(rememberedProjectProvider.future);
+    // Dropped when the read lands after somebody has already chosen: a
+    // remembered value must not undo a deliberate switch.
+    if (!ref.mounted || state != defaultProjectId) return;
+    if (remembered.isNotEmpty) state = remembered;
+  }
+
+  /// Looks at [projectId] from now on, and remembers it.
+  void select(String projectId) {
+    final trimmed = projectId.trim();
+    if (trimmed.isEmpty || trimmed == state) return;
+    state = trimmed;
+    unawaited(ref.read(projectMemoryProvider).remember(trimmed));
+  }
+}
 
 /// Database helper provider.
 final databaseHelperProvider = Provider<DatabaseHelper>(
@@ -43,11 +79,32 @@ final notesDaoProvider = Provider<NotesStore>(
   (ref) => NotesDao(ref.watch(databaseHelperProvider)),
 );
 
+/// The projects the store holds notes for, with the chosen one always among
+/// them.
+///
+/// A project nobody has written to yet does not exist as far as the store is
+/// concerned, so a freshly created one would vanish from the list the moment
+/// it was picked. Including the current one keeps the picker honest about
+/// what it is showing.
+final projectsProvider = FutureProvider<List<ProjectCount>>((ref) async {
+  final current = ref.watch(currentProjectProvider);
+  // Rebuilt when the notes change, so a project that has just received its
+  // first note appears without a reload.
+  ref.watch(notesProvider);
+
+  final known = await ref.watch(notesDaoProvider).projects();
+  if (known.any((p) => p.projectId == current)) return known;
+  return [...known, ProjectCount(current, 0)];
+});
+
 /// Holds the list. Every decision it makes comes from `lib/src/rules`; this
 /// class applies them and owns the identifiers, nothing else.
 class NotesNotifier extends Notifier<List<Note>> {
-  late final NotesStore _dao;
-  late final String _projectId;
+  // Neither of these is `late final`: build() runs again on this same
+  // instance whenever the chosen project changes, and a `late final` would
+  // throw the second time.
+  late NotesStore _dao;
+  String _projectId = defaultProjectId;
 
   /// Counts the changes made in memory.
   ///
@@ -59,7 +116,9 @@ class NotesNotifier extends Notifier<List<Note>> {
   @override
   List<Note> build() {
     _dao = ref.read(notesDaoProvider);
-    _projectId = ref.read(currentProjectProvider);
+    // Watched, not read: changing the project has to rebuild this list, or
+    // the app shows one project's notes under another's name.
+    _projectId = ref.watch(currentProjectProvider);
 
     // The store is read here and nowhere else at startup. Without this the
     // list is empty on every launch while the rows sit in the database, and
@@ -118,8 +177,13 @@ class NotesNotifier extends Notifier<List<Note>> {
     );
 
     _revision++;
-    // Optimistic update
-    state = [...state, note];
+    // Shown straight away, but only when it belongs to the project on
+    // screen. Before the project could be switched these were always the
+    // same, so the list showed whatever was added; now a note filed
+    // elsewhere would appear under a name it does not belong to.
+    if (note.projectId == _projectId) {
+      state = [...state, note];
+    }
 
     // Persist to database
     unawaited(

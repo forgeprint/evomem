@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-09 (onuncu oturum) · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-09 (on birinci oturum) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -96,7 +96,7 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler — 96 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi — 101 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
   sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve
@@ -163,10 +163,9 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    konuşturmak için önüne bir uyum katmanı gerekir. `Grouper` arayüzü buna
    kapalı değil (ADR-0027).
 
-1. **Uygulama tek projeye sabit.** `currentProjectProvider` her zaman
-   `default` dönüyor, yani başka bir projedeki notlar ve kümeler arayüzde
-   hiç görünmüyor. Hafızanın birden çok projesi olacaksa bu seçilebilir
-   olmalı.
+1. **Proje seçimi tarayıcıda görülmedi.** Mantığın testi var ama bu oturumda
+   tarayıcı paneli açılamadı; seçimin bir yenilemeden sağ çıktığı gözle
+   doğrulanmadı. Sıradaki oturumun ilk işi.
 
 2. **Tarayıcıda ses kaydı çalışmıyor.** `record`'un web desteği var ama kaydı
    yazdığımız yolu `path_provider` veriyor ve onun web uygulaması yok.
@@ -191,6 +190,15 @@ her açılışta sunucuya soruluyor (ADR-0024). Yapılandırılmamış / ulaşı
 okunamayan durumları ayrı ayrı açıklanıyor, çünkü boş ekranın üç ayrı anlamı
 var. Detayda her notun **kaynağı** ve işaretleri (dışarıdan, makine dökümü,
 onaylı) gösteriliyor.
+
+**Proje seçilebiliyor**: uygulama çubuğundaki seçici hangi projeye
+bakıldığını söylüyor ve değiştiriyor; not listesi, kümeler, yazılan not,
+kaydedilen ses ve panelin gruplatma düğmesi hepsi ona göre. Projeler
+**depodan** soruluyor (`NotesStore.projects()`), çünkü bir proje altında bir
+not durduğu sürece vardır; seçili olan, henüz notu olmasa da listede
+tutuluyor. Seçim hatırlanıyor (`ProjectMemory` portu). Yol boyunca iki hata
+çıktı: proje değişince `build()` yeniden koştuğu için `late final` alanlar
+patlıyordu, ve `add()` notu projesine bakmadan listeye koyuyordu.
 
 **Sunucu kendi gruplayabiliyor** (ADR-0027): panele yazılan bir model
 anahtarıyla `evomem organize` ve panelin "Group notes" düğmesi kümesiz

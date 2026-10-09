@@ -6,6 +6,7 @@ import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/rules/note_rules.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
+import 'package:evomem_mobile/src/ui/project_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -81,7 +82,9 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.homeScreenTitle),
+        // The project is the title: everything on this screen is scoped to
+        // it, and a filter that is not on screen is one people forget is on.
+        title: const ProjectPicker(),
         actions: [
           IconButton(
             tooltip: 'Sources',

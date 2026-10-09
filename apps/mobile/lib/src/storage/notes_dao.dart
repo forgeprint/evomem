@@ -201,6 +201,27 @@ class NotesDao implements NotesStore {
 
   /// Lists notes for a project, newest first.
   @override
+  @override
+  Future<List<ProjectCount>> projects() async {
+    final db = await _db;
+    // Ordered by size then name: the project somebody works in is the one
+    // with the notes, and a tie needs an order that does not shuffle.
+    final rows = await db.rawQuery(
+      'SELECT project_id, COUNT(*) AS n FROM notes '
+      'GROUP BY project_id ORDER BY n DESC, project_id ASC',
+    );
+    return rows
+        .map(
+          (row) => ProjectCount(
+            row['project_id'] as String? ?? '',
+            row['n'] as int? ?? 0,
+          ),
+        )
+        .where((p) => p.projectId.isNotEmpty)
+        .toList();
+  }
+
+  @override
   Future<List<Note>> listByProject({
     required String projectId,
     String? sourceType,

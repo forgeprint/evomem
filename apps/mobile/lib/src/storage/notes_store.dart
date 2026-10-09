@@ -26,6 +26,13 @@ abstract interface class NotesStore {
   /// Reads one note, or null when there is none.
   Future<Note?> getById(String id);
 
+  /// The projects this store holds notes for, with how many each has.
+  ///
+  /// Asked of the store rather than kept in a setting, because the answer is
+  /// a fact about the notes: a project exists exactly as long as a note is
+  /// filed under it, and one that was emptied should stop being offered.
+  Future<List<ProjectCount>> projects();
+
   /// A project's notes, newest first.
   Future<List<Note>> listByProject({
     required String projectId,
@@ -68,4 +75,16 @@ abstract interface class NotesStore {
 
   /// Forgets a deletion the mirror has taken.
   Future<void> forgetDeletion(String localId);
+}
+
+/// A project and how many notes are filed under it.
+class ProjectCount {
+  /// Creates a count.
+  const new(this.projectId, this.notes);
+
+  /// What the project is called.
+  final String projectId;
+
+  /// How many notes it holds.
+  final int notes;
 }

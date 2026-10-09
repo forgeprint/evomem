@@ -2208,3 +2208,48 @@ parantez olan bir başlık — hepsinin testi var).
 Anthropic'in kendi Messages API'si bu uçtan konuşulamıyor; önüne bir uyum
 katmanı gerekir. Arayüz (`Grouper`) buna kapalı değil, ama bu oturumda
 yazılmadı.
+
+## On birinci oturum — proje seçimi
+
+`currentProjectProvider` doğduğu günden beri `'default'` döndüren sabit bir
+sağlayıcıydı. Hafızanın birden çok projesi var (`evomem projects` onları
+sayıyor), ama uygulama yalnızca birini görebiliyordu.
+
+### Ne yazıldı
+
+- `NotesStore.projects()` — hangi projeler var ve kaç notu var. **Ayardan
+  değil depodan soruluyor**: bir proje, altında bir not durduğu sürece vardır.
+- `currentProjectProvider` artık bir `Notifier`. Seçim hatırlanıyor
+  (`ProjectMemory` portu; gerçek uygulaması ayarların kullandığı depo).
+- `ProjectPicker` uygulama çubuğunda, **başlığın yerinde**. Ekrandaki her
+  liste ona göre süzülüyor; görünmeyen bir süzgeç, insanların açık olduğunu
+  unuttuğu süzgeçtir.
+- Panelin "Group notes" düğmesi artık seçili projeyi gönderiyor.
+
+### Yol boyunca çıkan üç şey
+
+1. **`NotesNotifier.build()` artık yeniden koşuyor** (proje değişince). İki
+   alan `late final`'dı; ikinci koşuda patlardı ve hata bir depo hatası gibi
+   görünürdü. Testi var.
+2. **`add()` iyimser olarak listeye koyuyordu, projeye bakmadan.** Proje
+   seçilemezken ikisi hep aynıydı; artık değil. Başka projeye yazılan not,
+   ait olmadığı başlığın altında görünüyordu. Düzeltildi — ve bunu kodlayan
+   eski bir test de düzeltildi.
+3. **Erişilebilirlik testi seçiciyi yakaladı**: dokunma hedefi 178×28'di,
+   alt sınır 48. Bu testin işe yaradığı ilk sefer.
+
+### Riverpod 3 notu
+
+Sağlayıcılar dinleyen kalmayınca kendilerini atıyor. Testte
+`container.read(notesProvider)` yapıp beklemek, yeniden yüklenmemiş bir
+notifier ile atılıp yeniden kurulmuş bir notifier'ı ayırt edemiyor; test
+`container.listen` ile uygulamadaki widget'ın yerine geçiyor.
+
+### Doğrulama
+
+- Flutter: 101 test, `analyze` temiz, `build web --release` geçiyor
+- **Tarayıcıda görülmedi**: bu oturumda tarayıcı paneli açılamadı. Web'e
+  özgü tek risk seçimin hatırlanması; `flutter_secure_storage` pubspec'inde
+  `web:` platformunu **tanımlıyor** (`path_provider`'ın aksine) ve ayarlar
+  aynı depoyu kullanarak tarayıcıda zaten çalışıyor. Yine de gözle
+  görülmedi; sıradaki oturumun ilk işi.

@@ -1,6 +1,7 @@
 import 'package:evomem_mobile/src/clusters/cluster_service.dart';
 import 'package:evomem_mobile/src/sources/source_connection.dart';
 import 'package:evomem_mobile/src/sources/source_providers.dart';
+import 'package:evomem_mobile/src/state/notes_notifier.dart';
 import 'package:evomem_mobile/src/ui/clusters_screen.dart'
     show explainClusterProblem;
 import 'package:flutter/material.dart';
@@ -50,7 +51,11 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
     setState(() => _organizing = true);
     try {
       final service = await ref.read(sourceServiceProvider.future);
-      final outcome = await service.organize();
+      // The project on screen, not the server's default: grouping the notes
+      // of a project nobody is looking at is a surprise.
+      final outcome = await service.organize(
+        projectId: ref.read(currentProjectProvider),
+      );
       if (!mounted) return;
       final dropped = outcome.invented > 0
           ? ', ${outcome.invented} id(s) dropped'
