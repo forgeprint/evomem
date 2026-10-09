@@ -1,4 +1,5 @@
 import 'package:evomem_mobile/src/clusters/cluster_providers.dart';
+import 'package:evomem_mobile/src/clusters/cluster_service.dart';
 import 'package:evomem_mobile/src/log/log.dart';
 import 'package:evomem_mobile/src/sources/source_connection.dart';
 import 'package:evomem_mobile/src/sources/source_service.dart';
@@ -26,6 +27,14 @@ final sourceConnectionsProvider = FutureProvider<List<SourceConnection>>((
 ) async {
   final service = await ref.watch(sourceServiceProvider.future);
   final log = ref.read(logbookProvider.notifier);
+  if (!service.isConfigured) {
+    // Said outright rather than as a failed request. "asking /connections"
+    // with nothing in front of the slash is what the log printed the first
+    // time, and it reads as a bug in the app rather than an empty setting.
+    log.warn('panel', 'no server configured; nothing was asked');
+    throw const ClusterFailure(ClusterProblem.notConfigured);
+  }
+
   try {
     log.info('panel', 'asking ${service.serverUrl}/connections');
     final connections = await service.list();

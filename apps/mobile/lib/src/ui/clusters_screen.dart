@@ -3,6 +3,7 @@ import 'package:evomem_mobile/src/clusters/cluster_providers.dart';
 import 'package:evomem_mobile/src/clusters/cluster_service.dart';
 import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/ui/waiting_on_server.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,15 +14,26 @@ import 'package:go_router/go_router.dart';
 /// screen has several meanings and they need different answers: nothing is
 /// configured, nothing could be reached, or nothing has been grouped yet.
 String explainClusterProblem(ClusterProblem problem) => switch (problem) {
-  ClusterProblem.notConfigured =>
-    'Set the server address and token in Settings. Groupings are made on the '
-        'server, so this screen needs one.',
+  ClusterProblem.notConfigured => _notConfigured,
   ClusterProblem.unreachable =>
     'The server could not be reached. Groupings are not stored on this '
         'device, so there is nothing to show while it is away.',
   ClusterProblem.unreadable =>
     'The server answered something this version cannot read.',
 };
+
+/// In a browser the settings belong to the address they were saved under:
+/// localhost and 127.0.0.1 are different origins with separate storage, so
+/// the same app at the other one looks as though it was never configured.
+/// That is a confusing enough half-hour to be worth a sentence.
+const _sameAppOtherAddress =
+    '\n\nIf you have set them already, check the address bar: settings saved '
+    'at localhost are not visible at 127.0.0.1, or the other way round.';
+
+const _notConfigured =
+    'Set the server address and token in Settings. Groupings are made on '
+    'the server, so this screen needs one.'
+    '${kIsWeb ? _sameAppOtherAddress : ''}';
 
 /// The groupings the server made over this project's notes.
 class ClustersScreen extends ConsumerWidget {

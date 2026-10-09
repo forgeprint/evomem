@@ -112,7 +112,7 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük, ses çalma — 123 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük, ses çalma — 129 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
   sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve
@@ -386,6 +386,11 @@ Plan'daki (`plan.md`) beş fazın bütün kutuları işaretli. Kalan iş plan d�
 döküm, dağıtım ve gerçek dünya denemeleri.
 
 ## Bilinen sınırlar (hata değil, karar)
+
+- **Web'de ayarlar origin başına.** `flutter_secure_storage` tarayıcıda
+  `localStorage` kullanıyor; `localhost:8080`'de kaydedilen sunucu adresi
+  `127.0.0.1:8080`'de yok. Uygulama hiç yapılandırılmamış gibi görünür ve
+  "ayarlı değil" ekranı artık adres çubuğunu kontrol etmeyi söylüyor.
 
 - **Türkçe aramada `ı` → `i` katlanmıyor — SQLite'ta.** `veritabani` yazınca
   `veritabanı` bulunmuyor. PostgreSQL'de **katlanıyor** (`unaccent`), ve bu

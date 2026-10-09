@@ -44,6 +44,11 @@ final clustersProvider = FutureProvider<List<Cluster>>((ref) async {
   final service = await ref.watch(clusterServiceProvider.future);
   final project = ref.watch(currentProjectProvider);
   final log = ref.read(logbookProvider.notifier);
+  if (!service.isConfigured) {
+    log.warn('groups', 'no server configured; nothing was asked');
+    throw const ClusterFailure(ClusterProblem.notConfigured);
+  }
+
   try {
     log.info('groups', 'asking ${service.serverUrl}/clusters for $project');
     final clusters = await service.list(projectId: project);

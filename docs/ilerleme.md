@@ -2892,3 +2892,38 @@ izinli artık; joker hâlâ yok. Doğrulandı: iki yazım da
 En olası sebep: uygulamada kayıtlı sunucu adresi **eski bir port**. Önceki
 oturumlarda 8794 ve 8797 kullanılmıştı; compose 8787'de. O adrese giden
 istek, zaman aşımına kadar döner.
+
+### Günlük cevabı verdi, ve bir satırı benim hatamdı
+
+Kullanıcının gönderdiği günlük iki şey söyledi:
+
+```
+could not list the groups — Instance of 'minified:fn'
+asking /clusters for default
+```
+
+**İkincisi cevap**: `asking ${service.serverUrl}/clusters` yazıyor ve
+eğik çizgiden önce hiçbir şey yok — **sunucu adresi boş**, yani ayar yok.
+
+**Birincisi benim hatam**: `ClusterFailure`'ın `toString()`'i yoktu, bu
+yüzden varsayılan `Object.toString` sınıf adını basıyor ve release
+derlemede sınıf adı yok. Günlüğü "hataları görebileyim" diye kurup ilk
+ihtiyaç duyulduğunda `Instance of 'minified:fn'` yazdırmışım. `toString()`
+eklendi, testi de var.
+
+### Ve ayarın neden boş olduğu
+
+`flutter_secure_storage` web'de `localStorage` kullanıyor, o da **origin
+başına**. `localhost:8080`'de kaydedilen ayar `127.0.0.1:8080`'de yok —
+aynı uygulama, hiç yapılandırılmamış gibi görünüyor. Panelde bunu
+doğruladım: o origin'in `localStorage`'ında yalnızca
+`FlutterSecureStorage.evomem_current_project` vardı.
+
+Üç şey eklendi:
+
+- Adres boşsa istek **hiç denenmiyor**; günlük "no server configured;
+  nothing was asked" diyor. "asking /clusters" uygulamanın hatası gibi
+  okunuyordu.
+- "Ayarlı değil" ekranı, tarayıcıda, adres çubuğunu kontrol etmeyi
+  söylüyor.
+- `EVOMEM_CORS_ORIGIN` zaten iki yazıma da izin veriyor (önceki commit).

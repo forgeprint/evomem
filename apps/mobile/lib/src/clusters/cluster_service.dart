@@ -26,6 +26,22 @@ class ClusterFailure implements Exception {
 
   /// What the server or the client said, when there was anything.
   final String detail;
+
+  /// Says what went wrong, in words.
+  ///
+  /// Without this a release build logs `Instance of 'minified:fn'`, which
+  /// is what the log said the first time somebody needed it. The default
+  /// Object.toString is the class name, and release builds have no class
+  /// names.
+  @override
+  String toString() {
+    final reason = switch (problem) {
+      ClusterProblem.notConfigured => 'no server address or token in settings',
+      ClusterProblem.unreachable => 'the server could not be reached',
+      ClusterProblem.unreadable => 'the server answered something unreadable',
+    };
+    return detail.isEmpty ? reason : '$reason: $detail';
+  }
 }
 
 /// One cluster and the notes in it.
