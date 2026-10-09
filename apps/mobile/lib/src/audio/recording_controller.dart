@@ -164,6 +164,18 @@ class RecordingController extends Notifier<RecordingState> {
     if (!state.isRecording) return null;
 
     final startedAt = state.startedAt ?? DateTime.now();
+
+    // Asked before stopping, because afterwards the two ways this fails
+    // look identical. Still recording and no bytes means the microphone
+    // delivered nothing; already stopped means it died in between and said
+    // so only to debugPrint (ADR-0029).
+    bool wasRecording;
+    try {
+      wasRecording = await _recorder.isRecording();
+    } on Object {
+      wasRecording = true;
+    }
+
     final String? path;
     try {
       path = await _recorder.stop();
@@ -178,7 +190,17 @@ class RecordingController extends Notifier<RecordingState> {
     // reads the bytes out, so the URL's own lifetime stops mattering.
     final size = path == null ? null : await _store.claim(path);
     if (path == null || size == null || size == 0) {
-      _log.warn('recording', 'nothing was captured', 'handle=$path size=$size');
+      _log.warn(
+        'recording',
+        wasRecording
+            // Running right up to the stop, so the microphone delivered no
+            // audio at all.
+            ? 'the recorder was running but produced no audio'
+            // It had already stopped itself. Whatever killed it went to
+            // debugPrint, which is in this log under `framework`.
+            : 'the recorder had already stopped before it was asked to',
+        'handle=$path size=$size recording=$wasRecording',
+      );
       // Nothing was captured. Whatever was left behind goes rather than
       // waiting for an upload that would be refused.
       if (path != null) await _store.remove(path);

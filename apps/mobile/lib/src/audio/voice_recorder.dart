@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:record/record.dart';
 
 /// Recording a voice note, behind an interface.
@@ -41,22 +42,36 @@ abstract interface class VoiceRecorder {
 /// settings in about an hour and a half; and a phone on a tunnel is the
 /// slowest link in the chain.
 ///
-/// AAC-LC is the package's default encoder and writes an `.m4a`, which the
-/// transcription interface accepts and `shared/audio` stores as `audio/m4a`.
+/// The encoder, which is not the same answer on every platform.
+///
+/// A phone writes AAC-LC, the package's default, into an `.m4a`.
+///
+/// A browser is asked for Opus instead. Asking it for AAC goes through
+/// MediaRecorder, whose support for `audio/mp4` is uneven — and record_web's
+/// delegate swallows a failed start, so the result is a recorder that
+/// reports success and produces nothing. Opus in a WebM container is what
+/// browsers have always encoded; `shared/audio` already maps `audio/webm`,
+/// and the OpenAI speech-to-text interface documents webm as supported
+/// (ADR-0016, ADR-0029).
+const AudioEncoder _encoder = kIsWeb ? AudioEncoder.opus : AudioEncoder.aacLc;
+
+/// The settings every recording is made with.
 const speechRecordConfig = RecordConfig(
-  // AudioEncoder.aacLc is the package default and so not repeated here.
+  encoder: _encoder,
   numChannels: 1,
   sampleRate: 16000,
   bitRate: 32000,
 );
 
-/// The recording extension and the media type that goes with it, kept
-/// together because the server decides how to decode by the second and names
-/// the file by the first.
-const recordingExtension = '.m4a';
+/// What a recording is called on this platform.
+///
+/// Only the phone's name matters: in a browser the recorder ignores the path
+/// entirely and the type comes back with the bytes (ADR-0029).
+const recordingExtension = kIsWeb ? '.webm' : '.m4a';
 
-/// What `POST /ingest/audio` is told the body is.
-const recordingMediaType = 'audio/m4a';
+/// What `POST /ingest/audio` is told the body is, when nothing better is
+/// known. The browser reports the blob's own type instead.
+const recordingMediaType = kIsWeb ? 'audio/webm' : 'audio/m4a';
 
 /// [VoiceRecorder] over the `record` package.
 ///

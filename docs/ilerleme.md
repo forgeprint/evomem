@@ -2751,3 +2751,34 @@ kullandığı tam ayarlarla (`audio/mp4;codecs=mp4a.40.2` ve
 
 Artık bir sonraki denemede record_web'in kendi hata metni `/log`'da
 `framework` kaynağıyla görünecek — asıl sebep oradan okunacak.
+
+### Hâlâ aynı hata: tarayıcıdan AAC istemek
+
+"Aynı hatayı veriyor" denince önce önbelleği eledim, tahmin etmeden:
+bu derlemede **service worker kayıtlı değil**, `caches` boş, ve ağdan gelen
+`main.dart.js` yeni kodu içeriyor. Yani eski derleme değil.
+
+Geriye tek açıklama kalıyordu: `isRecording()` **true** dönüyor — kaydedici
+gerçekten çalışıyor — ve veri hiç gelmiyor, yani `_chunks` boş kalıyor.
+
+Muhtemel sebep: tarayıcıdan **AAC** istiyorduk. `speechRecordConfig`
+paketin varsayılan encoder'ını (aacLc) kullanıyordu ve record_web bunu
+`audio/mp4;codecs=...` olarak MediaRecorder'a veriyor. Tarayıcıların mp4
+desteği düzensiz, ve delegate başarısız bir start'ı yuttuğu için sonuç
+"başardım diyen ama hiçbir şey üretmeyen" bir kaydedici oluyor.
+
+**Encoder artık platforma göre**: tarayıcıda `AudioEncoder.opus`, telefonda
+`aacLc`. Opus/WebM tarayıcıların hep ürettiği biçim; `shared/audio`
+`audio/webm`'i zaten eşliyor ve OpenAI arayüzü webm'i destekliyor
+(ADR-0016). `recordingExtension` ve `recordingMediaType` de buna göre.
+
+Doğrulandı — gerçek tarayıcıda, record_web'in yazdığı tam dizeyle:
+`audio/webm; codecs=opus` destekli (boşluklu hali), sentetik akışla 6 parça
+ve 4898 bayt. `audio/opus` ve `audio/opus; codecs=opus` **desteksiz**, yani
+listenin ilki tutuyor.
+
+### Ve günlük artık iki hatayı ayırıyor
+
+`stop()` öncesi `isRecording()` soruluyor. "Çalışıyordu ama ses üretmedi" ile
+"zaten durmuştu" farklı satırlar; ikincisinde sebep `framework` kaynaklı
+satırda, çünkü `debugPrint` oraya akıyor.
