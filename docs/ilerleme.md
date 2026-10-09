@@ -1515,3 +1515,58 @@ yani hiçbir şey yapmıyordu.
    Katalogdaki 17 crew içinde Flutter olan yok. Expert'ler tek tek doğru
    (`flutter-mobile-engineer`, `dart-senior-architect` mevcut); eksik olan
    onları bir araya getiren crew. Forgeprint kataloğunda bir boşluk.
+
+---
+
+## 2026-10-09 — Flutter crew çekildi, iki üye daha kuruldu
+
+`flutter-app-crew` katalogda yayınlanmış (dün yoktu; crew sayısı 17 → 19,
+diğer yeni olan `android-app-crew`). npm'e yeni sürüm gerekmedi: yayınlanmış
+sunucu kataloğu çalışma anında
+`raw.githubusercontent.com/forgeprint/forgeprint/main/docs/index.json`'dan
+çekiyor, yani `main`'e giren crew doğrudan görünüyor.
+
+### Crew ne diyor
+
+- **üyeler**: `dart-senior-architect`, `flutter-mobile-engineer`,
+  `accessibility-specialist`, `qa-automation-lead`
+- **entegrasyon**: `mobile-mcp`
+- **not_for**: React Native (`mobile-app-crew`) veya native Android
+  (`android-app-crew`) değil; **sürüm işi değil** (o `release-crew`); backend
+  işi değil; tek ekran değil.
+
+Son iki madde bizim için doğru okuma: evomem'in Go tarafı bu crew'un dışında
+ve release zinciri zaten ayrı.
+
+### Kurulanlar
+
+`accessibility-specialist` ve `qa-automation-lead` → `.claude/skills/`.
+Crew'un dört üyesinden ikisi dün zaten kuruluydu. Toplam yedi expert, 388K.
+
+### Kurulmayan: `mobile-mcp` — gerekçesiyle
+
+Tarifi hazır ve pinli (`@mobilenext/mobile-mcp@1.0.5`, 2026-09-25'te
+doğrulanmış, telemetri kapalı). Kurulmadı, üç nedenle:
+
+1. **Sürecek bir şey yok.** `apps/mobile`'da Android/iOS derleme dosyaları
+   yok, yani simülatöre kurulacak bir uygulama üretilemiyor.
+2. **Örtüşme.** Bu oturumda zaten bir iOS Simulator aracı var.
+3. **Geniş yetki.** Kendi özetine göre makinedeki her simülatörü,
+   emülatörü ve USB ile bağlı cihazı sürüyor; ekranı okuyor, uygulama kurup
+   kaldırıyor, cihaz loglarını ve çökme raporlarını okuyor.
+
+Derleme dosyaları yazıldığında yeniden değerlendirilmeli.
+
+### İki bulgu
+
+1. **`recommend_experts` ifadeye çok duyarlı.** "Flutter app of more than one
+   screen: package boundaries..." (crew'un `for_what`'ına yakın) → crew'u
+   doğru buluyor ("names 23 of the things this crew is assembled for"). Ama
+   bu projeyi kendi sözlerimle tarif ettiğimde ("sqflite persistence, Riverpod
+   state, go_router, voice recording, widget ve accessibility testleri") crew
+   yerine üç expert dönüyor ve ikincisi **`android-mobile-engineer`** oluyor —
+   Flutter için yanlış. `get_crew` kusursuz çalışıyor; sorun eşleştirmede.
+2. **Bir indirme geçici olarak düştü.** `accessibility-specialist` ilk
+   denemede "No file SKILL.md" verdi; dosya raw URL'de 200 ve 10.9 KB olarak
+   duruyordu, ikinci deneme sorunsuz geçti. Yani kalıcı bir eksik değil,
+   geçici bir çekme hatası — sunucu bunu "dosya yok" diye bildiriyor.
