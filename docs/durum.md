@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-09 (on beşinci oturum) · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-09 (on altıncı oturum) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -59,10 +59,9 @@ docker compose run --rm sync
 Web <http://localhost:8080>, sunucu <http://localhost:8787>, PostgreSQL
 `127.0.0.1:5432`. Ayrıntı `docs/docker.md`'de.
 
-**Dikkat:** `compose.yaml`'da `server` servisinde `EVOMEM_POSTGRES_DSN` var
-ama **sunucu bugün onu okumuyor** — yalnızca `evomem sync` okuyor. Sunucu
-hâlâ volume'daki SQLite dosyasını tutuyor; PostgreSQL şimdilik ADR-0012'nin
-aynası. ADR-0028 bunu değiştiriyor, göç henüz başlamadı.
+Sunucu notlarını **PostgreSQL'de** tutuyor (ADR-0028, göç tamam). Volume'da
+yalnızca ses kayıtları var. `EVOMEM_STORE_DSN` notların yeri;
+`EVOMEM_POSTGRES_DSN` ise `evomem sync`'in ittiği ayna — iki ayrı şey.
 
 ## Komutlar
 
@@ -124,6 +123,11 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
   gördü (Bearer, model adı, system+user, `json_object`,
   `max_completion_tokens`, `max_tokens` yok) → üç not tek kümeye girdi.
   Uydurulmuş id düştü; anahtar veritabanında düz metin değil.
+- **Sunucu PostgreSQL'de, uçtan uca**: üç not `/ingest` ile yazıldı,
+  PostgreSQL'de 8 tablo ve notlar orada, sunucunun volume'unda SQLite dosyası
+  **yok**. Arama konteynerden gerçek depoya karşı: `veritabani` → `veritabanı`,
+  `dugum` → `düğüm`, `kilitlenmek` → hiçbir şey. `PUT` 200, `DELETE` 204,
+  mezar taşı düştü.
 - **Docker uçtan uca**: `db` + `server` + `web` ayakta, sunucu 12 ucu
   yayınladı, `/ingest` 201, `sync` notu PostgreSQL'e yazdı. Web konteyneri
   her dosyayı doğru içerik tipiyle servis etti; CORS izin verilen origin'e
@@ -185,14 +189,6 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    OpenAI-uyumlu `chat completions`'ı hedefliyor; Claude'u bu uçtan
    konuşturmak için önüne bir uyum katmanı gerekir. `Grouper` arayüzü buna
    kapalı değil (ADR-0027).
-
-1. **ADR-0028'in göçü: 4/5 aşama bitti.** Depo PostgreSQL'de tam çalışıyor,
-   arama dahil — SQLite'ta 117 geçiyor 0 atlanıyor, PostgreSQL'de 113
-   geçiyor 4 atlanıyor (hepsi tasarımı gereği SQLite'a özgü: WAL pragma'sı,
-   ADR-0004'ün tek yazıcısı, VACUUM, düşemeyen indeks). Kalan 5. aşama:
-   `core/sync` ile `evomem_notes`'un akıbeti, ve **sunucunun gerçekten
-   PostgreSQL'e çevrilmesi** — compose'daki `EVOMEM_POSTGRES_DSN` hâlâ
-   `serve` tarafından okunmuyor.
 
 2. **Tarayıcıda ses kaydı çalışmıyor.** `record`'un web desteği var ama kaydı
    yazdığımız yolu `path_provider` veriyor ve onun web uygulaması yok.

@@ -41,16 +41,18 @@ token is `EVOMEM_API_TOKEN`.
 
 ## What runs where
 
-**PostgreSQL is where the server's memory is going** (ADR-0028). It is not
-there yet: today the server keeps a SQLite file on its volume and
-`docker compose run --rm sync` pushes the notes into PostgreSQL, which is the
-mirror ADR-0012 describes. The container, the volume and the wiring are in
-place so that the migration changes what the server reads and not how any of
-this is run.
+**The server keeps its memory in PostgreSQL** (ADR-0028). Notes, search,
+clusters, the sealed connections and the tombstones all live there; the
+server's volume holds only the recordings, which are files a note stands for
+rather than rows.
 
-The phone keeps SQLite either way — that is the decision, not a stage — so it
-works with no network, and pressing sync on the phone pushes what it holds up
-to the server.
+The phone keeps SQLite so it works with no network, and pressing sync on the
+phone pushes what it holds up to the server.
+
+`EVOMEM_STORE_DSN` is where the notes live. It is **not**
+`EVOMEM_POSTGRES_DSN`, which means the mirror `evomem sync` pushes to — a
+different database in a different role. Compose sets the first and not the
+second.
 
 **`EVOMEM_SECRET_KEY` is worth keeping.** Losing it does not lose the notes,
 but every API token and model key entered in the panel becomes unreadable and
@@ -59,8 +61,8 @@ has to be entered again.
 ## Things to know
 
 ```bash
-docker compose logs -f server      # what it is serving, and what failed
-docker compose run --rm sync       # push what the server holds into PostgreSQL
+docker compose logs -f server                  # what it is serving, and what failed
+docker compose exec server evomem search -query x
 docker compose exec db psql -U evomem evomem
 docker compose down                # stop; the volumes stay
 docker compose down -v             # stop and delete the data

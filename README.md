@@ -61,9 +61,10 @@ docker compose up -d
 
 The web app on <http://localhost:8080>, the server on
 <http://localhost:8787>, PostgreSQL beside them — all published on loopback.
-The phone keeps SQLite so it works with no network and pushes one way into
-the server. PostgreSQL is where the server's own store is going (ADR-0028);
-today it holds the mirror, and the server still keeps a SQLite file.
+The server keeps its notes in PostgreSQL; the phone keeps SQLite so it works
+with no network and pushes one way into the server (ADR-0028). The command
+line and `evomem mcp` still use a file, so the binary stays one thing with no
+runtime.
 
 [docs/docker.md](docs/docker.md) has the rest.
 

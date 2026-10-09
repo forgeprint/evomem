@@ -51,16 +51,18 @@ services:
       # Exactly the origin the web service is published on. A browser page
       # served from anywhere else is refused.
       EVOMEM_CORS_ORIGIN: ${EVOMEM_CORS_ORIGIN:-http://localhost:8080}
-      # Set here, and today the server does not read it: only `evomem sync`
-      # does. It becomes the server's own store when ADR-0028's migration
-      # lands, and until then the server keeps its SQLite file on the volume
-      # below. Said plainly rather than left looking finished.
-      EVOMEM_POSTGRES_DSN: postgres://${POSTGRES_USER:-evomem}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-evomem}?sslmode=disable
+      # Where the notes live (ADR-0028). Not EVOMEM_POSTGRES_DSN, which
+      # means the mirror sync pushes to — a different database in a
+      # different role, and one name for both would be a mistake nobody
+      # could see.
+      EVOMEM_STORE_DSN: postgres://${POSTGRES_USER:-evomem}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-evomem}?sslmode=disable
       EVOMEM_TELEGRAM_SECRET: ${EVOMEM_TELEGRAM_SECRET:-}
       EVOMEM_TELEGRAM_PROJECT: ${EVOMEM_TELEGRAM_PROJECT:-}
       EVOMEM_JIRA_SECRET: ${EVOMEM_JIRA_SECRET:-}
       EVOMEM_JIRA_PROJECT: ${EVOMEM_JIRA_PROJECT:-}
     volumes:
+      # The recordings. The notes are in PostgreSQL now; what still belongs
+      # beside the process is the audio a note stands for (ADR-0018).
       - server-data:/data
     ports:
       - "127.0.0.1:${EVOMEM_PORT:-8787}:8787"
@@ -81,23 +83,6 @@ services:
     ports:
       - "127.0.0.1:${WEB_PORT:-8080}:80"
 
-  # Pushes what the server holds into PostgreSQL. Run on demand:
-  #   docker compose run --rm sync
-  # It is not a long-running service because sync is something somebody
-  # asks for, the same rule the pull connectors follow (ADR-0025).
-  sync:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.server
-    profiles: ["tools"]
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      EVOMEM_POSTGRES_DSN: postgres://${POSTGRES_USER:-evomem}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-evomem}?sslmode=disable
-    volumes:
-      - server-data:/data
-    command: ["sync", "-once", "-init-remote"]
 
 volumes:
   db-data:

@@ -79,7 +79,12 @@ tell a model so. endorse is how a person says they have read one and stand
 behind it: the mark goes, the note records that it was there, and a machine
 transcription stays marked as one. It cannot be undone.
 
-The store is $EVOMEM_DB, or ~/.evomem/evomem.db.
+The store is $EVOMEM_DB, or ~/.evomem/evomem.db. With $EVOMEM_STORE_DSN set
+it is that PostgreSQL instead, which is how the server runs; the file is what
+a laptop uses, so the binary stays one thing with no runtime (ADR-0028).
+
+$EVOMEM_STORE_DSN is not $EVOMEM_POSTGRES_DSN. The first is where the notes
+live; the second is the mirror sync pushes them to.
 
 serve reads its secrets from the environment, never from a flag:
   EVOMEM_API_TOKEN        bearer token for POST /ingest
@@ -445,8 +450,17 @@ func cmdMCP(args []string, out io.Writer, in io.Reader) error {
 	return server.Serve(in, out)
 }
 
+// storeDSNEnv names the PostgreSQL the store lives in.
+//
+// Deliberately not EVOMEM_POSTGRES_DSN, which already means something else:
+// the mirror core/sync pushes notes into (ADR-0012). Two different databases
+// in two different roles, and one name for both would be a configuration
+// mistake nobody could see — a laptop mirroring its notes into the server's
+// store, or a server mirroring its store into itself.
+const storeDSNEnv = "EVOMEM_STORE_DSN"
+
 func openStore() (*database.DB, error) {
-	db, err := database.Open(storePath())
+	db, err := openBackend()
 	if err != nil {
 		return nil, err
 	}
@@ -456,6 +470,18 @@ func openStore() (*database.DB, error) {
 	// a command that forgot to wire it up would quietly break that.
 	db.SetFiles(recordings())
 	return db, nil
+}
+
+// openBackend picks the store this process talks to (ADR-0028).
+//
+// A DSN means PostgreSQL, which is what the server in Docker has. Nothing
+// means the SQLite file, which is what a laptop running `evomem mcp` or
+// `evomem add` has, and what keeps that a single binary with no runtime.
+func openBackend() (*database.DB, error) {
+	if dsn := os.Getenv(storeDSNEnv); dsn != "" {
+		return database.OpenPostgres(context.Background(), dsn)
+	}
+	return database.Open(storePath())
 }
 
 func storePath() string {

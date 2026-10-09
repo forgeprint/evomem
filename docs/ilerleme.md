@@ -2483,3 +2483,47 @@ ADR-0003'e değişiklik notu düşüldü: `ı` katlaması artık arka uca bağl�
 bitmiş durumda**: hepsinin testi PostgreSQL'de geçiyor. Kalan tek aşama 5 —
 `core/sync` ve `evomem_notes`'un akıbeti, ve sunucunun gerçekten
 PostgreSQL'e çevrilmesi.
+
+
+## On altıncı oturum — göçün 5. aşaması: sunucu PostgreSQL'de
+
+Göç bitti. Sunucu notlarını PostgreSQL'de tutuyor.
+
+### Bir ayrım yapıldı
+
+`EVOMEM_STORE_DSN` **notların yaşadığı yer**. `EVOMEM_POSTGRES_DSN` ise
+`evomem sync`'in ittiği ayna (ADR-0012). İkisine aynı adı vermek,
+kimsenin göremeyeceği bir yapılandırma hatası olurdu: bir dizüstünün
+notlarını sunucunun deposuna aynalaması, ya da sunucunun deposunu kendi
+içine aynalaması.
+
+Aynı sebeple compose'daki `sync` servisi **kaldırıldı**: depo o PostgreSQL
+olunca, o servis bir veritabanını kendisine aynalamak olurdu.
+
+Depo çalışma zamanında seçiliyor: DSN varsa PostgreSQL, yoksa SQLite dosyası.
+Dizüstünde `evomem mcp` ve `evomem add` dosyayla çalışmaya devam ediyor —
+ADR-0001'in aldığı "tek ikili, çalışma zamanı yok" orada duruyor.
+
+### Doğrulandı, çalıştırılarak
+
+`docker compose up -d` → üçü de healthy. Üç not `POST /ingest` ile yazıldı,
+**PostgreSQL'de 8 tablo** (notes, clusters, cluster_notes, connections,
+deletions, proposals, meta, sync_state) ve notlar orada. Sunucunun
+volume'unda **SQLite dosyası yok** — `/data` boş.
+
+Arama konteynerin içinden, gerçek depoya karşı:
+
+- `veritabani` → `veritabanı`'yı buldu (PostgreSQL `ı`'yı katlıyor)
+- `dugum` → `düğüm`'ü buldu (aksanlar)
+- `locking` → İngilizce notu buldu
+- `kilitlenmek` → **hiçbir şey** (gövdeleme yok, ADR-0003'te yazdığı gibi)
+- Snippet `[düğüm]`, skor pozitif ve büyük-daha-iyi
+
+HTTP tarafı: `GET /notes` ve `GET /clusters` 200 ve CORS başlığıyla;
+`PUT /notes/{id}` 200, `DELETE` 204 ve mezar taşı PostgreSQL'e düştü.
+
+### Geriye kalan
+
+`core/sync` ve `evomem_notes` olduğu gibi duruyor: bir dizüstünün yerel
+SQLite'ını uzak bir PostgreSQL'e aynalaması hâlâ anlamlı, ve sunucunun
+deposuyla karışmıyor çünkü artık iki ayrı değişken.

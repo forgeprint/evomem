@@ -116,4 +116,4 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 - [x] 2. PostgreSQL şeması ve migration'ları, suite iki arka uca karşı
 - [x] 3. Arama: `tsvector` + GIN, ADR-0003'ün davranışıyla kıyaslanarak
 - [x] 4. Kümeler, bağlantılar, öneriler, mezar taşları (3. aşamayla birlikte geçti)
-- [ ] 5. `core/sync` ve `evomem_notes`'un akıbeti
+- [x] 5. Sunucu PostgreSQL'de; `core/sync` ve `evomem_notes` ayna olarak kaldı
