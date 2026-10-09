@@ -1,4 +1,5 @@
 import 'package:evomem_mobile/src/clusters/cluster_providers.dart';
+import 'package:evomem_mobile/src/log/log.dart';
 import 'package:evomem_mobile/src/sources/source_connection.dart';
 import 'package:evomem_mobile/src/sources/source_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,9 +16,23 @@ final sourceServiceProvider = FutureProvider<SourceService>((ref) async {
 
 /// What is connected, asked each time rather than kept in step: connections
 /// live on the server and nowhere else.
+///
+/// Both ends of the request are written down. A screen that sits on a
+/// spinner says nothing about which address it is waiting on, and a stored
+/// setting that points at a server which has moved looks exactly like one
+/// that is slow.
 final sourceConnectionsProvider = FutureProvider<List<SourceConnection>>((
   ref,
 ) async {
   final service = await ref.watch(sourceServiceProvider.future);
-  return await service.list();
+  final log = ref.read(logbookProvider.notifier);
+  try {
+    log.info('panel', 'asking ${service.serverUrl}/connections');
+    final connections = await service.list();
+    log.info('panel', '${connections.length} connection(s)');
+    return connections;
+  } on Object catch (e) {
+    log.error('panel', 'could not list the connections', e);
+    rethrow;
+  }
 });

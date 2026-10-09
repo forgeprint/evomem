@@ -1,5 +1,6 @@
 import 'package:evomem_mobile/src/clusters/cluster.dart';
 import 'package:evomem_mobile/src/clusters/cluster_service.dart';
+import 'package:evomem_mobile/src/log/log.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -41,5 +42,15 @@ final clusterServiceProvider = FutureProvider<ClusterService>((ref) async {
 /// kept in step (ADR-0024).
 final clustersProvider = FutureProvider<List<Cluster>>((ref) async {
   final service = await ref.watch(clusterServiceProvider.future);
-  return await service.list(projectId: ref.watch(currentProjectProvider));
+  final project = ref.watch(currentProjectProvider);
+  final log = ref.read(logbookProvider.notifier);
+  try {
+    log.info('groups', 'asking ${service.serverUrl}/clusters for $project');
+    final clusters = await service.list(projectId: project);
+    log.info('groups', '${clusters.length} group(s)');
+    return clusters;
+  } on Object catch (e) {
+    log.error('groups', 'could not list the groups', e);
+    rethrow;
+  }
 });

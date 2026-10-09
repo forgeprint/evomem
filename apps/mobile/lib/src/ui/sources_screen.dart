@@ -4,6 +4,7 @@ import 'package:evomem_mobile/src/sources/source_providers.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
 import 'package:evomem_mobile/src/ui/clusters_screen.dart'
     show explainClusterProblem;
+import 'package:evomem_mobile/src/ui/waiting_on_server.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -147,7 +148,7 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
         ],
       ),
       body: connections.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const WaitingOnServer(),
         error: (error, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),

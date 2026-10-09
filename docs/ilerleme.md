@@ -2849,3 +2849,46 @@ olurdu ve orası yanlış yer (ADR-0010).
 Derlenmiş sunucuya karşı: yükleme 204, geri okuma **200** +
 `Content-Type: audio/webm` + `Cache-Control: no-store`, token'sız **401**,
 sesi olmayan notta **404**. CORS başlıkları izin verilen origin'e veriliyor.
+
+## Yirmi ikinci oturum — "Sources ve Groups loading'de kalıyor"
+
+İkisi de bende sorunsuz yükleniyor: ayarları panele girip denedim, Sources
+bağlantı listesini, Groups "henüz gruplanmamış" mesajını gösterdi. Sunucu da
+hızlı — `/connections`, `/clusters`, `/notes` hepsi 10 ms altında 200.
+
+Yani sorun yapılandırmada, ve **uygulamanın bunu söylemesi gerekiyordu.**
+
+### Yine yanlış bir teşhisi ölçerek eledim
+
+`debugPrint`'i günlüğe bağlamıştım; günlük `state` yazıyor. Bir sağlayıcı
+**inşa edilirken** `debugPrint` olursa — ki sqflite'ın web fabrikası tam
+bunu yapıyor — Riverpod buna izin vermiyor. Test ettim, gerçekten patlıyor:
+
+```
+_AssertionError: Providers are not allowed to modify other providers
+during their initialization.
+```
+
+Ama bu bir **assert**, yani release derlemede kapalı — kullanıcının gördüğü
+takılma bu değil. Kaynağa bakıp doğruladım: `_debugAssertNotificationAllowed`
+yalnızca assert içeriyor. Teşhisi attım.
+
+### Gerçek bir tuzak bulundu
+
+`EVOMEM_CORS_ORIGIN` yalnızca `http://localhost:8080`'e izin veriyordu.
+Tarayıcı `localhost` ile `127.0.0.1`'i **ayrı origin** sayar: uygulamayı
+`127.0.0.1:8080`'den açan biri için her istek sessizce düşerdi. İkisi de
+izinli artık; joker hâlâ yok. Doğrulandı: iki yazım da
+`Access-Control-Allow-Origin` alıyor, `https://evil.example` almıyor.
+
+### Ve ekran artık konuşuyor
+
+- Dönen çark beklediği **adresi yazıyor**. Çıplak bir çark, sunucu yavaş
+  mı, taşınmış mı, hiç ayarlanmamış mı — üçünde de aynı resim; ayırt eden
+  şey tam olarak kayıtlı adres.
+- `/connections` ve `/clusters` isteklerinin **iki ucu da** günlüğe
+  yazılıyor: ne sorulduğu ve ne geldiği.
+
+En olası sebep: uygulamada kayıtlı sunucu adresi **eski bir port**. Önceki
+oturumlarda 8794 ve 8797 kullanılmıştı; compose 8787'de. O adrese giden
+istek, zaman aşımına kadar döner.

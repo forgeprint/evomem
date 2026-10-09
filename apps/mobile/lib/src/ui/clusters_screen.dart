@@ -2,6 +2,7 @@ import 'package:evomem_mobile/src/clusters/cluster.dart';
 import 'package:evomem_mobile/src/clusters/cluster_providers.dart';
 import 'package:evomem_mobile/src/clusters/cluster_service.dart';
 import 'package:evomem_mobile/src/routing/routes.dart';
+import 'package:evomem_mobile/src/ui/waiting_on_server.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -43,7 +44,7 @@ class ClustersScreen extends ConsumerWidget {
         ],
       ),
       body: clusters.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const WaitingOnServer(),
         error: (error, _) => _Explanation(
           message: error is ClusterFailure
               ? explainClusterProblem(error.problem)

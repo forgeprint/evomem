@@ -48,9 +48,10 @@ services:
       EVOMEM_API_TOKEN: ${EVOMEM_API_TOKEN:?set EVOMEM_API_TOKEN in .env}
       EVOMEM_SECRET_KEY: ${EVOMEM_SECRET_KEY:?set EVOMEM_SECRET_KEY in .env}
       EVOMEM_PROJECT: ${EVOMEM_PROJECT:-default}
-      # Exactly the origin the web service is published on. A browser page
-      # served from anywhere else is refused.
-      EVOMEM_CORS_ORIGIN: ${EVOMEM_CORS_ORIGIN:-http://localhost:8080}
+      # The origins the web service is published on, and no others. Both
+      # spellings of this machine, because a browser treats localhost and
+      # 127.0.0.1 as different origins and the app is reachable at either.
+      EVOMEM_CORS_ORIGIN: ${EVOMEM_CORS_ORIGIN:-http://localhost:8080,http://127.0.0.1:8080}
       # Where the notes live (ADR-0028). Not EVOMEM_POSTGRES_DSN, which
       # means the mirror sync pushes to — a different database in a
       # different role, and one name for both would be a mistake nobody
