@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-08 (dördüncü oturum) · Son commit: `a3fe900` · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-09 (dokuzuncu oturum) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -33,7 +33,8 @@ shared/database    tek yazıcılı iki havuz, FTS5 arama, delta izleme,
                    tombstone, öneriler, kümeler, arşivleme
 core/mcp           stdio JSON-RPC, 10 araç (6 okur, 1 önerir, 3 gruplar)
 core/api           POST /ingest, /ingest/audio, PUT + DELETE /notes/{id},
-                   GET /notes + /clusters, CORS, Telegram ve Jira webhook'ları
+                   GET /notes + /clusters, /connections (panel), CORS,
+                   Telegram ve Jira webhook'ları
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
 cmd/evomem         19 alt komut (mcp, serve, pull, restore, transcribe, endorse dahil)
 apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
@@ -93,12 +94,17 @@ evomem pull-sources                   # bağlı kaynakların API'sinden çek
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler — 84 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler — 92 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
   sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve
   detayında notları kaynaklarıyla (`jira`, `mobile`) gösterdi. Ayarlar
   arayüzden girildi, CORS gerçek tarayıcıda çalıştı.
+- **Panel uçtan uca, tarayıcıda**: Jira panelden bağlandı (201), liste onu
+  gösterdi, "Sync now" `POST /connections/pull` attı (200), sahte Jira iki
+  sayfa gördü (ilk istekte `nextPageToken` yok, ikincide `page-2`), iki issue
+  `origin: jira` + `tainted` not oldu. API token alanı gönderimden sonra
+  temizlendi; token hiçbir okuma ucundan geri dönmüyor.
 - **`remote_id`**: yerel bir HTTP sunucusuna karşı; dönen id saklanıyor,
   `updated_at` oynamıyor, ikinci push hiç istek atmıyor, yarıda kalan batch
   tekrarlandığında yalnızca eksik notu gönderiyor. v3→v4 migration gerçek bir
@@ -144,9 +150,10 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-0. **Panel yok.** Bağlantılar komut satırından kuruluyor; "web'de sync'e bas"
-   için bir arayüz ve bunu tetikleyen bir endpoint gerekiyor. Sunucu tarafı
-   model API anahtarı (ADR-0023'ün değişikliği) da aynı keyring'e oturacak.
+0. **Sunucu tarafı model anahtarı yok.** Panel bir kaynağı bağlıyor ama
+   kümelemeyi yapacak modelin anahtarını henüz almıyor; ADR-0023'ün
+   değişikliği aynı keyring'e (`connections`, mühürlü) oturacak. "Panelden
+   girdiğim yapay zekâ API'si" cümlesinin kalan yarısı bu.
 
 1. **Uygulama tek projeye sabit.** `currentProjectProvider` her zaman
    `default` dönüyor, yani başka bir projedeki notlar ve kümeler arayüzde
@@ -176,6 +183,13 @@ her açılışta sunucuya soruluyor (ADR-0024). Yapılandırılmamış / ulaşı
 okunamayan durumları ayrı ayrı açıklanıyor, çünkü boş ekranın üç ayrı anlamı
 var. Detayda her notun **kaynağı** ve işaretleri (dışarıdan, makine dökümü,
 onaylı) gösteriliyor.
+
+**Panel tamam** (ADR-0026): bir kaynak artık tarayıcıdan bağlanıyor ve sync
+tarayıcıdan tetikleniyor. Dört uç — `GET/POST /connections`,
+`DELETE /connections/{id}`, `POST /connections/pull` — hepsi aynı token'ın
+arkasında. Uygulamada `/sources` ekranı: kaynak listesi, Jira formu,
+"Sync now". **Mühürlü sır tarayıcıya hiç dönmüyor**; okuma uçları yalnızca
+adı, adresi ve son durumu veriyor.
 
 **Çekme bağlayıcıları tamam** (ADR-0025): `evomem connect` bir kaynağı
 bağlıyor, `evomem pull-sources` onların API'sini çağırıyor. İlk bağlayıcı

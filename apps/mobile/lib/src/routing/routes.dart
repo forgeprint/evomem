@@ -58,6 +58,18 @@ class SyncStatusRoute {
   String get location => path;
 }
 
+/// The sources the server pulls from.
+class SourcesRoute {
+  /// Creates the route to the panel's sources screen.
+  const new();
+
+  /// The pattern `GoRouter` matches on.
+  static const String path = '/sources';
+
+  /// Where to send `context.go`.
+  String get location => path;
+}
+
 /// The groupings the server made over this project's notes.
 class ClustersRoute {
   /// Creates the route to the list of groupings.

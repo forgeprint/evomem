@@ -2103,3 +2103,46 @@ Test anahtarı sabiti (`const testKey = "0123..."`) gerçekten anahtar
 çıkardım: `strings.Repeat("evomem-test-key-", 2)`. Yüksek entropili bir
 literal, bir tarayıcı için de bir okuyucu için de sızdırılmış olandan
 ayırt edilemez.
+
+## Dokuzuncu oturum — panel (ADR-0026)
+
+Bağlantılar bugüne kadar yalnızca komut satırından kuruluyordu. İstenen
+cümle şuydu: "panelden girdiğim yapay zeka api si". Bunun önkoşulu, bir
+kaynağı **tarayıcıdan** bağlayabilmek ve **tarayıcıdan** sync'e basabilmek.
+
+### Ne yazıldı
+
+Sunucu (`core/api/connections.go`): `GET /connections` bağlı kaynakları
+listeler, `POST /connections` bir tanesini bağlar, `DELETE /connections/{id}`
+koparır, `POST /connections/pull` çekme koşusunu tetikler. Hepsi aynı
+token'ın arkasında; `Config.SecretKey` ve `Config.Pull` ile bağlandı.
+
+Uygulama (`lib/src/sources/`, `lib/src/ui/sources_screen.dart`): kaynak
+listesi, Jira bağlama formu ve "Sync now". `/sources` rotası, uygulama
+çubuğundan giriliyor.
+
+### Kararlar
+
+- **Token tarayıcıya hiç dönmüyor.** Liste uçları bağlantının adını, adresini
+  ve son durumunu veriyor; mühürlü sır sunucuda kalıyor. Form alanı
+  gönderildikten sonra temizleniyor — ekranda duran bir sır, ekranda duran
+  bir sırdır.
+- **Çekme koşusu bir uç, bir zamanlayıcı değil.** ADR-0025'teki gerekçe
+  aynen geçerli: düğmeye basan biri var.
+
+### Doğrulama
+
+- Go: `./scripts/ci.sh` tam yeşil (gofmt, vet, test, beş hedefte cgo'suz
+  derleme, gitleaks "no leaks found")
+- Flutter: 92 test, `analyze` temiz
+- **Uçtan uca, gerçek tarayıcıda, derlenmiş ikiliyle**: panelden Jira
+  bağlandı (201), liste onu gösterdi, "Sync now" `POST /connections/pull`
+  attı (200), sahte Jira **iki sayfa** gördü — ilk istekte `nextPageToken`
+  **yok**, ikincide `page-2` var — ve iki issue not oldu
+  (`origin: jira`, `tainted`).
+
+### Kendi hatam
+
+"0 not" diye bir ara sonuç okudum; yanlış veritabanı yoluna bakıyordum.
+Çekme zaten çalışmıştı. Araç çıktısının hangi dosyadan geldiğini kontrol
+etmeden sonuç çıkarmak, testin kendisini boşa düşürüyor.

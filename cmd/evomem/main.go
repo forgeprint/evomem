@@ -83,6 +83,7 @@ serve reads its secrets from the environment, never from a flag:
   EVOMEM_JIRA_PROJECT     overrides the issue's own project key
   EVOMEM_ADDR             address to listen on
   EVOMEM_CORS_ORIGIN      origins a browser may call from; unset allows none
+  EVOMEM_SECRET_KEY       32 bytes; what seals the tokens the panel stores
 
 connect and pull-sources are the other direction of sync: a source somebody
 else owns is pulled by calling their API, rather than waiting for a webhook.

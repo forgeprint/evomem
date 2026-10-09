@@ -106,5 +106,5 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 ## Plan dışı: kaynak bağlayıcıları
 - [x] Çekme bağlayıcısı modeli + mühürlü kimlik bilgileri (şema 5) → ADR-0025
 - [x] Jira bağlayıcısı (`/rest/api/3/search/jql`, nextPageToken)
-- [ ] Panel: bağlantıları arayüzden kurma ve "sync" düğmesi
+- [x] Panel: bağlantıları arayüzden kurma ve "sync" düğmesi (ADR-0026)
 - [ ] Sunucu tarafı model API anahtarı (ADR-0023'ün değişikliği) — aynı keyring

@@ -9,6 +9,8 @@ import (
 	"os"
 
 	"github.com/forgeprint/evomem/core/api"
+	"github.com/forgeprint/evomem/core/connect"
+	"github.com/forgeprint/evomem/shared/database"
 )
 
 // cmdServe starts the HTTP server.
@@ -35,7 +37,14 @@ func cmdServe(args []string, out io.Writer) error {
 		JiraSecret:           os.Getenv("EVOMEM_JIRA_SECRET"),
 		JiraProject:          os.Getenv("EVOMEM_JIRA_PROJECT"),
 		CORSOrigins:          os.Getenv("EVOMEM_CORS_ORIGIN"),
-		Recordings:           recordings(),
+		SecretKey:            os.Getenv("EVOMEM_SECRET_KEY"),
+		Pull: func(ctx context.Context, key database.SecretKey) (connect.Result, error) {
+			// The panel asks; this is where the connectors are named.
+			return connect.Run(ctx, db, key, map[string]connect.Puller{
+				"jira": connect.NewJiraPuller(),
+			}, io.Discard)
+		},
+		Recordings: recordings(),
 	}
 
 	server, err := api.New(db, cfg)

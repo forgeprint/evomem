@@ -19,6 +19,7 @@ import (
 
 	"github.com/forgeprint/evomem/core/api/adapters/jira"
 	"github.com/forgeprint/evomem/core/api/adapters/telegram"
+	"github.com/forgeprint/evomem/shared/database"
 	"github.com/forgeprint/evomem/shared/models"
 )
 
@@ -101,6 +102,16 @@ type Config struct {
 	// serves somebody's memory to `*` is one any page they visit can read.
 	CORSOrigins string
 
+	// SecretKey seals the tokens the panel stores. Empty means the panel
+	// can list and forget connections but cannot add one, and cannot pull:
+	// without the key the stored tokens are unreadable (ADR-0025).
+	SecretKey string
+
+	// Pull runs every connection. Injected so this package does not import
+	// the connectors: the panel's job is to ask, not to know how Jira
+	// works. Nil means this server cannot pull.
+	Pull PullFunc
+
 	// Recordings is where POST /ingest/audio puts an upload. Nil means
 	// that endpoint is not served at all: there is nowhere to put a
 	// recording, and ADR-0018 keeps recordings only on the condition that
@@ -110,11 +121,13 @@ type Config struct {
 
 // Server is the HTTP entrypoint.
 type Server struct {
-	http       *http.Server
-	store      Store
-	reader     Reader
-	recordings Recordings
-	cfg        Config
+	http        *http.Server
+	store       Store
+	reader      Reader
+	connections Connections
+	recordings  Recordings
+	puller      PullFunc
+	cfg         Config
 
 	// routes is what was actually served, for the caller to report. A
 	// silently missing endpoint is the failure this makes visible.
@@ -141,6 +154,10 @@ func New(store Store, cfg Config) (*Server, error) {
 	if reader, ok := store.(Reader); ok {
 		s.reader = reader
 	}
+	if connections, ok := store.(Connections); ok {
+		s.connections = connections
+	}
+	s.puller = cfg.Pull
 	mux := http.NewServeMux()
 
 	// Unauthenticated on purpose, and says nothing but that the process is
@@ -168,6 +185,18 @@ func New(store Store, cfg Config) (*Server, error) {
 		// The read side (ADR-0024). Only when the store can answer: every
 		// caller passes a *database.DB, and a store that cannot read is a
 		// test double that should not advertise routes it has not got.
+		// The panel (ADR-0026). The one route set that holds other
+		// people's credentials.
+		if s.connections != nil {
+			mux.Handle("GET /connections", s.authenticated(http.HandlerFunc(s.handleListConnections)))
+			mux.Handle("POST /connections", s.authenticated(http.HandlerFunc(s.handleConnect)))
+			mux.Handle("DELETE /connections/{id}", s.authenticated(http.HandlerFunc(s.handleForget)))
+			mux.Handle("POST /connections/pull", s.authenticated(http.HandlerFunc(s.handlePull)))
+			s.routes = append(s.routes,
+				"GET /connections", "POST /connections",
+				"DELETE /connections/{id}", "POST /connections/pull")
+		}
+
 		if s.reader != nil {
 			mux.Handle("GET /notes", s.authenticated(http.HandlerFunc(s.handleListNotes)))
 			mux.Handle("GET /clusters", s.authenticated(http.HandlerFunc(s.handleListClusters)))
@@ -316,4 +345,9 @@ func readBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 		return nil, false
 	}
 	return data, true
+}
+
+// secretKey reads the key the panel seals tokens with.
+func (s *Server) secretKey() (database.SecretKey, error) {
+	return database.ParseSecretKey(s.cfg.SecretKey)
 }
