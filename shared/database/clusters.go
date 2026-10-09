@@ -86,7 +86,7 @@ func (d *DB) CreateCluster(ctx context.Context, c *Cluster, noteIDs []string) er
 //
 // A note that does not exist is refused by the foreign key rather than
 // silently stored, so a cluster can never name something that is not there.
-func addMembers(ctx context.Context, tx *sql.Tx, clusterID string, noteIDs []string, at time.Time) error {
+func addMembers(ctx context.Context, tx *txn, clusterID string, noteIDs []string, at time.Time) error {
 	for _, raw := range noteIDs {
 		noteID, err := models.NormalizeULID(raw)
 		if err != nil {

@@ -27,8 +27,8 @@ import (
 // turns contention into waiting inside the process instead of an error coming
 // back out of it.
 type DB struct {
-	write *sql.DB
-	read  *sql.DB
+	write pool
+	read  pool
 	path  string
 
 	// files removes a note's recording when the note goes. Nil when
@@ -114,7 +114,11 @@ func Open(path string) (*DB, error) {
 	}
 	read.SetMaxOpenConns(max(4, runtime.NumCPU()))
 
-	db := &DB{write: write, read: read, path: path}
+	db := &DB{
+		write: pool{DB: write, dialect: dialectSQLite},
+		read:  pool{DB: read, dialect: dialectSQLite},
+		path:  path,
+	}
 	if err := db.migrate(context.Background()); err != nil {
 		db.Close()
 		return nil, err
@@ -152,7 +156,11 @@ func OpenMemory() (*DB, error) {
 	}
 	read.SetMaxOpenConns(4)
 
-	db := &DB{write: write, read: read, path: ":memory:"}
+	db := &DB{
+		write: pool{DB: write, dialect: dialectSQLite},
+		read:  pool{DB: read, dialect: dialectSQLite},
+		path:  ":memory:",
+	}
 	if err := db.migrate(context.Background()); err != nil {
 		db.Close()
 		return nil, err

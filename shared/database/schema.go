@@ -213,7 +213,7 @@ func (d *DB) migrate(ctx context.Context) error {
 // nothing to do here for either. The slots exist so that the next version has
 // an obvious place, and so that the version number and the steps cannot drift
 // apart silently.
-var migrations = []func(context.Context, *sql.Tx) error{
+var migrations = []func(context.Context, *txn) error{
 	nil,            // 1 -> 2
 	nil,            // 2 -> 3
 	addClusters,    // 3 -> 4
@@ -221,7 +221,7 @@ var migrations = []func(context.Context, *sql.Tx) error{
 }
 
 // addConnections creates the table ADR-0025 introduced.
-func addConnections(ctx context.Context, tx *sql.Tx) error {
+func addConnections(ctx context.Context, tx *txn) error {
 	for _, statement := range []string{
 		`CREATE TABLE IF NOT EXISTS connections (
 			id             TEXT PRIMARY KEY,
@@ -249,7 +249,7 @@ func addConnections(ctx context.Context, tx *sql.Tx) error {
 // addClusters creates the tables ADR-0023 introduced. The statements are the
 // ones in schemaSQL, so a store created at 4 and one upgraded to it are the
 // same store.
-func addClusters(ctx context.Context, tx *sql.Tx) error {
+func addClusters(ctx context.Context, tx *txn) error {
 	for _, statement := range []string{
 		`CREATE TABLE IF NOT EXISTS clusters (
 			id         TEXT PRIMARY KEY,

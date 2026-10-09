@@ -358,7 +358,7 @@ func (d *DB) Archive(ctx context.Context, opts ArchiveOptions) (ArchiveResult, e
 }
 
 // archiveNotes removes old notes, holding back any the far end has not seen.
-func (d *DB) archiveNotes(ctx context.Context, tx *sql.Tx, cutoff string,
+func (d *DB) archiveNotes(ctx context.Context, tx *txn, cutoff string,
 	opts ArchiveOptions, result *ArchiveResult) error {
 
 	where, args := archiveWhere(cutoff, opts.ProjectID)
@@ -428,7 +428,7 @@ func (d *DB) archiveNotes(ctx context.Context, tx *sql.Tx, cutoff string,
 // An unsynced tombstone is kept whatever IncludeUnsynced says. Dropping one
 // would leave the cloud copy of a note the user deleted in place forever,
 // with nothing anywhere to say it should go.
-func (d *DB) archiveTombstones(ctx context.Context, tx *sql.Tx, cutoff string, result *ArchiveResult) error {
+func (d *DB) archiveTombstones(ctx context.Context, tx *txn, cutoff string, result *ArchiveResult) error {
 	cursor, err := d.Cursor(ctx, CursorDeletions)
 	if err != nil {
 		return err
@@ -466,7 +466,7 @@ func archiveWhere(cutoff, projectID string) (string, []any) {
 // A pending proposal is never removed, whatever its age and whatever
 // IncludeUnsynced says. Nobody has looked at it, and a review queue that
 // quietly drops its oldest entries is worse than one that is long.
-func (d *DB) archiveProposals(ctx context.Context, tx *sql.Tx, cutoff string, result *ArchiveResult) error {
+func (d *DB) archiveProposals(ctx context.Context, tx *txn, cutoff string, result *ArchiveResult) error {
 	res, err := tx.ExecContext(ctx,
 		`DELETE FROM proposals WHERE status != ? AND decided_at IS NOT NULL AND decided_at < ?`,
 		ProposalPending, cutoff)

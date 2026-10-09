@@ -2336,3 +2336,41 @@ Göç kararı yazıldı. İki şey kaydedildi, çünkü ikisi de bedel:
   aynı değil — sonradan biri farkı hata sanmasın diye yazıldı.
 
 Göç beş aşamaya bölündü; henüz hiçbiri yapılmadı.
+
+
+## On üçüncü oturum — göçün 1. aşaması: lehçe
+
+ADR-0028'in ilk adımı: `shared/database` artık iki SQL'i ayırt edebiliyor.
+**Hiçbir davranış değişmedi** — amacı buydu.
+
+### Ne yazıldı
+
+- `dialect` tipi ve `rewritePlaceholders`. Bu paketin her sorgusu `?` ile
+  yazılı; PostgreSQL `$1`, `$2` istiyor — numaralı, yani ikame değil sayma.
+  Tek yerde yapılması karar: yer tutucu, **her** ifadeye dokunan tek fark, ve
+  yalnızca `?`'lerinde ayrışan elli sorgunun iki kopyası, birini değiştirip
+  diğerini unutmak için elli fırsattır.
+- `pool` ve `txn` sarmalayıcıları: `*sql.DB` ve `*sql.Tx` gömülü, sorgu
+  taşıyan üç metot gölgeleniyor. Elli küsur çağrı yeri **hiç değişmedi** —
+  hâlâ `?` yazıyor, hâlâ `ExecContext` çağırıyor.
+- `BeginTx` artık `*txn` döndürüyor, `*sql.Tx` değil: bir işlem içindeki
+  ifade, eline verilen handle'ı kullanarak yeniden yazımı sessizce atlayamasın
+  diye.
+
+### Davranışsal test yazamadım, ve nedenini ölçtüm
+
+SQLite `$1`'i geçerli bir **adlandırılmış parametre** olarak kabul ediyor ve
+sürücü konumsal bağlıyor — denedim: PostgreSQL için yeniden yazılmış bir
+sorgu SQLite'a karşı da doğru koşuyor. Yani suite, kablolanmış bir yeniden
+yazıcıyı kablolanmamış olandan ayırt edemez.
+
+O yüzden korumayı gerçek riske koydum: yeni bir çağrı yerinin sarmalayıcıyı
+atlaması. `TestNothingBypassesTheRewriting` üretim dosyalarını tarıyor ve
+gömülü handle'a doğrudan uzanan her şeyi (`d.write.DB.ExecContext`,
+`tx.Tx.ExecContext`, …) reddediyor. **Testin düşebildiği kanıtlandı**:
+`notes.go`'ya bilerek bir `.DB.QueryContext` koyuldu, test kırmızıya döndü,
+geri alındı.
+
+### Sırada
+
+2. aşama: PostgreSQL şeması ve migration'ları, suite iki arka uca karşı.

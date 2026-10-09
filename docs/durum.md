@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-09 (on ikinci oturum) · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-09 (on üçüncü oturum) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -186,10 +186,10 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    konuşturmak için önüne bir uyum katmanı gerekir. `Grouper` arayüzü buna
    kapalı değil (ADR-0027).
 
-1. **ADR-0028'in göçü başlamadı.** Sunucunun deposu PostgreSQL olacak;
-   Docker, volume ve kablolama hazır ama `shared/database` hâlâ yalnızca
-   SQLite konuşuyor. Beş aşamaya bölündü, ADR'de sırası yazılı. Bu, kalan
-   işlerin en büyüğü.
+1. **ADR-0028'in göçü: 1/5 aşama bitti.** Lehçe ayrımı ve yer tutucu
+   yeniden yazımı yerinde, davranış değişmedi. Sırada 2. aşama: PostgreSQL
+   şeması ve migration'ları, suite iki arka uca karşı. Bu hâlâ kalan işlerin
+   en büyüğü.
 
 2. **Tarayıcıda ses kaydı çalışmıyor.** `record`'un web desteği var ama kaydı
    yazdığımız yolu `path_provider` veriyor ve onun web uygulaması yok.
