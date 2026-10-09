@@ -65,6 +65,63 @@ class SourceConnection {
   /// Kept on the connection rather than only in a log, because a log has
   /// rotated by the time somebody asks why a source is stale.
   final String lastError;
+
+  /// Whether this row is a model's API key rather than a source.
+  ///
+  /// The server keeps both in one keyring (ADR-0027). The panel has to tell
+  /// them apart because a model is never pulled from and a source never
+  /// groups anything.
+  bool get isModel => sourceType == modelSourceType;
+
+  /// Which model a model row names. The server puts it in the query field,
+  /// which for a model means which model.
+  String get modelName => query;
+}
+
+/// What the server calls a row in the keyring that holds a model key.
+const modelSourceType = 'model';
+
+/// What one grouping run did.
+class OrganizeOutcome {
+  /// Creates an outcome.
+  const new({
+    required this.offered,
+    required this.created,
+    required this.grouped,
+    required this.invented,
+    required this.dropped,
+  });
+
+  /// Reads it out of what `POST /organize` answered.
+  factory fromJson(Object? raw) {
+    final map = raw is Map<String, dynamic> ? raw : const <String, dynamic>{};
+    int at(String key) => map[key] is int ? map[key] as int : 0;
+    return OrganizeOutcome(
+      offered: at('offered'),
+      created: at('created'),
+      grouped: at('grouped'),
+      invented: at('invented'),
+      dropped: at('dropped'),
+    );
+  }
+
+  /// How many ungrouped notes the model was given.
+  final int offered;
+
+  /// How many groups were written.
+  final int created;
+
+  /// How many notes ended up in one.
+  final int grouped;
+
+  /// How many ids the model named that were never sent to it.
+  ///
+  /// Shown rather than swallowed: a model that invents half its ids is one
+  /// pointed at the wrong task, and the number is the only sign of it.
+  final int invented;
+
+  /// How many groups came back with nothing usable in them.
+  final int dropped;
 }
 
 /// What one pull did.

@@ -39,6 +39,25 @@ type Connection struct {
 	sealed []byte
 }
 
+// ModelSourceType marks a row in this table that is not a source at all: a
+// model's API key, sealed the same way and listed by the same panel
+// (ADR-0027).
+//
+// Reusing the keyring rather than building a second one is the decision; the
+// cost is that two kinds of row are told apart by a string, and the two
+// places that have to care say so where they do it.
+const ModelSourceType = "model"
+
+// IsModel reports whether this row holds a model key rather than a source.
+func (c *Connection) IsModel() bool { return c.SourceType == ModelSourceType }
+
+// ModelName is which model a model connection names.
+//
+// The query column means "what we ask this source for", and for a model that
+// is which model. The overload has exactly one reader, here, so no caller
+// has to know (ADR-0027).
+func (c *Connection) ModelName() string { return c.Query }
+
 // Failures a caller has to tell apart.
 var (
 	// ErrNoSecretKey is EVOMEM_SECRET_KEY missing or unusable. Without it

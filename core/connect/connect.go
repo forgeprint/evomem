@@ -68,6 +68,15 @@ func Run(
 			return result, err
 		}
 
+		if conn.IsModel() {
+			// Not a source: a model key, kept in the same keyring
+			// (ADR-0027). Skipped by name rather than by falling
+			// through to "no puller", so a source type that is
+			// genuinely unknown is still reported as one.
+			result.Considered--
+			continue
+		}
+
 		puller, ok := pullers[conn.SourceType]
 		if !ok {
 			result.Failed++

@@ -21,6 +21,7 @@ class SourcesScreen extends ConsumerStatefulWidget {
 
 class _SourcesScreenState extends ConsumerState<SourcesScreen> {
   bool _pulling = false;
+  bool _organizing = false;
 
   Future<void> _pull() async {
     setState(() => _pulling = true);
@@ -45,6 +46,33 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
     }
   }
 
+  Future<void> _organize() async {
+    setState(() => _organizing = true);
+    try {
+      final service = await ref.read(sourceServiceProvider.future);
+      final outcome = await service.organize();
+      if (!mounted) return;
+      final dropped = outcome.invented > 0
+          ? ', ${outcome.invented} id(s) dropped'
+          : '';
+      _say(
+        outcome.offered == 0
+            ? 'every note is already in a group'
+            : '${outcome.created} group(s) over '
+                  '${outcome.grouped} note(s)$dropped',
+      );
+    } on ClusterFailure catch (failure) {
+      if (!mounted) return;
+      _say(
+        failure.detail.isEmpty
+            ? explainClusterProblem(failure.problem)
+            : failure.detail,
+      );
+    } finally {
+      if (mounted) setState(() => _organizing = false);
+    }
+  }
+
   Future<void> _forget(SourceConnection connection) async {
     try {
       final service = await ref.read(sourceServiceProvider.future);
@@ -60,6 +88,12 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
             : failure.detail,
       );
     }
+  }
+
+  /// Whether a model is connected, which is what makes grouping offerable.
+  bool _hasModel(AsyncValue<List<SourceConnection>> connections) {
+    final list = connections.asData?.value;
+    return list != null && list.any((c) => c.isModel);
   }
 
   void _say(String message) {
@@ -82,16 +116,30 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _pulling ? null : _pull,
-        icon: _pulling
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.sync),
-        label: Text(_pulling ? 'Pulling…' : 'Sync now'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Only offered when a model is connected: a button that can only
+          // answer "nothing is configured" is a button that teaches nothing.
+          if (_hasModel(connections)) ...[
+            FloatingActionButton.extended(
+              heroTag: 'organize',
+              onPressed: _organizing ? null : _organize,
+              icon: _organizing
+                  ? const _Spinner()
+                  : const Icon(Icons.auto_awesome_motion),
+              label: Text(_organizing ? 'Grouping…' : 'Group notes'),
+            ),
+            const SizedBox(height: 12),
+          ],
+          FloatingActionButton.extended(
+            heroTag: 'pull',
+            onPressed: _pulling ? null : _pull,
+            icon: _pulling ? const _Spinner() : const Icon(Icons.sync),
+            label: Text(_pulling ? 'Pulling…' : 'Sync now'),
+          ),
+        ],
       ),
       body: connections.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -130,6 +178,11 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
               onConnected: () => ref.invalidate(sourceConnectionsProvider),
               say: _say,
             ),
+            const Divider(height: 32),
+            _ModelForm(
+              onConnected: () => ref.invalidate(sourceConnectionsProvider),
+              say: _say,
+            ),
           ],
         ),
       ),
@@ -148,7 +201,12 @@ class _ConnectionRow extends StatelessWidget {
     final lines = <String>[
       connection.baseUrl,
       if (connection.account.isNotEmpty) 'as ${connection.account}',
-      if (connection.query.isNotEmpty) 'asks for: ${connection.query}',
+      // A model row is in the same keyring but is not a source: it is never
+      // pulled from, and "asks for" would read as a search (ADR-0027).
+      if (connection.isModel)
+        'groups notes with: ${connection.modelName}'
+      else if (connection.query.isNotEmpty)
+        'asks for: ${connection.query}',
       if (connection.lastPulledAt != null)
         'last pulled ${connection.lastPulledAt}',
       // The failure is shown, not buried: a stale source is otherwise a
@@ -158,11 +216,17 @@ class _ConnectionRow extends StatelessWidget {
     ];
 
     return ListTile(
-      title: Text('${connection.sourceType} → ${connection.projectId}'),
+      title: Text(
+        connection.isModel
+            ? 'model → ${connection.projectId}'
+            : '${connection.sourceType} → ${connection.projectId}',
+      ),
       subtitle: Text(lines.join('\n')),
       isThreeLine: true,
       trailing: IconButton(
-        tooltip: 'Forget this source',
+        tooltip: connection.isModel
+            ? 'Forget this model key'
+            : 'Forget this source',
         icon: const Icon(Icons.delete_outline),
         onPressed: onForget,
       ),
@@ -286,6 +350,145 @@ class _ConnectFormState extends ConsumerState<_ConnectForm> {
           FilledButton(
             onPressed: _busy ? null : _connect,
             child: Text(_busy ? 'Connecting…' : 'Connect'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The spinner a busy button shows in place of its icon.
+class _Spinner extends StatelessWidget {
+  const new();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+    width: 18,
+    height: 18,
+    child: CircularProgressIndicator(strokeWidth: 2),
+  );
+}
+
+/// Connects the model that groups notes on the server.
+///
+/// The other half of "panelden girdiğim yapay zeka API'si" (ADR-0027). The
+/// key is typed here, sent once and sealed on the server; the panel never
+/// reads it back.
+class _ModelForm extends ConsumerStatefulWidget {
+  const new({required this.onConnected, required this.say});
+
+  final VoidCallback onConnected;
+  final void Function(String) say;
+
+  @override
+  ConsumerState<_ModelForm> createState() => _ModelFormState();
+}
+
+class _ModelFormState extends ConsumerState<_ModelForm> {
+  final _url = TextEditingController(text: 'https://api.openai.com');
+  final _model = TextEditingController(text: 'gpt-4o-mini');
+  final _secret = TextEditingController();
+  final _project = TextEditingController(text: 'default');
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    for (final controller in [_url, _model, _secret, _project]) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _connect() async {
+    setState(() => _busy = true);
+    try {
+      final service = await ref.read(sourceServiceProvider.future);
+      await service.connect(
+        sourceType: modelSourceType,
+        projectId: _project.text.trim(),
+        baseUrl: _url.text.trim(),
+        // The server keeps which model in the query column, which for a
+        // model means which model.
+        query: _model.text.trim(),
+        secret: _secret.text,
+      );
+      if (!mounted) return;
+      _secret.clear();
+      widget.say('model connected');
+      widget.onConnected();
+    } on ClusterFailure catch (failure) {
+      if (!mounted) return;
+      widget.say(
+        failure.detail.isEmpty
+            ? explainClusterProblem(failure.problem)
+            : failure.detail,
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Connect a model',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          // Said at the point the key is entered, not buried in a record
+          // nobody opens: this is the moment a person decides that their
+          // notes may leave the machine (ADR-0027).
+          Text(
+            'With a model connected, pressing "Group notes" sends the text '
+            'of the notes being grouped to this address. An agent connected '
+            'over MCP can group notes without any of this.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _url,
+            decoration: const InputDecoration(
+              labelText: 'Server address',
+              helperText: 'Any OpenAI-compatible server, including a local one',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _model,
+            decoration: const InputDecoration(
+              labelText: 'Model',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _secret,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'API key',
+              helperText:
+                  'Sent once and sealed on the server; never shown again',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _project,
+            decoration: const InputDecoration(
+              labelText: 'Group notes in project',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _busy ? null : _connect,
+            child: Text(_busy ? 'Connecting…' : 'Connect model'),
           ),
         ],
       ),

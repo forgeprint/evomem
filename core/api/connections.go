@@ -141,3 +141,76 @@ func (s *Server) handlePull(w http.ResponseWriter, r *http.Request) {
 // PullFunc runs every connection. Injected so that core/api does not import
 // the connectors: the panel's job is to ask, not to know how Jira works.
 type PullFunc func(ctx context.Context, key database.SecretKey) (connect.Result, error)
+
+// OrganizeFunc groups a project's ungrouped notes with the connected model.
+//
+// Injected for the same reason PullFunc is: core/api asks, and core/organize
+// is what knows how to talk to a model.
+type OrganizeFunc func(ctx context.Context, key database.SecretKey, projectID string, dryRun bool) (OrganizeResult, error)
+
+// OrganizeResult is what one grouping run did, as the panel reports it.
+type OrganizeResult struct {
+	Offered  int `json:"offered"`
+	Created  int `json:"created"`
+	Grouped  int `json:"grouped"`
+	Invented int `json:"invented"`
+	Dropped  int `json:"dropped"`
+}
+
+// ErrNoModel is the feature being off rather than a failure: nobody has
+// connected a model, so nothing calls one and no note leaves the machine.
+var ErrNoModel = errors.New("api: no model connected")
+
+// handleOrganize asks the connected model to group what is ungrouped.
+//
+// Synchronous like the pull, and bounded by the same write timeout
+// (ADR-0027). A browser that gives up does not stop the run; the clusters it
+// writes are there on the next load.
+func (s *Server) handleOrganize(w http.ResponseWriter, r *http.Request) {
+	key, err := s.secretKey()
+	if err != nil {
+		http.Error(w,
+			"this server has no usable EVOMEM_SECRET_KEY, so the model's key cannot be read",
+			http.StatusServiceUnavailable)
+		return
+	}
+	if s.organizer == nil {
+		http.Error(w, "this server cannot group notes", http.StatusServiceUnavailable)
+		return
+	}
+
+	project := strings.TrimSpace(r.URL.Query().Get("project"))
+	if project == "" {
+		project = s.defaultProject()
+	}
+	dryRun := r.URL.Query().Get("dry_run") == "1"
+
+	result, err := s.organizer(r.Context(), key, project, dryRun)
+	switch {
+	case errors.Is(err, ErrNoModel):
+		// Not an error the panel should show as a failure: it is the
+		// switch being off, and the panel says how to turn it on.
+		http.Error(w, "no model is connected, so nothing was sent anywhere",
+			http.StatusServiceUnavailable)
+		return
+	case err != nil:
+		// The model's own words, not a generic message: "incorrect api
+		// key" and "model not found" are the two things that actually
+		// go wrong here and the person at the panel can fix both.
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	writeReadJSON(w, map[string]any{
+		"offered": result.Offered, "created": result.Created,
+		"grouped": result.Grouped, "invented": result.Invented,
+		"dropped": result.Dropped, "project": project,
+	})
+}
+
+// defaultProject is what a request that named no project is grouped under.
+func (s *Server) defaultProject() string {
+	if s.cfg.DefaultProject != "" {
+		return s.cfg.DefaultProject
+	}
+	return "default"
+}

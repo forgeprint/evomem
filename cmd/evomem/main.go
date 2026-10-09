@@ -49,6 +49,7 @@ usage:
   evomem clusters [-project <id>] [-show <id>] [-delete <id>]
   evomem connect [-add jira -project <id> -url <base> -account <email> -query <jql>]
   evomem pull-sources
+  evomem organize [-project <id>] [-dry-run]
   evomem mcp    [-quiet]
   evomem serve  [-addr <host:port>]
   evomem sync   [-once] [-init-remote] [-interval <d>]
@@ -66,6 +67,12 @@ nothing an agent proposes is in memory until then.
 clusters shows what an agent has grouped through the MCP tools. A grouping is
 a label over notes that are already stored: it changes nothing a note says,
 and deleting it takes the label off and leaves the notes.
+
+organize is the other way to get one: a model connected with "connect -add
+model" is asked to group the notes nothing has grouped yet. It runs when it
+is asked and never on a timer, it only ever adds groups, and with no model
+connected it is off and no note leaves this machine. Pressing it does send
+the text of those notes to whatever server the key points at.
 
 Anything an adapter wrote is marked as coming from outside, and the MCP tools
 tell a model so. endorse is how a person says they have read one and stand
@@ -150,6 +157,8 @@ func run(args []string, out io.Writer, in io.Reader) error {
 		return cmdConnect(rest, out, in)
 	case "pull-sources":
 		return cmdPullSources(rest, out)
+	case "organize":
+		return cmdOrganize(rest, out)
 	case "sync":
 		return cmdSync(rest, out)
 	case "pull":

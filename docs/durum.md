@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-09 (dokuzuncu oturum) · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-09 (onuncu oturum) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -33,10 +33,11 @@ shared/database    tek yazıcılı iki havuz, FTS5 arama, delta izleme,
                    tombstone, öneriler, kümeler, arşivleme
 core/mcp           stdio JSON-RPC, 10 araç (6 okur, 1 önerir, 3 gruplar)
 core/api           POST /ingest, /ingest/audio, PUT + DELETE /notes/{id},
-                   GET /notes + /clusters, /connections (panel), CORS,
-                   Telegram ve Jira webhook'ları
+                   GET /notes + /clusters, /connections + /organize (panel),
+                   CORS, Telegram ve Jira webhook'ları
+core/organize      kümesiz notları OpenAI-uyumlu bir modele gruplatır
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
-cmd/evomem         19 alt komut (mcp, serve, pull, restore, transcribe, endorse dahil)
+cmd/evomem         20 alt komut (mcp, serve, pull, restore, transcribe, endorse dahil)
 apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
                    mobil şema v6: notes.remote_id/remote_updated_at, deletions.remote_id
                    record 7.1.1 + path_provider 2.1.6 (ses kaydı)
@@ -74,6 +75,7 @@ evomem clusters -delete <id>          # gruplamayı geri al (notlar kalır)
 evomem connect                        # bağlı kaynaklar ve son durumları
 evomem connect -add jira …            # kaynak bağla (token stdin'den)
 evomem pull-sources                   # bağlı kaynakların API'sinden çek
+evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
 ```
 
 ## Neyin doğrulandığı, neyin doğrulanmadığı
@@ -94,12 +96,18 @@ evomem pull-sources                   # bağlı kaynakların API'sinden çek
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler — 92 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler — 96 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
   sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve
   detayında notları kaynaklarıyla (`jira`, `mobile`) gösterdi. Ayarlar
   arayüzden girildi, CORS gerçek tarayıcıda çalıştı.
+- **Sunucu tarafı kümeleme uçtan uca, tarayıcıda**: model panelden bağlandı,
+  anahtar alanı temizlendi, "Group notes" düğmesi ancak o zaman belirdi,
+  basıldı → `POST /organize` 200 → sahte OpenAI-uyumlu sunucu doğru kabloyu
+  gördü (Bearer, model adı, system+user, `json_object`,
+  `max_completion_tokens`, `max_tokens` yok) → üç not tek kümeye girdi.
+  Uydurulmuş id düştü; anahtar veritabanında düz metin değil.
 - **Panel uçtan uca, tarayıcıda**: Jira panelden bağlandı (201), liste onu
   gösterdi, "Sync now" `POST /connections/pull` attı (200), sahte Jira iki
   sayfa gördü (ilk istekte `nextPageToken` yok, ikincide `page-2`), iki issue
@@ -150,10 +158,10 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-0. **Sunucu tarafı model anahtarı yok.** Panel bir kaynağı bağlıyor ama
-   kümelemeyi yapacak modelin anahtarını henüz almıyor; ADR-0023'ün
-   değişikliği aynı keyring'e (`connections`, mühürlü) oturacak. "Panelden
-   girdiğim yapay zekâ API'si" cümlesinin kalan yarısı bu.
+0. **Anthropic'in kendi Messages API'si konuşulamıyor.** `core/organize`
+   OpenAI-uyumlu `chat completions`'ı hedefliyor; Claude'u bu uçtan
+   konuşturmak için önüne bir uyum katmanı gerekir. `Grouper` arayüzü buna
+   kapalı değil (ADR-0027).
 
 1. **Uygulama tek projeye sabit.** `currentProjectProvider` her zaman
    `default` dönüyor, yani başka bir projedeki notlar ve kümeler arayüzde
@@ -183,6 +191,19 @@ her açılışta sunucuya soruluyor (ADR-0024). Yapılandırılmamış / ulaşı
 okunamayan durumları ayrı ayrı açıklanıyor, çünkü boş ekranın üç ayrı anlamı
 var. Detayda her notun **kaynağı** ve işaretleri (dışarıdan, makine dökümü,
 onaylı) gösteriliyor.
+
+**Sunucu kendi gruplayabiliyor** (ADR-0027): panele yazılan bir model
+anahtarıyla `evomem organize` ve panelin "Group notes" düğmesi kümesiz
+notları bir modele gruplatıyor. ADR-0023 bu seçeneği reddetmişti; ADR-0027
+onu değiştiriyor ve neyin ayakta kaldığını yazıyor — **zamanlayıcı yok**,
+düğmeye basan biri var. Arayüz OpenAI-uyumlu `chat completions`, şekli
+OpenAI'ın kendi OpenAPI belgesinden doğrulanmış. Anahtar aynı keyring'de
+(`connections`, `source_type = "model"`, aynı mühür); `pull-sources` o satırı
+adıyla atlıyor. Yalnızca **kümesiz** notlar veriliyor, yani koşu grup ekler
+ve hiçbirini dağıtmaz; gönderilmemiş bir id düşürülüyor. Tavan 200 not.
+**Bedeli açıkça yazılı**: anahtar varken düğmeye basmak, gruplanacak notların
+metnini anahtarın gösterdiği sunucuya gönderir — panel bunu anahtarın
+girildiği yerde söylüyor.
 
 **Panel tamam** (ADR-0026): bir kaynak artık tarayıcıdan bağlanıyor ve sync
 tarayıcıdan tetikleniyor. Dört uç — `GET/POST /connections`,

@@ -112,6 +112,12 @@ type Config struct {
 	// works. Nil means this server cannot pull.
 	Pull PullFunc
 
+	// Organize groups a project's ungrouped notes with the model somebody
+	// connected in the panel. Injected for the same reason Pull is. Nil
+	// means this server cannot group, which is different from no model
+	// being connected: that is reported per request (ADR-0027).
+	Organize OrganizeFunc
+
 	// Recordings is where POST /ingest/audio puts an upload. Nil means
 	// that endpoint is not served at all: there is nowhere to put a
 	// recording, and ADR-0018 keeps recordings only on the condition that
@@ -127,6 +133,7 @@ type Server struct {
 	connections Connections
 	recordings  Recordings
 	puller      PullFunc
+	organizer   OrganizeFunc
 	cfg         Config
 
 	// routes is what was actually served, for the caller to report. A
@@ -158,6 +165,7 @@ func New(store Store, cfg Config) (*Server, error) {
 		s.connections = connections
 	}
 	s.puller = cfg.Pull
+	s.organizer = cfg.Organize
 	mux := http.NewServeMux()
 
 	// Unauthenticated on purpose, and says nothing but that the process is
@@ -195,6 +203,12 @@ func New(store Store, cfg Config) (*Server, error) {
 			s.routes = append(s.routes,
 				"GET /connections", "POST /connections",
 				"DELETE /connections/{id}", "POST /connections/pull")
+
+			// The other button (ADR-0027). Registered beside the
+			// pull because it reads the same keyring, and it is
+			// the panel that presses both.
+			mux.Handle("POST /organize", s.authenticated(http.HandlerFunc(s.handleOrganize)))
+			s.routes = append(s.routes, "POST /organize")
 		}
 
 		if s.reader != nil {

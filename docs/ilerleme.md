@@ -2146,3 +2146,65 @@ listesi, Jira bağlama formu ve "Sync now". `/sources` rotası, uygulama
 "0 not" diye bir ara sonuç okudum; yanlış veritabanı yoluna bakıyordum.
 Çekme zaten çalışmıştı. Araç çıktısının hangi dosyadan geldiğini kontrol
 etmeden sonuç çıkarmak, testin kendisini boşa düşürüyor.
+
+## Onuncu oturum — sunucunun kendi grupladığı (ADR-0027)
+
+"Panelden girdiğim yapay zekâ API'si" cümlesinin kalan yarısı. ADR-0023 bu
+seçeneği gerekçeli olarak **reddetmişti**; istenen tam da o olduğu için
+ADR-0027 onu değiştiriyor ve neyin ayakta kaldığını yazıyor:
+
+- **"kimse yokken zamanlayıcıyla organize eder"** itirazı haklıydı ve
+  korunuyor. Zamanlayıcı yok; düğmeye basan biri var (ADR-0025'in kuralı).
+- **"anahtar, maliyet ve mahremiyet bir operatörün elinde"** itirazı,
+  *operatörün kullanıcı adına karar vermesine* karşıydı. Anahtarı panele
+  yazan kişi kullanıcının kendisi.
+
+### Arayüz doğrulandı, ezberden yazılmadı
+
+Kullanıcı OpenAI-uyumlu `chat completions` seçti. Şekil OpenAI'ın **kendi**
+OpenAPI belgesinden okundu (`openai/openai-openapi`, `openapi.yaml`,
+`info.version: 2.3.0`, 2026-10-09): `model` ve `messages` zorunlu, yanıt
+`choices[].message.content`'te ve şema onun **null** olmasına izin veriyor,
+`max_tokens` **deprecated** (`max_completion_tokens` gönderiliyor), güvenlik
+şeması http bearer, ve `response_format: json_object`'in kendi açıklaması
+modelin "bir system ya da user mesajı söylemeden JSON üretmeyeceğini" yazıyor
+— bu yüzden istem de JSON istiyor.
+
+`response_format` gönderiliyor ama **güvenilmiyor**: alanı tanımayan
+self-hosted bir sunucu da çalışsın diye yanıt, metindeki ilk JSON nesnesi
+bulunarak ayrıştırılıyor (kod bloğu, önüne yazılmış cümle, içinde süslü
+parantez olan bir başlık — hepsinin testi var).
+
+### Kararlar
+
+- **Anahtar mevcut keyring'de.** `connections`, `source_type = "model"`, aynı
+  mühür, aynı panel. İki sonucu var ve ikisi de yazıldı: `connect.Run` o
+  satırı **adıyla** atlıyor (yoksa her pull koşusu çalışan bir satıra kalıcı
+  hata yazardı), ve `query` sütunu model adını taşıyor — tek okuyucusu
+  `Connection.ModelName()`.
+- **Yalnızca kümesiz notlar veriliyor.** İki kez basmanın güvenli olmasının
+  tek sebebi bu: koşu grup **ekler**, hiçbirini dağıtmaz.
+- **Modelin cevabı süzülüyor.** Gönderilmemiş bir id düşürülüyor ve
+  sayılıyor; elinde kullanılabilir not kalmayan grup yaratılmıyor.
+- **Tavan 200 not / not başına 2000 karakter.** Sınırsız koşu, sınırsız
+  fatura.
+
+### Doğrulama
+
+- Go: `./scripts/ci.sh` tam yeşil, `core/organize` için 17 test
+- Flutter: 96 test, `analyze` temiz
+- **Uçtan uca, gerçek tarayıcıda, derlenmiş ikiliyle**: model panelden
+  bağlandı (201), anahtar alanı temizlendi, **"Group notes" düğmesi ancak o
+  zaman belirdi**, basıldı → `POST /organize` 200 → sahte model doğru kabloyu
+  gördü (`Bearer`, `a-local-model`, system+user, `json_object`,
+  `max_completion_tokens`, `max_tokens` **yok**) → üç not tek kümeye girdi.
+- Komut satırında: modelsizken "hiçbir not bu makineden çıkmıyor" diyor,
+  `-dry-run` hiçbir şey yazmıyor, ikinci basış "zaten gruplanmış" diyor,
+  uydurma id düşüyor, `pull-sources` model satırını atlıyor,
+  `strings evomem.db | grep the-model-api-key` → 0.
+
+### Açıkta kalan
+
+Anthropic'in kendi Messages API'si bu uçtan konuşulamıyor; önüne bir uyum
+katmanı gerekir. Arayüz (`Grouper`) buna kapalı değil, ama bu oturumda
+yazılmadı.

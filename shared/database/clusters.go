@@ -323,3 +323,42 @@ func scanCluster(s interface{ Scan(...any) error }) (*Cluster, error) {
 	}
 	return &c, nil
 }
+
+// Ungrouped returns a project's notes that belong to no cluster, oldest
+// first.
+//
+// Oldest first, like the transcription queue and for the same reason: this is
+// a backlog being worked through a page at a time, and a note that has waited
+// since March should not keep losing to one written this morning.
+//
+// This is the whole input to a grouping run (ADR-0027). Notes that are
+// already in a cluster are left out, which is what makes pressing the button
+// twice safe: a second run can add groups, never dissolve one.
+func (d *DB) Ungrouped(ctx context.Context, projectID string, limit int) ([]*models.Note, error) {
+	projectID = strings.TrimSpace(projectID)
+	if projectID == "" {
+		return nil, models.ErrEmptyProjectID
+	}
+	rows, err := d.read.QueryContext(ctx, `SELECT `+prefixed(noteColumns, "n")+`
+		FROM notes n
+		WHERE n.project_id = ?
+		  AND NOT EXISTS (SELECT 1 FROM cluster_notes cn WHERE cn.note_id = n.id)
+		ORDER BY n.created_at ASC, n.id ASC LIMIT ?`, projectID, clampLimit(limit))
+	if err != nil {
+		return nil, fmt.Errorf("database: listing ungrouped notes: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*models.Note
+	for rows.Next() {
+		n, err := scanNote(rows)
+		if err != nil {
+			return nil, fmt.Errorf("database: listing ungrouped notes: %w", err)
+		}
+		out = append(out, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("database: listing ungrouped notes: %w", err)
+	}
+	return out, nil
+}

@@ -28,12 +28,12 @@ func secretKey() (database.SecretKey, error) {
 // every process on the machine (ADR-0010).
 func cmdConnect(args []string, out io.Writer, in io.Reader) error {
 	fs := flag.NewFlagSet("connect", flag.ContinueOnError)
-	add := fs.String("add", "", "add a source: jira")
+	add := fs.String("add", "", "add a source: jira, or a model key: model")
 	remove := fs.String("remove", "", "forget a connection, and its token, by id")
 	project := fs.String("project", "", "the project pulled notes are filed under")
 	baseURL := fs.String("url", "", "the source's base address, e.g. https://you.atlassian.net")
 	account := fs.String("account", "", "the account the token belongs to; Jira wants the email")
-	query := fs.String("query", "", "what to ask the source for; Jira takes JQL")
+	query := fs.String("query", "", "what to ask the source for; Jira takes JQL, a model takes its name")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -82,7 +82,12 @@ func cmdConnect(args []string, out io.Writer, in io.Reader) error {
 			return err
 		}
 		fmt.Fprintf(out, "\nconnected %s as %s\n", conn.SourceType, conn.ID)
-		fmt.Fprintln(out, "evomem pull-sources   pulls from it")
+		if conn.IsModel() {
+			fmt.Fprintln(out, "evomem organize       asks it to group the notes nothing has grouped")
+			fmt.Fprintln(out, "\nPressing that sends the text of those notes to", conn.BaseURL)
+		} else {
+			fmt.Fprintln(out, "evomem pull-sources   pulls from it")
+		}
 		return nil
 	}
 
@@ -97,14 +102,20 @@ func cmdConnect(args []string, out io.Writer, in io.Reader) error {
 		return nil
 	}
 
-	fmt.Fprintf(out, "%d source(s) connected:\n", len(connections))
+	// "connection(s)", not "source(s)": the keyring holds model keys too
+	// and they are not sources (ADR-0027).
+	fmt.Fprintf(out, "%d connection(s):\n", len(connections))
 	for _, conn := range connections {
 		fmt.Fprintf(out, "\n%s  %s  -> %s\n  %s", conn.ID, conn.SourceType, conn.ProjectID, conn.BaseURL)
 		if conn.Account != "" {
 			fmt.Fprintf(out, "  as %s", conn.Account)
 		}
 		fmt.Fprintln(out)
-		if conn.Query != "" {
+		if conn.IsModel() {
+			// Not a source: the query column holds which model
+			// (ADR-0027), and "asks for" would read as a search.
+			fmt.Fprintf(out, "  groups notes with: %s\n", conn.ModelName())
+		} else if conn.Query != "" {
 			fmt.Fprintf(out, "  asks for: %s\n", conn.Query)
 		}
 		if conn.LastPulledAt != nil {

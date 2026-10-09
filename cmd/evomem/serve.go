@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/forgeprint/evomem/core/api"
 	"github.com/forgeprint/evomem/core/connect"
+	"github.com/forgeprint/evomem/core/organize"
 	"github.com/forgeprint/evomem/shared/database"
 )
 
@@ -43,6 +45,25 @@ func cmdServe(args []string, out io.Writer) error {
 			return connect.Run(ctx, db, key, map[string]connect.Puller{
 				"jira": connect.NewJiraPuller(),
 			}, io.Discard)
+		},
+		Organize: func(ctx context.Context, key database.SecretKey, project string, dryRun bool) (api.OrganizeResult, error) {
+			// The panel asks; this is where the model is named.
+			connections, err := db.Connections(ctx)
+			if err != nil {
+				return api.OrganizeResult{}, err
+			}
+			model, err := organize.FromConnection(connections, key)
+			if errors.Is(err, organize.ErrNotConfigured) {
+				return api.OrganizeResult{}, api.ErrNoModel
+			}
+			if err != nil {
+				return api.OrganizeResult{}, err
+			}
+			r, err := organize.Run(ctx, db, model, project, dryRun, io.Discard)
+			return api.OrganizeResult{
+				Offered: r.Offered, Created: r.Created, Grouped: r.Grouped,
+				Invented: r.Invented, Dropped: r.Dropped,
+			}, err
 		},
 		Recordings: recordings(),
 	}

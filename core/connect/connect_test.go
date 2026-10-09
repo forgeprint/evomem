@@ -210,3 +210,53 @@ func TestRunWithNothingConfigured(t *testing.T) {
 		t.Errorf("result = %+v", result)
 	}
 }
+
+// A model key lives in the same keyring as the sources (ADR-0027). It has no
+// puller and never will; a pull run has to pass over it rather than mark it
+// failed, or every run would leave a permanent error on a row that is working
+// exactly as intended.
+func TestRunSkipsAModelKey(t *testing.T) {
+	db, key := store(t)
+	ctx := context.Background()
+
+	model := &database.Connection{
+		SourceType: database.ModelSourceType,
+		ProjectID:  "evomem",
+		BaseURL:    "https://model.invalid",
+		Query:      "a-model",
+	}
+	if err := db.AddConnection(ctx, model, "a-model-key", key); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Run(ctx, db, key, map[string]Puller{}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Failed != 0 {
+		t.Fatalf("the model row was counted as a failed source: %+v", result)
+	}
+	if result.Considered != 0 {
+		t.Fatalf("the model row was counted as a source: %+v", result)
+	}
+
+	after, err := db.Connections(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after[0].LastError != "" {
+		t.Fatalf("a pull run wrote an error onto the model key: %q", after[0].LastError)
+	}
+
+	// And a source type that is genuinely unknown is still reported, so
+	// the skip above is a named exception rather than a hole.
+	unknown := connect(t, db, key, "something-nobody-wrote")
+	result, err = Run(ctx, db, key, map[string]Puller{}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Failed != 1 {
+		t.Fatalf("an unknown source should still fail: %+v", result)
+	}
+	_ = unknown
+}

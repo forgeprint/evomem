@@ -96,6 +96,19 @@ class SourceService {
     return PullOutcome.fromJson(body);
   }
 
+  /// Asks the connected model to group what nothing has grouped yet.
+  ///
+  /// Pressing this sends the text of those notes to whatever server the
+  /// stored key points at (ADR-0027). With no model connected the server
+  /// answers that nothing was sent anywhere.
+  Future<OrganizeOutcome> organize({String projectId = ''}) async {
+    final query = projectId.isEmpty
+        ? ''
+        : '?project=${Uri.encodeQueryComponent(projectId)}';
+    final body = await _send('POST', '/organize$query', timeout: pullTimeout);
+    return OrganizeOutcome.fromJson(body);
+  }
+
   Future<Map<String, dynamic>> _send(
     String method,
     String path, {
