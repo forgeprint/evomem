@@ -17,7 +17,6 @@ Thumbs.db
 
 # Generated files
 lib/l10n/app_localizations.dart
-lib/generated_plugin_registrant.dart
 
 # Android
 android/.gradle/

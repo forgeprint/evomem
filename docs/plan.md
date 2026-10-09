@@ -89,6 +89,8 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
       push artık idempotent → ADR-0018
 - [x] Mobilde düzenlenen notun sunucuda güncellenmesi: `PUT /notes/{id}` +
       mobil şema v5 (`remote_updated_at`) → ADR-0019
-- [ ] Telefonda silinen notun aynadan da silinmesi (yerel `deletions` tablosu yok)
+- [x] Telefonda silinen notun aynadan da silinmesi: `DELETE /notes/{id}` +
+      yerel mezar taşı kuyruğu (mobil şema v6) → ADR-0020
+- [ ] Sunucuda silinen notun telefondan da silinmesi (`pull` mezar taşı okumuyor)
 - [x] Not silindiğinde ses dosyasının da silinmesi (archive ve restore dahil) → ADR-0018
 - [ ] Dökümü onaylayıp işaretleri temizleyen akış (ayrı karar)

@@ -1634,3 +1634,60 @@ Doğrulama betiğinde `path` adlı bir kabuk değişkeni kullandım; zsh'de `pat
 dizisi `PATH`'e bağlıdır, yani onu ezince `curl`, `python3` ve `pkill`
 bulunamadı. Değişken yeniden adlandırıldı. Depoyu etkilemedi, ama bir daha
 `path` adını kullanmamak gerekiyor.
+
+---
+
+## 2026-10-09 (devam) — Silme aynaya ulaşıyor (ADR-0020)
+
+Telefonda silinen not aynada yaşamaya devam ediyordu; `_pushDeletions` sıfır
+dönüp bunu bir yorumla itiraf ediyordu. Flutter testleri 70 → **75**.
+
+Silme, hiçbir şey yapmamanın en pahalı olduğu yer: senkronize olmayan bir not
+aynanın henüz duymadığı bir nottur, ama senkronize olmayan bir **silme**,
+birinin bilerek kaldırdığı içeriğin aynanın beslediği her ajan tarafından
+okunabilir kalması demek.
+
+### Zincirin yarısı zaten yapılmıştı
+
+- Telefonun şemasında `deletions` tablosu v2'den beri var ve **hiç
+  yazılmamış**.
+- Sunucuda `database.Delete` mezar taşını silmeyle aynı işlemde yazıyor,
+  bilerek; ses kaydını da götürüyor (ADR-0018).
+- `core/sync` o mezar taşlarını PostgreSQL'e zaten gönderiyor.
+
+Eksik olan ilk adımdı: telefondan sunucuya.
+
+### Yazılanlar
+
+- `DELETE /notes/{id}` — token'la kayıtlı, `database.Delete`'i çağırıyor, yani
+  mezar taşı ve ses silme bedavaya geliyor. Olmayan id **404**: deponun kendi
+  kuralı ("verilen bir kimlikle silen çağıran, kimliğin yanlış olduğunu bilmek
+  ister"). Telefon bunu "zaten gitmiş" okuyor, ADR-0019'un PUT 404'üyle aynı
+  şekilde.
+- `NotesDao.delete` artık mezar taşını **silmeyle aynı transaction'da**
+  yazıyor — ikisi ayrılamasın. Yalnızca sunucunun kabul ettiği not için;
+  hiç görülmemiş notun söylenecek bir şeyi yok.
+- `deletions` bir **kuyruk, kayıt değil**: sunucu 204 ya da 404 verince satır
+  siliniyor. Sonsuza dek tutmak, her senkronizasyonun telefonun yaptığı bütün
+  silmeleri yeniden göndermesi olurdu.
+- Mobil şema **v6**: `deletions.remote_id`. Tablonun `id`'si telefonun kendi
+  kimliği ve sunucu onu hiç duymadı; DELETE'in adreslenebileceği tek şey uzak
+  kimlik, o yüzden `id`'yi aşırı yüklemek yerine kendi kolonunu aldı.
+
+### Testte bulunan bir gerçekçilik hatası
+
+v3→v6 migration testindeki fixture `deletions` tablosunu hiç yaratmıyordu —
+oysa gerçek bir v3 deposunda o tablo v2'den beri var. Yani fixture'ım var
+olan hiçbir şeyden daha kolay göç ediyordu. Gerçekçi hale getirildi ve test
+artık zincirin tamamını (v3 → v6, üç kolon) ve kuyruğun uzak kimliği
+taşıdığını doğruluyor.
+
+### Doğrulama
+
+- Go 9 paket yeşil, Flutter 75 test iki koşu üst üste, web release build'i
+  geçiyor
+- **Canlı sunucuya karşı uçtan uca**: not + `.m4a` yükleme → `DELETE` 204 →
+  `audio/` dizini boş (ses kaydı da gitti) → `sync-status` "deletions 1
+  pending" diyor, yani mezar taşı PostgreSQL'e gitmeyi bekliyor
+- Reddedilenler, canlı: ikinci silme 404, olmayan not 404, bozuk id 400,
+  yanlış token 401

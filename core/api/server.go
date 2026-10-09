@@ -54,6 +54,11 @@ type Store interface {
 	// Update replaces a note's content and metadata. Only PUT /notes/{id}
 	// calls it (ADR-0019).
 	Update(ctx context.Context, n *models.Note) error
+
+	// Delete removes a note and leaves a tombstone, which is what carries
+	// the deletion on to the cloud copy. Only DELETE /notes/{id} calls it
+	// (ADR-0020).
+	Delete(ctx context.Context, id string) error
 }
 
 // ChatProjectMap maps chat_id (string form of int64) to project_id.
@@ -143,6 +148,10 @@ func New(store Store, cfg Config) (*Server, error) {
 		// arbitrary writes.
 		mux.Handle("PUT /notes/{id}", s.authenticated(http.HandlerFunc(s.handleEdit)))
 		s.routes = append(s.routes, "PUT /notes/{id}")
+
+		// The first irreversible thing this token can do (ADR-0020).
+		mux.Handle("DELETE /notes/{id}", s.authenticated(http.HandlerFunc(s.handleDelete)))
+		s.routes = append(s.routes, "DELETE /notes/{id}")
 
 		// Only with somewhere to put a recording. Served under the
 		// same token as /ingest, because it is the second half of one

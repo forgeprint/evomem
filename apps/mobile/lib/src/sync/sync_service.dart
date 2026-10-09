@@ -398,12 +398,56 @@ class SyncService {
     }
   }
 
-  /// Pushes deletions (tombstones) to the remote.
+  /// Tells the mirror about the notes this phone deleted.
+  ///
+  /// A deletion that never arrives is worse than a note that never arrives:
+  /// it is content somebody deliberately removed, still readable by every
+  /// agent the mirror feeds (ADR-0020).
   Future<SyncResult> _pushDeletions() async {
-    // For now, we don't track deletions locally in the mobile app
-    // The Go backend handles deletions via the sync worker
-    // This would need a local deletions table to track
-    return SyncResult.success(notesPushed: 0, deletionsPushed: 0);
+    final pending = await _notesDao.pendingDeletions(config.batchSize);
+    if (pending.isEmpty) {
+      return SyncResult.success(notesPushed: 0, deletionsPushed: 0);
+    }
+
+    final client = http.Client();
+    var done = 0;
+    try {
+      for (final deletion in pending) {
+        final uri = Uri.parse(
+          '${config.serverUrl}/notes/${Uri.encodeComponent(deletion.remoteId)}',
+        );
+        final request = http.Request('DELETE', uri)
+          ..headers['Authorization'] = 'Bearer ${config.apiToken}';
+
+        final http.Response response;
+        try {
+          final streamed = await client.send(request).timeout(config.timeout);
+          response = await http.Response.fromStream(streamed);
+        } on Exception catch (e) {
+          return SyncResult.failure(
+            error: 'Failed to push deletions: $e',
+            deletionsPushed: done,
+          );
+        }
+
+        // 404 counts as done: the mirror does not have the note, which is
+        // what this was asking for. Anything else leaves the row for the
+        // next run rather than dropping it on the floor.
+        if (response.statusCode != 204 && response.statusCode != 404) {
+          return SyncResult.failure(
+            error: 'Failed to push deletions: ${response.statusCode}',
+            deletionsPushed: done,
+          );
+        }
+
+        await _notesDao.forgetDeletion(deletion.localId);
+        done++;
+      }
+    } finally {
+      client.close();
+    }
+
+    return SyncResult.success(notesPushed: done, deletionsPushed: done);
   }
 
   /// Gets cursor from sync_state table.

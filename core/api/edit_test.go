@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -247,6 +248,118 @@ func TestRoutesNameTheEditEndpoint(t *testing.T) {
 	var found bool
 	for _, route := range s.Routes() {
 		if route == "PUT /notes/{id}" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("routes = %v", s.Routes())
+	}
+}
+
+func remove(t *testing.T, h http.Handler, id, bearer string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodDelete, "/notes/"+id, nil)
+	if bearer != "" {
+		r.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	return do(h, r)
+}
+
+func TestDeleteRemovesTheNoteAndLeavesATombstone(t *testing.T) {
+	h, db := newServer(t, fullConfig())
+	id := storedNote(t, h, `{"project":"evomem","content":"to delete"}`)
+
+	if w := remove(t, h, id, token); w.Code != http.StatusNoContent {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+
+	if _, err := db.Get(t.Context(), id); !errors.Is(err, database.ErrNotFound) {
+		t.Errorf("the note is still there: %v", err)
+	}
+	// The tombstone is what carries the deletion on to the cloud copy; a
+	// delete without one would be indistinguishable from a note that was
+	// never here.
+	deletions, _, err := db.PendingDeletions(t.Context(), database.Cursor{}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, one := range deletions {
+		if one.ID == id {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no tombstone for %s: %v", id, deletions)
+	}
+}
+
+// Reported, not silently accepted — the store's own rule. The phone reads it
+// as "already gone" (ADR-0020).
+func TestDeleteOfAMissingNoteIs404(t *testing.T) {
+	h, _ := newServer(t, fullConfig())
+	if w := remove(t, h, "01M4D3H3HNMFM69N4MHNAYBZ1Z", token); w.Code != http.StatusNotFound {
+		t.Errorf("%d, want 404", w.Code)
+	}
+}
+
+func TestDeleteIsNotRepeatable(t *testing.T) {
+	h, _ := newServer(t, fullConfig())
+	id := storedNote(t, h, `{"project":"evomem","content":"to delete"}`)
+
+	if w := remove(t, h, id, token); w.Code != http.StatusNoContent {
+		t.Fatalf("first: %d", w.Code)
+	}
+	// The second says the identifier is no longer a note, which is the
+	// truthful answer and the one the phone acts on.
+	if w := remove(t, h, id, token); w.Code != http.StatusNotFound {
+		t.Errorf("second: %d, want 404", w.Code)
+	}
+}
+
+func TestDeleteRefusesAnIdentifierItCannotTrust(t *testing.T) {
+	h, _ := newServer(t, fullConfig())
+	for _, id := range []string{"not-a-ulid", "01M4D3H3HNMFM69N4MHNAYBZ"} {
+		if w := remove(t, h, id, token); w.Code != http.StatusBadRequest {
+			t.Errorf("id %q: %d, want 400", id, w.Code)
+		}
+	}
+}
+
+func TestDeleteRejectsBadCredentials(t *testing.T) {
+	h, db := newServer(t, fullConfig())
+	id := storedNote(t, h, `{"project":"evomem","content":"keep me"}`)
+
+	for _, bearer := range []string{"", "wrong-token", token + "x"} {
+		if w := remove(t, h, id, bearer); w.Code != http.StatusUnauthorized {
+			t.Errorf("bearer %q: %d, want 401", bearer, w.Code)
+		}
+	}
+	if _, err := db.Get(t.Context(), id); err != nil {
+		t.Errorf("an unauthorized request deleted the note: %v", err)
+	}
+}
+
+func TestDeleteIsNotServedWithoutAToken(t *testing.T) {
+	h, _ := newServer(t, Config{TelegramSecret: telegramSecret, TelegramProject: "evomem"})
+	if w := remove(t, h, "01M4D3H3HNMFM69N4MHNAYBZ1Z", token); w.Code != http.StatusNotFound {
+		t.Errorf("%d, want 404", w.Code)
+	}
+}
+
+func TestRoutesNameTheDeleteEndpoint(t *testing.T) {
+	db, err := database.OpenMemory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s, err := New(db, fullConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, route := range s.Routes() {
+		if route == "DELETE /notes/{id}" {
 			found = true
 		}
 	}

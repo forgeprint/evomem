@@ -194,6 +194,37 @@ own token.
 A **404 is not retried into a create.** The mirror no longer has that note,
 and posting it again would bring back something somebody deleted there.
 
+## DELETE /notes/{id} — remove a note
+
+Served only with `EVOMEM_API_TOKEN`, under that same token. See
+[ADR-0020](adr/0020-deleting-from-the-phone.md).
+
+```sh
+curl -X DELETE "http://127.0.0.1:8765/notes/$id" \
+  -H "Authorization: Bearer $EVOMEM_API_TOKEN"
+```
+
+It calls the store's own delete, so three things happen at once: the row goes,
+a **tombstone** is written in the same transaction — which is what carries the
+deletion on to the PostgreSQL mirror through `evomem sync` — and the note's
+**recording is removed** from `audio/` (ADR-0018).
+
+| what | answer |
+| - | - |
+| deleted | `204` |
+| no token | `404` — the endpoint is not served |
+| wrong token | `401` |
+| the id is not a note id | `400` |
+| no note with that id, or it was already deleted | `404` |
+
+**A second delete answers 404, not 204.** The store reports an identifier it
+does not have rather than silently accepting it, because a caller deleting by
+an id it was given wants to know the id was wrong. The phone reads that 404 as
+"already gone" and drops the deletion from its queue.
+
+This is the first irreversible thing the token can do. Nothing keeps the
+content of a deleted note on either side, so there is nothing to restore from.
+
 ## POST /ingest/audio — a recording for a note
 
 Served only with `EVOMEM_API_TOKEN`, under that same token, and only when the

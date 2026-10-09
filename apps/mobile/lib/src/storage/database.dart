@@ -10,8 +10,9 @@ import 'package:sqflite/sqflite.dart';
 /// ones. From 4 on they are the phone's alone, recording facts about this
 /// device's sync rather than the store the backend keeps: `notes.remote_id`
 /// (what the server called a note it accepted) and `notes.remote_updated_at`
-/// (what the note said when it did).
-const int _databaseVersion = 5;
+/// (what the note said when it did), and `deletions.remote_id` (which note on
+/// the mirror a local deletion is asking to remove).
+const int _databaseVersion = 6;
 
 /// Database file name.
 const String _databaseName = 'evomem.db';
@@ -92,7 +93,8 @@ class DatabaseHelper {
       CREATE TABLE deletions (
         id TEXT PRIMARY KEY,
         project_id TEXT NOT NULL,
-        deleted_at TEXT NOT NULL
+        deleted_at TEXT NOT NULL,
+        remote_id TEXT NOT NULL DEFAULT ''
       )
     ''');
 
@@ -207,6 +209,17 @@ class DatabaseHelper {
       await db.execute(
         'ALTER TABLE notes '
         "ADD COLUMN remote_updated_at TEXT NOT NULL DEFAULT ''",
+      );
+    }
+
+    if (oldVersion < 6) {
+      // Which note on the mirror a local deletion is asking to remove. The
+      // table's `id` is this phone's own, which the server has never heard
+      // of, so the remote id gets a column rather than overloading that one
+      // (ADR-0020).
+      await db.execute(
+        'ALTER TABLE deletions '
+        "ADD COLUMN remote_id TEXT NOT NULL DEFAULT ''",
       );
     }
 

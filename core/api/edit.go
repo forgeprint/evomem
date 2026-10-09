@@ -97,3 +97,31 @@ func (s *Server) handleEdit(w http.ResponseWriter, r *http.Request) {
 		"updated_at": note.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	})
 }
+
+// handleDelete removes a note the phone has deleted.
+//
+// It calls the store's Delete, so the server writes its own tombstone in the
+// same transaction and the deletion carries on to PostgreSQL through
+// core/sync — and takes the note's recording with it (ADR-0018). Nothing here
+// knows about any of that, which is the point: one route, one call.
+func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := models.NormalizeULID(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "the path has to end in a note id, as /ingest returned it",
+			http.StatusBadRequest)
+		return
+	}
+
+	switch err := s.store.Delete(r.Context(), id); {
+	case err == nil:
+		w.WriteHeader(http.StatusNoContent)
+	case errors.Is(err, database.ErrNotFound):
+		// Reported rather than silently accepted, the way the store reports
+		// it: a caller deleting by an identifier it was given wants to know
+		// the identifier was wrong. The phone reads this as "already gone"
+		// and stops asking (ADR-0020).
+		http.Error(w, "there is no such note", http.StatusNotFound)
+	default:
+		http.Error(w, "could not delete the note", http.StatusInternalServerError)
+	}
+}

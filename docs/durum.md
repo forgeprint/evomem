@@ -32,11 +32,12 @@ shared/audio       nota ait kayıtların dosya deposu, silme dahil
 shared/database    tek yazıcılı iki havuz, FTS5 arama, delta izleme,
                    tombstone, öneriler, arşivleme
 core/mcp           stdio JSON-RPC, spec'e göre yazılmış, iki protokol dönemi
-core/api           POST /ingest, /ingest/audio, PUT /notes/{id} + Telegram ve Jira webhook'ları
+core/api           POST /ingest, /ingest/audio, PUT + DELETE /notes/{id},
+                   Telegram ve Jira webhook'ları
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
 cmd/evomem         14 alt komut (mcp, serve, pull, restore, transcribe dahil)
 apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
-                   mobil şema v5: notes.remote_id, remote_updated_at
+                   mobil şema v6: notes.remote_id/remote_updated_at, deletions.remote_id
                    record 7.1.1 + path_provider 2.1.6 (ses kaydı)
 ```
 
@@ -84,7 +85,7 @@ evomem transcribe                     # kuyruğu işle (servis yoksa kapalı)
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı — 70 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı — 75 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **`remote_id`**: yerel bir HTTP sunucusuna karşı; dönen id saklanıyor,
   `updated_at` oynamıyor, ikinci push hiç istek atmıyor, yarıda kalan batch
@@ -125,10 +126,15 @@ Bunlar bende değil, sende:
    bir yer bulamadı (manifest ve Info.plist'e yorum olarak düşüldü).
 2. **Dökümü onaylama akışı.** `tainted` ve `transcribed` işaretlerini
    temizleyen hiçbir şey yok. ADR-0016 ayrı bir karar olarak bıraktı.
-3. **Telefondan silme aynaya gitmiyor.** Mobilde yerel bir `deletions`
-   tablosu yok (`_pushDeletions` sıfır dönüp bunu söylüyor), yani telefonda
-   silinen not aynada yaşamaya devam ediyor. ADR-0019 bunu kapsam dışı
-   bıraktı; kendi tablosu ve yolu gerekiyor.
+3. **Sunucuda silinen not telefonda kalıyor.** `evomem pull` notları okuyor,
+   mezar taşlarını okumuyor. Diğer yön; pull tarafının `deletions` tablosunu
+   da okuması gerekiyor. ADR-0020 kapsam dışı bıraktı.
+
+**Silme tamam** (ADR-0020): `DELETE /notes/{id}` satırı siliyor, aynı
+işlemde mezar taşı yazıyor (PostgreSQL aynasına taşıyan şey o) ve notun ses
+kaydını da götürüyor. Telefonda yerel bir mezar taşı kuyruğu var (mobil şema
+v6: `deletions.remote_id`); kuyruk bir kayıt değil, sunucu aldıktan sonra
+satır siliniyor. 404 "zaten gitmiş" sayılıyor.
 
 **Düzenleme tamam** (ADR-0019): `PUT /notes/{id}` bir notun ne söylediğini
 değiştiriyor — kimliğini, projesini, kaynağını değil; `updated_at`'i sunucu

@@ -7,6 +7,14 @@ import '../sqflite_test_setup.dart' as sqflite_setup;
 
 /// The v3 `notes` table: what a phone that has been installed for a while
 /// has on disk, with no `remote_id`.
+const _v3Deletions = '''
+  CREATE TABLE deletions (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    deleted_at TEXT NOT NULL
+  )
+''';
+
 const _v3Notes = '''
   CREATE TABLE notes (
     rowid INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,6 +47,9 @@ void main() {
         version: 3,
         onCreate: (db, version) async {
           await db.execute(_v3Notes);
+          // A real v3 store has this from v2; without it the fixture would be
+          // easier to migrate than anything that exists.
+          await db.execute(_v3Deletions);
           await db.execute(
             'CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
           );
@@ -81,13 +92,25 @@ void main() {
       );
 
       final db = await DatabaseHelper.instance.database;
-      expect(await db.getVersion(), 5);
+      expect(await db.getVersion(), 6);
       final meta = await db.query(
         'meta',
         where: 'key = ?',
         whereArgs: ['schema_version'],
       );
-      expect(meta.first['value'], '5');
+      expect(meta.first['value'], '6');
+
+      // And the deletions queue can carry a remote id, which is what a
+      // DELETE is addressed with (ADR-0020).
+      await db.insert('deletions', {
+        'id': 'local-9',
+        'project_id': 'evomem',
+        'deleted_at': '2026-10-09T00:00:00.000Z',
+        'remote_id': '01M4D3H3HNMFM69N4MHNAYBZ1Y',
+      });
+      final queued = await NotesDao(DatabaseHelper.instance)
+          .pendingDeletions(10);
+      expect(queued.single.remoteId, '01M4D3H3HNMFM69N4MHNAYBZ1Y');
     },
   );
 }

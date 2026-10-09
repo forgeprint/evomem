@@ -23,6 +23,14 @@ class FakeIngest {
       contentTypes.add(request.headers.contentType?.mimeType ?? '');
       authorizations.add(request.headers.value('authorization') ?? '');
 
+      if (request.method == 'DELETE') {
+        deleted.add(request.uri.path);
+        bodies.add('');
+        request.response.statusCode = deleteStatus;
+        await request.response.close();
+        return;
+      }
+
       if (request.method == 'PUT') {
         putBodies.add(await utf8.decoder.bind(request).join());
         bodies.add('');
@@ -67,12 +75,16 @@ class FakeIngest {
   final List<String> authorizations = [];
   final List<List<int>> audioBodies = [];
   final List<String> putBodies = [];
+  final List<String> deleted = [];
 
   /// What `/ingest/audio` answers.
   int audioStatus = 204;
 
   /// What `PUT /notes/{id}` answers.
   int putStatus = 200;
+
+  /// What `DELETE /notes/{id}` answers.
+  int deleteStatus = 204;
 
   String get url => 'http://127.0.0.1:${_server.port}';
   int get requests => paths.length;
@@ -414,5 +426,78 @@ void main() {
     expect(result.success, isTrue);
     expect(result.notesPushed, 1);
     expect((await dao.getById('local-1'))!.isPushed, isTrue);
+  });
+
+  test('a deletion reaches the mirror and the queue empties', () async {
+    await storeNote('local-1', 'buy milk');
+    final first = await FakeIngest.start();
+    addTearDown(first.close);
+    await pushWith(first);
+
+    await dao.delete('local-1');
+    // A tombstone is waiting, because the server had accepted this note.
+    expect(await dao.pendingDeletions(10), hasLength(1));
+
+    final second = await FakeIngest.start();
+    addTearDown(second.close);
+    final result = await pushWith(second);
+
+    expect(result.success, isTrue);
+    expect(second.deleted, ['/notes/01M4D3H3HNMFM69N4MHNAYBZ1X']);
+    // The queue is not a log: a row that was taken goes.
+    expect(await dao.pendingDeletions(10), isEmpty);
+  });
+
+  test('a note the server never saw leaves no tombstone', () async {
+    await storeNote('local-1', 'never pushed');
+    await dao.delete('local-1');
+
+    // Nothing to ask the server to remove; it could only answer 404.
+    expect(await dao.pendingDeletions(10), isEmpty);
+
+    final server = await FakeIngest.start();
+    addTearDown(server.close);
+    await pushWith(server);
+    expect(server.deleted, isEmpty);
+  });
+
+  test('a 404 on a deletion counts as done', () async {
+    await storeNote('local-1', 'buy milk');
+    final first = await FakeIngest.start();
+    addTearDown(first.close);
+    await pushWith(first);
+    await dao.delete('local-1');
+
+    final second = await FakeIngest.start();
+    addTearDown(second.close);
+    second.deleteStatus = 404;
+
+    final result = await pushWith(second);
+    // The mirror does not have the note, which is what this was asking for.
+    expect(result.success, isTrue);
+    expect(await dao.pendingDeletions(10), isEmpty);
+  });
+
+  test('a deletion that failed stays in the queue', () async {
+    await storeNote('local-1', 'buy milk');
+    final first = await FakeIngest.start();
+    addTearDown(first.close);
+    await pushWith(first);
+    await dao.delete('local-1');
+
+    final second = await FakeIngest.start();
+    addTearDown(second.close);
+    second.deleteStatus = 500;
+
+    final result = await pushWith(second);
+    expect(result.success, isFalse);
+    // Left for the next run rather than dropped on the floor.
+    expect(await dao.pendingDeletions(10), hasLength(1));
+  });
+
+  test('deleting a note removes it from the notes table either way', () async {
+    await storeNote('local-1', 'never pushed');
+    await dao.delete('local-1');
+    expect(await dao.getById('local-1'), isNull);
   });
 }

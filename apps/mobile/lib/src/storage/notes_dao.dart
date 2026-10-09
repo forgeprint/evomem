@@ -122,9 +122,55 @@ class NotesDao {
   }
 
   /// Deletes a note by id.
+  /// Deletes a note by id, and remembers to tell the mirror.
+  ///
+  /// A note the server has accepted leaves a tombstone, in the same
+  /// transaction as the delete so the two cannot come apart. One it has never
+  /// seen leaves none: there would be nothing to ask the server to remove,
+  /// and it could only answer 404 (ADR-0020).
   Future<void> delete(String id) async {
     final db = await _db;
-    await db.delete('notes', where: 'id = ?', whereArgs: [id]);
+    final note = await getById(id);
+    await db.transaction((txn) async {
+      await txn.delete('notes', where: 'id = ?', whereArgs: [id]);
+      if (note != null && note.isPushed) {
+        await txn.insert('deletions', {
+          'id': note.id,
+          'project_id': note.projectId,
+          'deleted_at': DateTime.now().toIso8601String(),
+          'remote_id': note.remoteId,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
+  }
+
+  /// The deletions waiting to be told to the mirror, oldest first.
+  Future<List<Deletion>> pendingDeletions(int limit) async {
+    final db = await _db;
+    final maps = await db.query(
+      'deletions',
+      orderBy: 'deleted_at ASC, id ASC',
+      limit: limit,
+    );
+    return maps
+        .map(
+          (map) => Deletion(
+            localId: map['id']! as String,
+            remoteId: (map['remote_id'] as String?) ?? '',
+            projectId: map['project_id']! as String,
+          ),
+        )
+        .toList();
+  }
+
+  /// Forgets a deletion the mirror has taken.
+  ///
+  /// `deletions` is a queue, not a log: keeping a row after the server has
+  /// acted on it would mean every sync re-sending every deletion this phone
+  /// has ever made (ADR-0020).
+  Future<void> forgetDeletion(String localId) async {
+    final db = await _db;
+    await db.delete('deletions', where: 'id = ?', whereArgs: [localId]);
   }
 
   /// Gets a note by id.
@@ -268,4 +314,23 @@ class NotesDao {
     );
     return maps.map(_noteFromMap).toList();
   }
+}
+
+/// One note this phone deleted that the mirror has not been told about.
+class Deletion {
+  /// Creates a pending deletion.
+  const new({
+    required this.localId,
+    required this.remoteId,
+    required this.projectId,
+  });
+
+  /// This phone's identifier for the note that went.
+  final String localId;
+
+  /// What the server called it, which is what a DELETE is addressed with.
+  final String remoteId;
+
+  /// The project it belonged to.
+  final String projectId;
 }
