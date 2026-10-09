@@ -87,6 +87,8 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 - [x] `POST /ingest/audio` + `shared/audio` deposu + yerel dosya `Fetcher`'ı → ADR-0018
 - [x] Telefonun `/ingest`'ten dönen id'yi saklaması (`remote_id`, mobil şema v4);
       push artık idempotent → ADR-0018
-- [ ] Mobilde düzenlenen notun sunucuda güncellenmesi (`/ingest` update yapamıyor)
+- [x] Mobilde düzenlenen notun sunucuda güncellenmesi: `PUT /notes/{id}` +
+      mobil şema v5 (`remote_updated_at`) → ADR-0019
+- [ ] Telefonda silinen notun aynadan da silinmesi (yerel `deletions` tablosu yok)
 - [x] Not silindiğinde ses dosyasının da silinmesi (archive ve restore dahil) → ADR-0018
 - [ ] Dökümü onaylayıp işaretleri temizleyen akış (ayrı karar)

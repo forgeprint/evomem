@@ -26,7 +26,13 @@ class NotesDao {
       updatedAt: DateTime.parse(map['updated_at'] as String),
       metadata: metadata,
       remoteId: (map['remote_id'] as String?) ?? '',
+      remoteUpdatedAt: _parseOptional(map['remote_updated_at'] as String?),
     );
+  }
+
+  static DateTime? _parseOptional(String? value) {
+    if (value == null || value.isEmpty) return null;
+    return DateTime.tryParse(value);
   }
 
   Map<String, dynamic> _decodeMetadata(String? metadataJson) {
@@ -59,6 +65,7 @@ class NotesDao {
       'updated_at': note.updatedAt.toIso8601String(),
       'metadata': _encodeMetadata(note.metadata),
       'remote_id': note.remoteId,
+      'remote_updated_at': note.remoteUpdatedAt?.toIso8601String() ?? '',
     }, conflictAlgorithm: ConflictAlgorithm.fail);
   }
 
@@ -82,11 +89,33 @@ class NotesDao {
   /// Written on its own rather than through [update], which moves
   /// `updated_at` forward: this changes nothing about the note, and bumping
   /// the timestamp would push it back over the sync cursor it just crossed.
-  Future<void> setRemoteId(String localId, String remoteId) async {
+  Future<void> setRemoteId(
+    String localId,
+    String remoteId,
+    DateTime remoteUpdatedAt,
+  ) async {
     final db = await _db;
     await db.update(
       'notes',
-      {'remote_id': remoteId},
+      {
+        'remote_id': remoteId,
+        'remote_updated_at': remoteUpdatedAt.toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [localId],
+    );
+  }
+
+  /// Records that the mirror now holds what this note says.
+  ///
+  /// Written on its own for the same reason as [setRemoteId]: going through
+  /// [update] would move `updated_at` forward and push the note back over the
+  /// cursor it just crossed.
+  Future<void> setRemoteUpdatedAt(String localId, DateTime at) async {
+    final db = await _db;
+    await db.update(
+      'notes',
+      {'remote_updated_at': at.toIso8601String()},
       where: 'id = ?',
       whereArgs: [localId],
     );

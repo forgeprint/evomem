@@ -7,11 +7,11 @@ import 'package:sqflite/sqflite.dart';
 /// Database version.
 ///
 /// Versions 1 to 3 match the Go backend's, because the tables were the same
-/// ones. Version 4 is the phone's alone: `notes.remote_id` records what the
-/// server called a note it accepted, which is a fact about this device's sync
-/// and not part of the store the backend keeps. The two numbers diverge from
-/// here on.
-const int _databaseVersion = 4;
+/// ones. From 4 on they are the phone's alone, recording facts about this
+/// device's sync rather than the store the backend keeps: `notes.remote_id`
+/// (what the server called a note it accepted) and `notes.remote_updated_at`
+/// (what the note said when it did).
+const int _databaseVersion = 5;
 
 /// Database file name.
 const String _databaseName = 'evomem.db';
@@ -66,7 +66,8 @@ class DatabaseHelper {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         metadata TEXT NOT NULL DEFAULT '{}',
-        remote_id TEXT NOT NULL DEFAULT ''
+        remote_id TEXT NOT NULL DEFAULT '',
+        remote_updated_at TEXT NOT NULL DEFAULT ''
       )
     ''');
 
@@ -192,6 +193,20 @@ class DatabaseHelper {
       // so those notes stay unattachable. See ADR-0018.
       await db.execute(
         "ALTER TABLE notes ADD COLUMN remote_id TEXT NOT NULL DEFAULT ''",
+      );
+    }
+
+    if (oldVersion < 5) {
+      // The note's own updated_at at the moment the server accepted it.
+      // Without it a retried batch cannot tell a note that was edited since
+      // from one that was not, and writes both to the mirror (ADR-0019).
+      //
+      // Empty for every existing row, which reads as "pushed, and we do not
+      // know what it said then": those notes get one redundant PUT on their
+      // next edit and are exact from then on.
+      await db.execute(
+        'ALTER TABLE notes '
+        "ADD COLUMN remote_updated_at TEXT NOT NULL DEFAULT ''",
       );
     }
 

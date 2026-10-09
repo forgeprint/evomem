@@ -157,6 +157,43 @@ whatever reads it next. Nothing here can stop that text being stored; the mark
 is so the reader knows what it is holding. See
 [ADR-0009](adr/0009-tainted-content.md).
 
+## PUT /notes/{id} — change what a note says
+
+Served only with `EVOMEM_API_TOKEN`, under that same token. It replaces the
+content and the metadata of a note the server already has, addressed by the
+id `/ingest` returned — see [ADR-0019](adr/0019-editing-a-pushed-note.md).
+
+```sh
+curl -X PUT "http://127.0.0.1:8765/notes/$id" \
+  -H "Authorization: Bearer $EVOMEM_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"content":"buy oat milk","metadata":{"pinned":false}}'
+```
+
+Both fields are optional and at least one is required: send `content` to
+change the words without restating metadata, or `metadata` alone to change
+what is attached without resending the text. `metadata` **replaces** rather
+than merges.
+
+**It changes what a note says, never what it is.** The id, the project, the
+source and `created_at` are ignored if sent; `updated_at` is set by the
+server, because a clock it does not own has no business ordering its rows and
+`updated_at` is half of the sync cursor. A note edited here is **not** marked
+tainted, for the same reason `/ingest`'s is not: it arrives under the user's
+own token.
+
+| what | answer |
+| - | - |
+| changed | `200` with the id, project and new `updated_at` |
+| no token | `404` — the endpoint is not served |
+| wrong token | `401` |
+| the id is not a note id | `400` |
+| neither field, or empty content | `400` |
+| no note with that id | `404`, and nothing is written |
+
+A **404 is not retried into a create.** The mirror no longer has that note,
+and posting it again would bring back something somebody deleted there.
+
 ## POST /ingest/audio — a recording for a note
 
 Served only with `EVOMEM_API_TOKEN`, under that same token, and only when the

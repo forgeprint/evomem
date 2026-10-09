@@ -47,8 +47,13 @@ type Store interface {
 	Create(ctx context.Context, n *models.Note) error
 
 	// Get is what the audio endpoint checks a note with before storing a
-	// recording against its identifier.
+	// recording against its identifier, and what an edit reads before
+	// changing it.
 	Get(ctx context.Context, id string) (*models.Note, error)
+
+	// Update replaces a note's content and metadata. Only PUT /notes/{id}
+	// calls it (ADR-0019).
+	Update(ctx context.Context, n *models.Note) error
 }
 
 // ChatProjectMap maps chat_id (string form of int64) to project_id.
@@ -131,6 +136,13 @@ func New(store Store, cfg Config) (*Server, error) {
 	if cfg.Token != "" {
 		mux.Handle("POST /ingest", s.authenticated(http.HandlerFunc(s.handleIngest)))
 		s.routes = append(s.routes, "POST /ingest")
+
+		// An edit is a different act from an arrival, so it is a different
+		// method on a different path rather than a third body shape on
+		// /ingest (ADR-0019). Same token: one credential already meant
+		// arbitrary writes.
+		mux.Handle("PUT /notes/{id}", s.authenticated(http.HandlerFunc(s.handleEdit)))
+		s.routes = append(s.routes, "PUT /notes/{id}")
 
 		// Only with somewhere to put a recording. Served under the
 		// same token as /ingest, because it is the second half of one

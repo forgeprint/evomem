@@ -23,6 +23,14 @@ class FakeIngest {
       contentTypes.add(request.headers.contentType?.mimeType ?? '');
       authorizations.add(request.headers.value('authorization') ?? '');
 
+      if (request.method == 'PUT') {
+        putBodies.add(await utf8.decoder.bind(request).join());
+        bodies.add('');
+        request.response.statusCode = putStatus;
+        await request.response.close();
+        return;
+      }
+
       if (request.uri.path == '/ingest/audio') {
         // The body is the recording itself, so it is read as bytes.
         final chunks = <int>[];
@@ -58,9 +66,13 @@ class FakeIngest {
   final List<String> contentTypes = [];
   final List<String> authorizations = [];
   final List<List<int>> audioBodies = [];
+  final List<String> putBodies = [];
 
   /// What `/ingest/audio` answers.
   int audioStatus = 204;
+
+  /// What `PUT /notes/{id}` answers.
+  int putStatus = 200;
 
   String get url => 'http://127.0.0.1:${_server.port}';
   int get requests => paths.length;
@@ -149,7 +161,7 @@ void main() {
     expect(stored!.updatedAt, note.updatedAt);
   });
 
-  test('a note the server already has is not posted again', () async {
+  test('a note the server already has is never posted again', () async {
     await storeNote('local-1', 'buy milk');
     final first = await FakeIngest.start();
     addTearDown(first.close);
@@ -166,8 +178,86 @@ void main() {
 
     expect(result.success, isTrue);
     // /ingest always creates, so a second post would be a second note.
-    expect(second.requests, 0);
-    expect(result.notesPushed, 0);
+    expect(second.paths, isNot(contains('/ingest')));
+  });
+
+  test('an edit reaches the mirror as a PUT', () async {
+    await storeNote('local-1', 'buy milk');
+    final first = await FakeIngest.start();
+    addTearDown(first.close);
+    await pushWith(first);
+
+    // Edited since. The cursor brings it back on (updated_at, id), which is
+    // what makes an edit reach the mirror without a column to remember it.
+    await dao.update(
+      (await dao.getById('local-1'))!
+          .withContent('buy oat milk', DateTime.utc(2026, 10, 9)),
+    );
+    final db = await helper.database;
+    await db.delete('sync_state');
+
+    final second = await FakeIngest.start();
+    addTearDown(second.close);
+    final result = await pushWith(second);
+
+    expect(result.success, isTrue);
+    expect(second.paths, ['/notes/01M4D3H3HNMFM69N4MHNAYBZ1X']);
+    expect(
+      json.decode(second.putBodies.single),
+      containsPair('content', 'buy oat milk'),
+    );
+    expect(result.notesPushed, 1);
+  });
+
+  test('a 404 on an edit does not recreate the note', () async {
+    await storeNote('local-1', 'buy milk');
+    final first = await FakeIngest.start();
+    addTearDown(first.close);
+    await pushWith(first);
+
+    await dao.update(
+      (await dao.getById('local-1'))!
+          .withContent('buy oat milk', DateTime.utc(2026, 10, 9)),
+    );
+    final db = await helper.database;
+    await db.delete('sync_state');
+
+    final second = await FakeIngest.start();
+    addTearDown(second.close);
+    second.putStatus = 404;
+
+    final result = await pushWith(second);
+    // Somebody deleted it on the mirror. Posting it again would undo that
+    // delete on the next sync, which is the worst outcome available.
+    expect(result.success, isTrue);
+    expect(second.paths, isNot(contains('/ingest')));
+    // The local copy and its id are left alone.
+    expect(
+      (await dao.getById('local-1'))!.remoteId,
+      '01M4D3H3HNMFM69N4MHNAYBZ1X',
+    );
+    expect((await dao.getById('local-1'))!.content, 'buy oat milk');
+  });
+
+  test('an edit that failed for another reason fails the batch', () async {
+    await storeNote('local-1', 'buy milk');
+    final first = await FakeIngest.start();
+    addTearDown(first.close);
+    await pushWith(first);
+
+    await dao.update(
+      (await dao.getById('local-1'))!
+          .withContent('buy oat milk', DateTime.utc(2026, 10, 9)),
+    );
+    final db = await helper.database;
+    await db.delete('sync_state');
+
+    final second = await FakeIngest.start();
+    addTearDown(second.close);
+    second.putStatus = 500;
+
+    final result = await pushWith(second);
+    expect(result.success, isFalse);
   });
 
   test('a batch that failed half way is safe to retry', () async {

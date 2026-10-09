@@ -254,11 +254,20 @@ class SyncService {
       // Sequentially, so the server's created_at order matches the phone's.
       for (final note in notes) {
         if (note.isPushed) {
-          // Already accepted, under the id in remote_id. An edit made since
-          // does not reach the server: /ingest cannot update a note, and
-          // posting it again would duplicate it rather than change it. The
-          // remote copy stays as first sent — a known limit of one-way sync
-          // through this endpoint.
+          // Already accepted, under the id in remote_id. Posting it again
+          // would make a second note, so an edit goes as a PUT (ADR-0019).
+          //
+          // Only when it has actually changed: a batch that failed half way
+          // is retried whole, and writing an unchanged note to the mirror
+          // would move its updated_at there — which is the cursor another
+          // device pulls on.
+          if (!note.isEditedSincePush) continue;
+          final changed = await _putNote(client, note);
+          if (changed == null) return null;
+          if (changed) {
+            await _notesDao.setRemoteUpdatedAt(note.id, note.updatedAt);
+            posted++;
+          }
           continue;
         }
 
@@ -290,7 +299,7 @@ class SyncService {
           // post it again.
           return null;
         }
-        await _notesDao.setRemoteId(note.id, remoteId);
+        await _notesDao.setRemoteId(note.id, remoteId, note.updatedAt);
         posted++;
 
         // The recording, now that there is an identifier to attach it to.
@@ -303,6 +312,34 @@ class SyncService {
     } finally {
       client.close();
     }
+  }
+
+  /// Sends what a pushed note now says to `PUT /notes/{id}`.
+  ///
+  /// Returns whether the mirror was changed, or null when the batch should
+  /// stop. A 404 is neither: the mirror no longer has this note, and posting
+  /// it again would bring back something somebody deleted there, so the batch
+  /// carries on and leaves the local copy alone (ADR-0019).
+  Future<bool?> _putNote(http.Client client, Note note) async {
+    final uri = Uri.parse(
+      '${config.serverUrl}/notes/${Uri.encodeComponent(note.remoteId)}',
+    );
+    final request = http.Request('PUT', uri)
+      ..headers.addAll({
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${config.apiToken}',
+      })
+      ..body = json.encode({
+        'content': note.content,
+        'metadata': note.metadata,
+      });
+
+    final streamed = await client.send(request).timeout(config.timeout);
+    final response = await http.Response.fromStream(streamed);
+
+    if (response.statusCode == 200) return true;
+    if (response.statusCode == 404) return false;
+    return null;
   }
 
   /// Sends a note's recording to `POST /ingest/audio`, if it has one.

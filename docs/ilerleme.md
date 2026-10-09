@@ -1570,3 +1570,67 @@ Derleme dosyaları yazıldığında yeniden değerlendirilmeli.
    denemede "No file SKILL.md" verdi; dosya raw URL'de 200 ve 10.9 KB olarak
    duruyordu, ikinci deneme sorunsuz geçti. Yani kalıcı bir eksik değil,
    geçici bir çekme hatası — sunucu bunu "dosya yok" diye bildiriyor.
+
+---
+
+## 2026-10-09 — Düzenleme aynaya ulaşıyor (ADR-0019)
+
+Sırayı kendim kurdum. 3. maddeyi öne aldım çünkü diğer ikisi *eksik yetenek*,
+bu ise **yanlış davranış** ve dün benim bilinçli takasımla girdi: ADR-0018'den
+önce düzenlenen not en azından çift kayıt olarak aynaya ulaşıyordu, sonra hiç
+ulaşmıyordu. v0.1.1 yayında olduğu için canlı bir yanlışlık.
+
+### Karar ve kod
+
+`PUT /notes/{id}`: bir notun **ne söylediğini** değiştirir, **ne olduğunu**
+değil. İçerik ve metadata; kimlik, proje, kaynak ve `created_at` gönderilse
+bile yok sayılır. `updated_at`'i sunucu koyar — sahibi olmadığı bir saatin
+satırlarını sıralamakta işi yok, ve `updated_at` sync imlecinin yarısı.
+`/ingest` gibi tainted işaretlemez: kullanıcının kendi token'ıyla geliyor.
+
+`/ingest`'i client id'siyle upsert yapmak reddedildi: gönderenin kimlik
+seçmesi, bir çağıranın başkasının notunu adını vererek ezmesi demek.
+
+**Olmayan nota PUT 404 ve yeniden yaratılmıyor.** `POST /ingest`'e düşmek,
+aynada birinin sildiği notu geri getirirdi — eldeki en kötü sonuç: bir sonraki
+senkronizasyonda kendini geri alan bir silme. Bu kararın en çok yanlış olma
+ihtimali olan parçası ve ADR'de öyle yazılı.
+
+### Test bir şeyi yakaladı, ADR'yi düzelttim
+
+ADR'nin ilk halinde "**yeni kolon gerekmiyor**" yazıyordu; gerekçe de doğruydu:
+imleç `(updated_at, id)` olduğu için düzenlenen not zaten geri okunuyor. Ama
+eksikti — imleç yalnızca batch bütünüyle başarılı olunca ilerliyor, yani
+**yarıda kalan bir batch bütün notları geri getiriyor** ve telefon
+"push'tan beri değişti mi" sorusunu cevaplayamadığı için değişmemiş olanları da
+PUT ediyor. Var olan test bunu yakaladı: iki notluk tekrarlanan batch bir
+istek beklenirken iki istek attı.
+
+Mobil şema **v5**: `notes.remote_updated_at` — notun sunucu kabul ettiği andaki
+`updated_at`'i. Değişmemiş notu aynaya yeniden yazmak, onun aynadaki
+`updated_at`'ini ileri alır; o da `evomem pull`'un başka bir cihaza verdiği
+imleç, yani buradaki gereksiz yazma oradaki gereksiz okumaya dönüşüyor.
+
+Mevcut satırlar boş değer alıyor = "push edilmiş, ama o an ne dediğini
+bilmiyoruz". Bunlar "değişmiş" sayılıyor: her biri sonraki düzenlemesinde bir
+gereksiz PUT alıyor ve ondan sonra kesin oluyor. "Değişmemiş" varsaymak,
+gerçekten düzenlenmiş bir notu sonsuza dek bayat bırakırdı — düzeltilen kusurun
+aynısı.
+
+ADR'deki yanlış iddia düzeltildi ve nasıl yakalandığı oraya yazıldı.
+
+### Doğrulama
+
+- Go 9 paket yeşil, `./scripts/ci.sh` tam; Flutter 70 test, iki koşu üst üste
+- **Canlı sunucuya karşı**: not geldi → PUT → içerik ve metadata değişti,
+  `created_at` sabit kaldı, `updated_at` ilerledi, **tek not** kaldı
+  (çoğaltmadı)
+- Reddedilenler, canlı: olmayan not 404, bozuk id 400, boş gövde 400, boş
+  içerik 400, yanlış token 401 — ve hiçbiri notu değiştirmedi
+
+### Yan not: kendi kabuğumu bozdum
+
+Doğrulama betiğinde `path` adlı bir kabuk değişkeni kullandım; zsh'de `path`
+dizisi `PATH`'e bağlıdır, yani onu ezince `curl`, `python3` ve `pkill`
+bulunamadı. Değişken yeniden adlandırıldı. Depoyu etkilemedi, ama bir daha
+`path` adını kullanmamak gerekiyor.

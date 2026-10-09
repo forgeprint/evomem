@@ -44,7 +44,11 @@ void main() {
   test('setRemoteId writes only that column', () async {
     final original = note('local-1');
     await dao.insert(original);
-    await dao.setRemoteId('local-1', '01M4D3H3HNMFM69N4MHNAYBZ1X');
+    await dao.setRemoteId(
+      'local-1',
+      '01M4D3H3HNMFM69N4MHNAYBZ1X',
+      original.updatedAt,
+    );
 
     final stored = await dao.getById('local-1');
     expect(stored!.remoteId, '01M4D3H3HNMFM69N4MHNAYBZ1X');

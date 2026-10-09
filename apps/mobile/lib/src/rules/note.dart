@@ -14,6 +14,7 @@ class Note {
     required this.updatedAt,
     this.metadata = const {},
     this.remoteId = '',
+    this.remoteUpdatedAt,
   });
 
   /// Identifies the note in a link such as `/notes/abc123`.
@@ -46,8 +47,21 @@ class Note {
   /// already has one is not posted a second time. See ADR-0018.
   final String remoteId;
 
+  /// What [updatedAt] was when the server accepted this note, or null when it
+  /// has not been accepted or was accepted before this was recorded.
+  final DateTime? remoteUpdatedAt;
+
   /// Whether the server has accepted this note.
   bool get isPushed => remoteId.isNotEmpty;
+
+  /// Whether the note has been edited since the server accepted it.
+  ///
+  /// A note with no recorded [remoteUpdatedAt] counts as changed: it was
+  /// accepted before this column existed, so the honest answer is "unknown",
+  /// and one redundant write is better than a silently stale mirror.
+  bool get isEditedSincePush =>
+      isPushed &&
+      (remoteUpdatedAt == null || updatedAt.isAfter(remoteUpdatedAt!));
 
   /// The same note with [content] and [updatedAt] changed.
   Note withContent(String newContent, DateTime newUpdatedAt) => Note(
@@ -59,6 +73,7 @@ class Note {
     updatedAt: newUpdatedAt,
     metadata: metadata,
     remoteId: remoteId,
+    remoteUpdatedAt: remoteUpdatedAt,
   );
 
   /// The same note with the identifier the server gave it.
@@ -71,5 +86,6 @@ class Note {
     updatedAt: updatedAt,
     metadata: metadata,
     remoteId: newRemoteId,
+    remoteUpdatedAt: updatedAt,
   );
 }

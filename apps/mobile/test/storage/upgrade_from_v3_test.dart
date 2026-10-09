@@ -66,22 +66,28 @@ void main() {
       // and cannot be recovered, so it stays unattachable (ADR-0018).
       expect(note.remoteId, isEmpty);
       expect(note.isPushed, isFalse);
+      // And nothing is known about what the mirror holds (ADR-0019).
+      expect(note.remoteUpdatedAt, isNull);
 
       // And the column is writable, so the next push can record an id.
-      await dao.setRemoteId('local-1', '01M4D3H3HNMFM69N4MHNAYBZ1X');
+      await dao.setRemoteId(
+        'local-1',
+        '01M4D3H3HNMFM69N4MHNAYBZ1X',
+        DateTime.utc(2026),
+      );
       expect(
         (await dao.getById('local-1'))!.remoteId,
         '01M4D3H3HNMFM69N4MHNAYBZ1X',
       );
 
       final db = await DatabaseHelper.instance.database;
-      expect(await db.getVersion(), 4);
+      expect(await db.getVersion(), 5);
       final meta = await db.query(
         'meta',
         where: 'key = ?',
         whereArgs: ['schema_version'],
       );
-      expect(meta.first['value'], '4');
+      expect(meta.first['value'], '5');
     },
   );
 }
