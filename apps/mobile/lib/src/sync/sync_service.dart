@@ -3,7 +3,9 @@ import 'dart:convert';
 
 import 'package:evomem_mobile/src/audio/recording_controller.dart';
 import 'package:evomem_mobile/src/audio/recording_store.dart';
+import 'package:evomem_mobile/src/clusters/cluster_providers.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
+import 'package:evomem_mobile/src/state/notes_notifier.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
 import 'package:evomem_mobile/src/storage/notes_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -538,7 +540,30 @@ class SyncServiceNotifier extends Notifier<SyncServiceState> {
 
   @override
   SyncServiceState build() {
+    // Configured from what is already stored, not only when somebody
+    // presses Save. Until this, `initialize` was called from exactly one
+    // place — the settings screen's save handler — so a reload with
+    // perfectly good settings left the sync service unconfigured, and the
+    // status screen said "set the server URL in Settings" to somebody who
+    // just had. The other screens read the stored settings directly, which
+    // is why they worked and this did not.
+    unawaited(_restore());
     return const SyncServiceState();
+  }
+
+  /// Builds the service from the settings already on this device.
+  Future<void> _restore() async {
+    final settings = await ref.read(serverSettingsProvider.future);
+    if (!ref.mounted || state.isInitialized) return;
+    if (settings.url.isEmpty || settings.token.isEmpty) return;
+
+    initialize(
+      serverUrl: settings.url,
+      apiToken: settings.token,
+      notesDao: ref.read(notesDaoProvider),
+      dbHelper: ref.read(databaseHelperProvider),
+      recordings: ref.read(recordingStoreProvider),
+    );
   }
 
   /// Initialize the sync service with configuration.

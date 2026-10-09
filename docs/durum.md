@@ -112,7 +112,7 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük, ses çalma — 129 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük, ses çalma — 132 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
   sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve

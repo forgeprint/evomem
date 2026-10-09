@@ -2927,3 +2927,23 @@ doğruladım: o origin'in `localStorage`'ında yalnızca
 - "Ayarlı değil" ekranı, tarayıcıda, adres çubuğunu kontrol etmeyi
   söylüyor.
 - `EVOMEM_CORS_ORIGIN` zaten iki yazıma da izin veriyor (önceki commit).
+
+### "Bağlandım ama sync etmiyor" — ve etmemesi normal değildi
+
+Sync Status "Sync not configured. Set server URL and API token in Settings."
+diyordu, ayarlar girilmiş ve Sources/Groups çalışıyorken.
+
+Sebep: `initialize()` **tek bir yerden** çağrılıyordu — ayarlar ekranının
+kaydet düğmesinden. Yani sayfa her yenilendiğinde sync servisi
+yapılandırılmamış kalıyordu, ve durum ekranı ayarları yeni girmiş birine
+"git ayarları gir" diyordu. Diğer ekranlar depoyu doğrudan okuduğu için
+onlar çalışıyordu; fark buydu.
+
+`SyncServiceNotifier.build()` artık kendini zaten kayıtlı ayarlardan
+kuruyor. Testi var ve **düşebildiği kanıtlandı**: `_restore()` çağrısı
+kaldırılınca kırmızıya döndü.
+
+Yol boyunca: `serverSettingsProvider` çekirdek yokken fırlatıyordu
+(`ProjectMemory` ile aynı sınıf). Artık her şeyi yakalayıp "ayar yok"
+diyor — kilitli bir keychain, site verisi engellenmiş bir tarayıcı ve
+çekirdeksiz bir test hepsi aynı anlama geliyor.

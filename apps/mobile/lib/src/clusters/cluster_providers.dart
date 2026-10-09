@@ -13,9 +13,18 @@ final serverSettingsProvider = FutureProvider<({String url, String token})>((
   ref,
 ) async {
   const storage = FlutterSecureStorage();
-  final url = await storage.read(key: 'evomem_server_url') ?? '';
-  final token = await storage.read(key: 'evomem_api_token') ?? '';
-  return (url: url.trim(), token: token.trim());
+  try {
+    final url = await storage.read(key: 'evomem_server_url') ?? '';
+    final token = await storage.read(key: 'evomem_api_token') ?? '';
+    return (url: url.trim(), token: token.trim());
+  } on Object {
+    // Anything, not just Exception. A locked keychain and a browser with
+    // site data blocked throw, and with no Flutter binding the platform
+    // channel throws an Error. Every one of them means the same thing —
+    // there are no settings — and the screens already say what to do
+    // about that. The same reasoning as ProjectMemory.
+    return (url: '', token: '');
+  }
 });
 
 /// The client the cluster service sends with.
