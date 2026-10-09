@@ -1748,3 +1748,58 @@ durumu istedi, komut bunu söyleyip sıfırla çıkıyor.
 Toplu onay yok: ADR-0021 `-project` bayrağını bilinçli dışarıda bıraktı,
 sürtünmeyi koruma sayarak. Bunun tiyatro mu gerçek koruma mı olduğu kullanımla
 anlaşılacak; öyle çıkarsa küçük bir değişiklik ve kendi kararı.
+
+---
+
+## 2026-10-09 (devam) — Web gerçekten çalışıyor mu? Hayır.
+
+Kullanıcı yönü verdi: **web önce, mobil sonra** — not döngüsü (oluşturma,
+yapay zekâ ile kümeleme, organize etme) önce tarayıcıda denenebilsin; mimari
+genişletilebilir olsun çünkü sırada notları organize eden yapay zekâ ve onu
+Claude'a bağlayan MCP özellikleri var. `docs/durum.md`'ye "Yön" başlığı olarak
+eklendi.
+
+Bunun üzerine, bir şey yazmadan önce varsayımı denedim.
+
+### `flutter build web` geçiyordu, uygulama hiç açılmıyordu
+
+`web/index.html` eski bootstrap kalıbındaydı: `_flutter.loader.loadEntrypoint`
+çağırıp `serviceWorkerVersion` değişkenini okuyor, ama bu Flutter sürümü artık
+o değişkeni tanımlamıyor. Script hata veriyor, motor hiç başlamıyor —
+**sayfa bomboş**. CI haftalardır yeşildi çünkü `flutter build web --release`
+yalnızca derlemeyi ölçüyor.
+
+Doğru kalıbı hafızadan yazmadım: geçici bir dizinde `flutter create
+--platforms=web` ile SDK'nın kendi şablonunu alıp ona göre yazdım
+(`<script src="flutter_bootstrap.js" async>`). Eksik `web/icons/` ve
+`favicon.png` de SDK şablonundan eklendi — ikisi de index.html ve manifest
+tarafından isteniyordu ve 404 veriyordu.
+
+Araya bir hata da ben kattım: özel bir yükleme katmanı yazıp yorumuna
+"uygulama kaldırır" dedim, kaldıran bir şey yoktu. Flutter üstüne boyadığı
+için görünmüyordu ama yorum yalandı; katman tamamen kaldırıldı ve şablon
+SDK'nınki kadar sade bırakıldı.
+
+### Asıl bulgu: açılıyor, ama hiçbir şey kaydetmiyor
+
+Tarayıcıda denedim — uygulama açıldı, not yazdım, "Add Note" bastım: not
+listede göründü ve "Note saved" dedi. **Sayfayı yenileyince not yok.**
+
+Neden, paketlerin kendi `pubspec.yaml`'larından:
+
+| paket | beyan ettiği platformlar | web |
+| - | - | - |
+| `sqflite` | android, ios, macos | **yok** |
+| `path_provider` | android, ios, linux, macos, windows | **yok** |
+| `record` | android, ios, web, windows, macos, linux | var |
+
+Yazma patlıyor, konsolda yakalanmamış bir hata kalıyor; `NotesNotifier` state'i
+yazmadan **önce** iyimser güncellediği için arayüz olmamış bir başarıyı
+gösteriyor. Yani en kötü tür bozukluk: çalışıyormuş gibi görünen bir şey.
+
+### Sonuç
+
+Kullanıcının istediği "tarayıcıda dene" yolu, depo katmanı web'de çalışmadan
+mümkün değil. Bu, 1. maddeden (sunucuda silinen notun telefona ulaşması) daha
+öncelikli hale geldi ve `durum.md`'ye 0. madde olarak yazıldı. Nasıl
+çözüleceği bir mimari karar ve kullanıcıya sorulacak.

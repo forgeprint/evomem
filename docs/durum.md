@@ -115,9 +115,33 @@ Bunlar bende değil, sende:
    `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`, sonra taslağı
    oku ve yayınla.
 
+## Yön (2026-10-09, kullanıcıdan)
+
+**Web önce, mobil sonra.** Not döngüsünün tamamı — not oluşturma, **notların
+yapay zekâ ile kümelere oturması ve organize edilmesi** — önce tarayıcıda
+denenebilsin; mobil ondan sonra geliştirilsin. Web bir yan ürün değil, test
+yüzeyi.
+
+**Mimari genişletilebilir olsun:** sırada notları organize eden yapay zekâ ve
+onu Claude'a bağlayan **MCP özellikleri** var. Bu yönde istekler gelecek,
+sökülmeden yerine konamayacak hiçbir şey tasarlanmamalı.
+
+Önceliklendirme sonucu: yalnızca telefonda karşılığı olan iş (platform derleme
+dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
+
 ## Sırada — kod
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
+
+0. **Flutter web hiçbir şeyi kaydetmiyor — yukarıdaki yönün önündeki engel.**
+   Uygulama tarayıcıda açılıyor ve not eklemek "Note saved" diyor, ama
+   yenileyince not yok. Neden paketlerin kendi `pubspec`'lerinde yazılı:
+   `sqflite` yalnızca `android, ios, macos`, `path_provider` yalnızca
+   `android, ios, linux, macos, windows` — ikisinde de web yok. Yazma
+   patlıyor; `NotesNotifier` iyimser güncelleme yaptığı için arayüz olmamış
+   bir başarıyı gösteriyor. (`record`'un web desteği **var**.)
+   Depo katmanı web uygulaması olan bir şeye geçmeli ya da arayüz arkasına
+   alınmalı — ikincisi "genişletilebilir mimari" isteğiyle aynı iş.
 
 1. **Android/iOS derleme dosyaları yok.** `android/` ve `ios/` ağaçlarında ne
    `build.gradle`, ne `settings.gradle`, ne `Podfile`, ne `Runner.xcodeproj`
