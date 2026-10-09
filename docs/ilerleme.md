@@ -2657,3 +2657,24 @@ Artık "the microphone was refused" satırının altında
 `package:web` doğrudan bağımlılık oldu. Zaten record_web ve
 sqflite_common_ffi_web üzerinden derlemedeydi, yani pakete hiçbir şey
 eklemiyor; tarayıcıya bunu sormanın başka yolu yok.
+
+### Ve bir şey daha çıktı: web imajı temiz klondan derlenmiyordu
+
+`package:web`'i bağımlılık yapınca `pubspec.lock` değişti ama commit'e
+girmedi — `apps/mobile/.gitignore`'da `*.lock` varmış. Oysa
+`docker/Dockerfile.web` onu kopyalıyor.
+
+İddia etmek yerine denedim: `git archive HEAD` ile temiz bir ağaç çıkarıp
+imajı derledim →
+
+```
+ERROR: "/apps/mobile/pubspec.lock": not found
+```
+
+Yani web imajı **hiçbir zaman temiz bir klondan derlenemiyormuş**; bende
+çalışmasının sebebi, çalışma ağacımda deponun içermediği bir dosya olması.
+Tam bu projenin tekrar tekrar yakaladığı sınıf: "bende çalışıyor".
+
+`pubspec.lock` artık commit'li. Gerekçe `.gitignore`'a yazıldı: bu bir
+kütüphane değil uygulama, kilit dosyası derlemeyi tekrarlanabilir yapan şey.
+Düzeltmeden sonra ikisi de temiz ağaçtan derlendi.

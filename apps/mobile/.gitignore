@@ -2,7 +2,6 @@
 .dart_tool/
 .pub-cache/
 build/
-*.lock
 *.log
 *.packages
 
@@ -14,6 +13,15 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# pubspec.lock is committed on purpose. This is an application, not a
+# library: the lockfile is what makes a build reproducible, and
+# docker/Dockerfile.web copies it before resolving. It was ignored, and the
+# web image turned out not to build from a clean checkout at all — only from
+# a working tree that happened to have the file.
+#
+# Other lockfiles stay out; add them by name if any appear.
+ios/Flutter/ephemeral/
 
 # Generated files
 lib/l10n/app_localizations.dart

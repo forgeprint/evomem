@@ -132,6 +132,10 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
   **yok**. Arama konteynerden gerçek depoya karşı: `veritabani` → `veritabanı`,
   `dugum` → `düğüm`, `kilitlenmek` → hiçbir şey. `PUT` 200, `DELETE` 204,
   mezar taşı düştü.
+- **Docker imajları temiz klondan**: `git archive HEAD` ile çıkarılmış bir
+  ağaçta hem sunucu hem web imajı derleniyor. Önce derlenmiyordu —
+  `pubspec.lock` gitignore'luydu ama Dockerfile onu kopyalıyordu; artık
+  commit'li.
 - **Docker uçtan uca**: `db` + `server` + `web` ayakta, sunucu 12 ucu
   yayınladı, `/ingest` 201, `sync` notu PostgreSQL'e yazdı. Web konteyneri
   her dosyayı doğru içerik tipiyle servis etti; CORS izin verilen origin'e
