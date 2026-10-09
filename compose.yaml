@@ -1,0 +1,104 @@
+# Evomem, running continuously: the database, the server and the web app.
+#
+# The web app is a browser page and talks to the server over HTTP like any
+# other client, so the two are separate services on separate ports and the
+# server's EVOMEM_CORS_ORIGIN is what lets the page call it at all. Nothing
+# is served to a wildcard origin (ADR-0010).
+#
+# Secrets come from .env, which is not committed. `cp .env.example .env` and
+# fill it in; the server refuses to serve an endpoint whose secret is
+# missing rather than serving it open.
+
+name: evomem
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-evomem}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-evomem}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # Published on loopback only: this is the machine's database, not the
+    # network's. Change it deliberately if something else has to reach it.
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      # The server waits for this rather than for the container to exist:
+      # postgres accepts connections a few seconds after it starts, and a
+      # migration that runs before then fails for no reason anyone can see.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-evomem} -d ${POSTGRES_DB:-evomem}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server
+      args:
+        VERSION: ${EVOMEM_VERSION:-docker}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      EVOMEM_API_TOKEN: ${EVOMEM_API_TOKEN:?set EVOMEM_API_TOKEN in .env}
+      EVOMEM_SECRET_KEY: ${EVOMEM_SECRET_KEY:?set EVOMEM_SECRET_KEY in .env}
+      EVOMEM_PROJECT: ${EVOMEM_PROJECT:-default}
+      # Exactly the origin the web service is published on. A browser page
+      # served from anywhere else is refused.
+      EVOMEM_CORS_ORIGIN: ${EVOMEM_CORS_ORIGIN:-http://localhost:8080}
+      # Set here, and today the server does not read it: only `evomem sync`
+      # does. It becomes the server's own store when ADR-0028's migration
+      # lands, and until then the server keeps its SQLite file on the volume
+      # below. Said plainly rather than left looking finished.
+      EVOMEM_POSTGRES_DSN: postgres://${POSTGRES_USER:-evomem}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-evomem}?sslmode=disable
+      EVOMEM_TELEGRAM_SECRET: ${EVOMEM_TELEGRAM_SECRET:-}
+      EVOMEM_TELEGRAM_PROJECT: ${EVOMEM_TELEGRAM_PROJECT:-}
+      EVOMEM_JIRA_SECRET: ${EVOMEM_JIRA_SECRET:-}
+      EVOMEM_JIRA_PROJECT: ${EVOMEM_JIRA_PROJECT:-}
+    volumes:
+      - server-data:/data
+    ports:
+      - "127.0.0.1:${EVOMEM_PORT:-8787}:8787"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+
+  # Pushes what the server holds into PostgreSQL. Run on demand:
+  #   docker compose run --rm sync
+  # It is not a long-running service because sync is something somebody
+  # asks for, the same rule the pull connectors follow (ADR-0025).
+  sync:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server
+    profiles: ["tools"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      EVOMEM_POSTGRES_DSN: postgres://${POSTGRES_USER:-evomem}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-evomem}?sslmode=disable
+    volumes:
+      - server-data:/data
+    command: ["sync", "-once", "-init-remote"]
+
+volumes:
+  db-data:
+  server-data:

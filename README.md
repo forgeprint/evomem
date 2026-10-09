@@ -52,6 +52,21 @@ evomem archive -dry-run    # what would be thinned out
 One-directional: the local file is the authority and PostgreSQL is a mirror.
 Archiving holds back anything not yet synced. See [docs/sync.md](docs/sync.md).
 
+## Running it continuously
+
+```sh
+cp .env.example .env     # fill in three secrets
+docker compose up -d
+```
+
+The web app on <http://localhost:8080>, the server on
+<http://localhost:8787>, PostgreSQL beside them — all published on loopback.
+The phone keeps SQLite so it works with no network and pushes one way into
+the server. PostgreSQL is where the server's own store is going (ADR-0028);
+today it holds the mirror, and the server still keeps a SQLite file.
+
+[docs/docker.md](docs/docker.md) has the rest.
+
 ## Building
 
 ```sh

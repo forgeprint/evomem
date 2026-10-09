@@ -111,5 +111,14 @@ if [ ! -x "$bin" ]; then
 	install_gitleaks "$platform"
 fi
 
+# .env is allowlisted in .gitleaks.toml because it is gitignored and is where
+# the local secrets belong. That allowlist is only safe while git is not
+# tracking the file, so this checks rather than assumes.
+if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+	echo "git is tracking .env, which holds this machine's real secrets." >&2
+	echo "Remove it from the index: git rm --cached .env" >&2
+	exit 1
+fi
+
 echo "==> $("$bin" version) scanning working tree"
 "$bin" dir . --config .gitleaks.toml --redact --no-banner

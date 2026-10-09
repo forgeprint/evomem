@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-09 (on birinci oturum) · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-09 (on ikinci oturum) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -47,6 +47,22 @@ apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good
 Şema sürümü **5**. Kayıtlar şemada değil, veritabanının yanındaki `audio/`
 dizininde. Bağımlılıklar: `modernc.org/sqlite`, `jackc/pgx/v5`,
 ikisi de vendor'lı ve saf Go.
+
+## Çalıştırma (sürekli kullanım)
+
+```sh
+cp .env.example .env     # üç sır doldurulur
+docker compose up -d     # db + server + web, hepsi loopback'te
+docker compose run --rm sync
+```
+
+Web <http://localhost:8080>, sunucu <http://localhost:8787>, PostgreSQL
+`127.0.0.1:5432`. Ayrıntı `docs/docker.md`'de.
+
+**Dikkat:** `compose.yaml`'da `server` servisinde `EVOMEM_POSTGRES_DSN` var
+ama **sunucu bugün onu okumuyor** — yalnızca `evomem sync` okuyor. Sunucu
+hâlâ volume'daki SQLite dosyasını tutuyor; PostgreSQL şimdilik ADR-0012'nin
+aynası. ADR-0028 bunu değiştiriyor, göç henüz başlamadı.
 
 ## Komutlar
 
@@ -108,6 +124,13 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
   gördü (Bearer, model adı, system+user, `json_object`,
   `max_completion_tokens`, `max_tokens` yok) → üç not tek kümeye girdi.
   Uydurulmuş id düştü; anahtar veritabanında düz metin değil.
+- **Docker uçtan uca**: `db` + `server` + `web` ayakta, sunucu 12 ucu
+  yayınladı, `/ingest` 201, `sync` notu PostgreSQL'e yazdı. Web konteyneri
+  her dosyayı doğru içerik tipiyle servis etti; CORS izin verilen origin'e
+  başlık veriyor, başkasına vermiyor.
+- **Proje seçimi tarayıcıda**: konteynerden açılan uygulamada `default`'a
+  not yazıldı, `isler` projesi açıldı, liste boşaldı, oraya not yazıldı ve
+  **tam yenilemeden sonra `isler`'de geri geldi** — seçim hatırlanıyor.
 - **Panel uçtan uca, tarayıcıda**: Jira panelden bağlandı (201), liste onu
   gösterdi, "Sync now" `POST /connections/pull` attı (200), sahte Jira iki
   sayfa gördü (ilk istekte `nextPageToken` yok, ikincide `page-2`), iki issue
@@ -163,9 +186,10 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    konuşturmak için önüne bir uyum katmanı gerekir. `Grouper` arayüzü buna
    kapalı değil (ADR-0027).
 
-1. **Proje seçimi tarayıcıda görülmedi.** Mantığın testi var ama bu oturumda
-   tarayıcı paneli açılamadı; seçimin bir yenilemeden sağ çıktığı gözle
-   doğrulanmadı. Sıradaki oturumun ilk işi.
+1. **ADR-0028'in göçü başlamadı.** Sunucunun deposu PostgreSQL olacak;
+   Docker, volume ve kablolama hazır ama `shared/database` hâlâ yalnızca
+   SQLite konuşuyor. Beş aşamaya bölündü, ADR'de sırası yazılı. Bu, kalan
+   işlerin en büyüğü.
 
 2. **Tarayıcıda ses kaydı çalışmıyor.** `record`'un web desteği var ama kaydı
    yazdığımız yolu `path_provider` veriyor ve onun web uygulaması yok.

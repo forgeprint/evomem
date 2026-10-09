@@ -1,0 +1,10 @@
+# Keep the build context small and keep local state out of the image.
+.git
+dist
+docs
+apps/mobile/build
+apps/mobile/.dart_tool
+**/*.db
+**/*.db-wal
+**/*.db-shm
+.env

@@ -29,3 +29,16 @@ Scoped to the ULID alphabet and length rather than allowing high-entropy
 strings generally, so a real key of a different shape is still caught.
 """
 regexes = ['''\b[0-7][0-9A-HJKMNP-TV-Z]{25}\b''']
+
+[[allowlists]]
+description = """
+The local .env. Docker Compose reads it from the project root by convention,
+it is where this machine's real secrets are supposed to live, and it is in
+.gitignore — so what it holds cannot reach the repository.
+
+Allowlisting a path normally trades away protection, so it is paid for:
+scripts/gitleaks.sh refuses to run if git is tracking .env. That covers the
+one case this rule would otherwise miss, somebody running `git add -f .env`,
+and it fails loudly rather than silently passing.
+"""
+paths = ['''^\.env$''']

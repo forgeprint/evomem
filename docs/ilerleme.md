@@ -2253,3 +2253,86 @@ notifier ile atılıp yeniden kurulmuş bir notifier'ı ayırt edemiyor; test
   `web:` platformunu **tanımlıyor** (`path_provider`'ın aksine) ve ayarlar
   aynı depoyu kullanarak tarayıcıda zaten çalışıyor. Yine de gözle
   görülmedi; sıradaki oturumun ilk işi.
+
+## On ikinci oturum — Docker, ve sunucunun deposu kararı
+
+İstenen iki şeydi: web tarafı ve PostgreSQL için Docker, sürekli kullanım
+için. Konuşurken üçüncüsü netleşti: **sunucunun kendi deposu PostgreSQL
+olacak**, mobil offline çalışsın diye SQLite kalacak, sync mobilden sunucudaki
+Postgre'ye gidecek.
+
+### Bugün çalışan
+
+`compose.yaml`: üç servis — `db` (postgres:17-alpine), `server`, `web` — ve
+istendiğinde koşan bir `sync`. Hepsi **yalnızca loopback'te** yayımlanıyor.
+Sırlar `.env`'den; `.env` commit edilmiyor, `.env.example` ne gerektiğini
+söylüyor.
+
+- `docker/Dockerfile.server`: vendor'lı ağaçtan, `CGO_ENABLED=0`, ağsız
+  derleme; son imaj alpine + ca-certificates, **root değil**, veri tek bir
+  volume'da (not ve ses kaydı yan yana kalsın diye).
+- `docker/Dockerfile.web`: Flutter SDK **Google'ın kendi sürüm meta
+  verisinden** indiriliyor ve yayımladıkları sha256 ile doğrulanıyor
+  (3.47.5, 2026-10-09). Üçüncü taraf bir temel imaj kullanılmadı.
+
+### Vendor'dan öğrenilen bir şey
+
+Flutter Linux SDK'sını **yalnızca x64** yayınlıyor: `releases_linux_arm64.json`
+diye bir dosya yok (404). İlk denemede arm64 makinede x64 arşivi çalıştırmaya
+çalıştım ve `rosetta error: failed to open elf` aldım. Derleme aşaması
+`--platform=linux/amd64`'e sabitlendi — yalnızca o aşama; koşan imaj nginx ve
+o yerel mimaride.
+
+### nginx.conf'ta kendi yazdığım hata
+
+`types { application/wasm wasm; }` koymuştum — gerekçem `sqlite3.wasm`'in
+doğru tiple servis edilmesiydi. İki bakımdan yanlıştı: nginx'in kendi
+`mime.types`'ı `wasm`'i zaten eşliyor, **ve** `server` seviyesindeki bir
+`types` bloğu miras alınan haritaya eklemez, onun **yerine geçer**. Yani
+`main.dart.js` `application/octet-stream` olarak gidecekti ve uygulama hiç
+açılmayacaktı. Kaldırıldı; konteynerden `curl` ile her tipin doğru geldiği
+görüldü.
+
+### Doğrulandı
+
+Docker'daki sunucu ayağa kalktı, 12 ucu da yayınladı, `/healthz` yanıt verdi,
+`POST /ingest` 201 döndü, `docker compose run --rm sync` şemayı kurdu ve notu
+Docker'daki PostgreSQL'e yazdı — `psql` ile satır görüldü.
+
+Web konteyneri: `/`, `index.html`, `main.dart.js`, `flutter_bootstrap.js`,
+`sqlite3.wasm` hepsi 200 ve **doğru içerik tipiyle**; `index.html`'e
+`no-cache`; olmayan bir yola SPA geri dönüşü. CORS: izin verilen origin'e
+`Access-Control-Allow-Origin` veriliyor, başka bir origin'e **verilmiyor**
+(istek işleniyor ama tarayıcı yanıtı okutmuyor; kapı hâlâ token).
+
+**Ve tarayıcıda, konteynerden**: uygulama açıldı, `default`'a not yazıldı,
+seçici `default · 1` gösterdi, "New project…" ile `isler` açıldı, liste
+boşaldı, oraya not yazıldı — **sayfa tam yenilendikten sonra `isler`'de geri
+geldi ve yalnızca onun notu göründü**. Bu, on birinci oturumun açık bıraktığı
+maddeydi: seçim bir yenilemeden sağ çıkıyor ve `flutter_secure_storage`
+tarayıcıda çalışıyor.
+
+### Söylenmesi gereken
+
+`compose.yaml`'da `server` servisinde `EVOMEM_POSTGRES_DSN` var ama **bugün
+sunucu onu okumuyor**; yalnızca `evomem sync` okuyor. Yok sayılan bir ortam
+değişkeni tuzaktır, o yüzden compose'da, `docs/docker.md`'de ve README'de
+bugünkü durum açıkça yazıldı: sunucu hâlâ volume'daki SQLite dosyasını
+tutuyor, PostgreSQL şimdilik ADR-0012'nin aynası.
+
+### ADR-0028
+
+Göç kararı yazıldı. İki şey kaydedildi, çünkü ikisi de bedel:
+
+- **SQLite uygulaması kalıyor, ve bu tercih değil.** `scripts/ci.sh` her
+  makinede çevrimdışı koşmak zorunda, ve `evomem mcp` ile komut satırı
+  sunucu değil — ikisini de PostgreSQL'e bağlamak, ADR-0001'in aldığı "tek
+  ikili, çalışma zamanı yok"u geri verir. Depo arka ucu çalışma zamanında
+  seçiliyor: `EVOMEM_POSTGRES_DSN` varsa Postgre, yoksa SQLite dosyası.
+  Bedeli: her sorgu iki kez yazılıyor ve iki kez test ediliyor.
+- **Türkçe arama yeniden karara bağlanıyor.** PostgreSQL'de **gömülü Türkçe
+  sözlük yok**, yani `to_tsvector('turkish', …)` mevcut değil; dürüst
+  başlangıç `simple`. ADR-0003'ün kaydettiği davranışla kıyaslanabilir ama
+  aynı değil — sonradan biri farkı hata sanmasın diye yazıldı.
+
+Göç beş aşamaya bölündü; henüz hiçbiri yapılmadı.

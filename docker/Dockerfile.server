@@ -1,0 +1,49 @@
+# The evomem server: one static binary and the certificates it needs to call
+# somebody else's API.
+#
+# Built from the vendored tree, so the build needs no network and the image
+# contains exactly the dependencies that are reviewable in this repository
+# (ADR-0002).
+
+FROM golang:1.27-alpine AS build
+
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY vendor/ vendor/
+COPY cmd/ cmd/
+COPY core/ core/
+COPY shared/ shared/
+
+ARG VERSION=docker
+# CGO_ENABLED=0 is not optional here either: the whole point of the pure-Go
+# SQLite driver is that no C toolchain is in the chain (ADR-0001).
+RUN CGO_ENABLED=0 go build -mod=vendor -trimpath \
+	-ldflags "-s -w -X main.version=${VERSION}" \
+	-o /out/evomem ./cmd/evomem
+
+FROM alpine:3.22
+
+# Certificates, because the server calls Jira and a model over TLS. tzdata
+# so timestamps in logs are not all UTC-or-nothing.
+RUN apk add --no-cache ca-certificates tzdata \
+	&& adduser -D -u 10001 evomem \
+	&& mkdir -p /data && chown evomem:evomem /data
+
+COPY --from=build /out/evomem /usr/local/bin/evomem
+
+# Not root: this process holds other people's API tokens and serves the
+# user's memory.
+USER evomem
+WORKDIR /data
+
+# The store and the recordings beside it live here, so one volume keeps
+# both and `evomem delete` can still reach a note's audio (ADR-0018).
+ENV EVOMEM_DB=/data/evomem.db
+
+# Containers have no loopback worth binding to: the port is published by
+# compose, and the token is what guards it (ADR-0010).
+ENV EVOMEM_ADDR=0.0.0.0:8787
+EXPOSE 8787
+
+ENTRYPOINT ["evomem"]
+CMD ["serve"]

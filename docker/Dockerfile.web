@@ -1,0 +1,49 @@
+# The Flutter web app, built from source and served as static files.
+#
+# The SDK is downloaded from Google's own release storage and checked against
+# the sha256 their release metadata publishes, rather than taken from a
+# third-party base image: this is the one piece of the build that comes off
+# the network, so it is the one piece worth pinning.
+#
+# Version, archive path and digest read from
+# https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json
+# on 2026-10-09.
+
+# Pinned to amd64 on purpose. Google publishes the Linux SDK as x64 only —
+# there is no releases_linux_arm64.json and no arm64 archive in the metadata
+# (checked 2026-10-09) — so on an arm64 host this stage runs emulated. Slow
+# once; the layer caches. Only this stage: the image that actually runs is
+# nginx, and that is native.
+FROM --platform=linux/amd64 debian:bookworm-slim AS build
+
+ARG FLUTTER_VERSION=3.47.5
+ARG FLUTTER_SHA256=2132e990f236f8d22e7c6314b29a191a95b10d7cbcfec9b4e2e303d996652cbb
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+	ca-certificates curl git unzip xz-utils \
+	&& rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL -o /tmp/flutter.tar.xz \
+	"https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz" \
+	&& echo "${FLUTTER_SHA256}  /tmp/flutter.tar.xz" | sha256sum -c - \
+	&& tar -xJf /tmp/flutter.tar.xz -C /opt \
+	&& rm /tmp/flutter.tar.xz
+
+ENV PATH="/opt/flutter/bin:${PATH}"
+# Flutter refuses to run in a directory owned by somebody else.
+RUN git config --global --add safe.directory /opt/flutter
+
+WORKDIR /app
+# Dependencies first, so editing a Dart file does not re-resolve the world.
+COPY apps/mobile/pubspec.yaml apps/mobile/pubspec.lock ./
+RUN flutter pub get
+
+COPY apps/mobile/ ./
+RUN flutter build web --release
+
+FROM nginx:1.29-alpine
+
+COPY --from=build /app/build/web /usr/share/nginx/html
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80

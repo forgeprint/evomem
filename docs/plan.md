@@ -108,3 +108,12 @@ This step-by-step roadmap governs the iterative development of the Evomem Monore
 - [x] Jira bağlayıcısı (`/rest/api/3/search/jql`, nextPageToken)
 - [x] Panel: bağlantıları arayüzden kurma ve "sync" düğmesi (ADR-0026)
 - [x] Sunucu tarafı model API anahtarı → ADR-0027 (aynı keyring, OpenAI-uyumlu)
+
+## Plan dışı: sürekli çalıştırma ve PostgreSQL göçü
+- [x] Docker: db + server + web + sync, loopback'te, sırlar `.env`'den
+- [x] Sunucunun deposunun PostgreSQL olması kararı → ADR-0028
+- [ ] 1. Lehçe ayrımı ve yer tutucu yeniden yazımı (SQLite suite yeşil kalır)
+- [ ] 2. PostgreSQL şeması ve migration'ları, suite iki arka uca karşı
+- [ ] 3. Arama: `tsvector` + GIN, ADR-0003'ün davranışıyla kıyaslanarak
+- [ ] 4. Kümeler, bağlantılar, öneriler, mezar taşları
+- [ ] 5. `core/sync` ve `evomem_notes`'un akıbeti
