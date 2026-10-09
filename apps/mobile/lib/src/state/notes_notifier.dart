@@ -5,11 +5,25 @@ import 'package:evomem_mobile/src/rules/note_rules.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
 import 'package:evomem_mobile/src/storage/notes_dao.dart';
 import 'package:evomem_mobile/src/storage/notes_store.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// The notes list for a project, and the only thing allowed to change it.
 final notesProvider = NotifierProvider<NotesNotifier, List<Note>>(
   NotesNotifier.new,
+);
+
+/// What a note written in this app is filed under.
+///
+/// The phone is a source in its own right, the way Jira and Telegram are: a
+/// note that came off a phone says so, and the server can be asked for just
+/// those. The browser is not a source — it is where the memory is worked on —
+/// so a note typed there is filed as the hand-written note it is.
+///
+/// Decided here rather than in `lib/src/rules`, which may not import Flutter
+/// and so cannot ask which platform this is.
+final currentSourceProvider = Provider<String>(
+  (ref) => kIsWeb ? defaultSourceType : 'mobile',
 );
 
 /// Current project ID filter.

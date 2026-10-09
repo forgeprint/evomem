@@ -95,6 +95,12 @@ type Config struct {
 	JiraSecret  string
 	JiraProject string
 
+	// CORSOrigins names the origins a browser may call the read side from,
+	// comma-separated. Empty allows none: absent is off, not open, like
+	// every other secret here. No wildcard is accepted — an endpoint that
+	// serves somebody's memory to `*` is one any page they visit can read.
+	CORSOrigins string
+
 	// Recordings is where POST /ingest/audio puts an upload. Nil means
 	// that endpoint is not served at all: there is nowhere to put a
 	// recording, and ADR-0018 keeps recordings only on the condition that
@@ -106,6 +112,7 @@ type Config struct {
 type Server struct {
 	http       *http.Server
 	store      Store
+	reader     Reader
 	recordings Recordings
 	cfg        Config
 
@@ -129,6 +136,11 @@ func New(store Store, cfg Config) (*Server, error) {
 	}
 
 	s := &Server{store: store, cfg: cfg}
+	// Every caller passes a *database.DB, which is both. Taking them as two
+	// interfaces is what keeps each half honest about what it touches.
+	if reader, ok := store.(Reader); ok {
+		s.reader = reader
+	}
 	mux := http.NewServeMux()
 
 	// Unauthenticated on purpose, and says nothing but that the process is
@@ -152,6 +164,17 @@ func New(store Store, cfg Config) (*Server, error) {
 		// The first irreversible thing this token can do (ADR-0020).
 		mux.Handle("DELETE /notes/{id}", s.authenticated(http.HandlerFunc(s.handleDelete)))
 		s.routes = append(s.routes, "DELETE /notes/{id}")
+
+		// The read side (ADR-0024). Only when the store can answer: every
+		// caller passes a *database.DB, and a store that cannot read is a
+		// test double that should not advertise routes it has not got.
+		if s.reader != nil {
+			mux.Handle("GET /notes", s.authenticated(http.HandlerFunc(s.handleListNotes)))
+			mux.Handle("GET /clusters", s.authenticated(http.HandlerFunc(s.handleListClusters)))
+			mux.Handle("GET /clusters/{id}", s.authenticated(http.HandlerFunc(s.handleGetCluster)))
+			s.routes = append(s.routes,
+				"GET /notes", "GET /clusters", "GET /clusters/{id}")
+		}
 
 		// Only with somewhere to put a recording. Served under the
 		// same token as /ingest, because it is the second half of one
@@ -197,7 +220,7 @@ func New(store Store, cfg Config) (*Server, error) {
 
 	s.http = &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           mux,
+		Handler:           withCORS(mux, corsOrigins(cfg.CORSOrigins)),
 		ReadTimeout:       readTimeout,
 		ReadHeaderTimeout: readTimeout,
 		WriteTimeout:      writeTimeout,

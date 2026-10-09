@@ -33,7 +33,7 @@ shared/database    tek yazıcılı iki havuz, FTS5 arama, delta izleme,
                    tombstone, öneriler, kümeler, arşivleme
 core/mcp           stdio JSON-RPC, 10 araç (6 okur, 1 önerir, 3 gruplar)
 core/api           POST /ingest, /ingest/audio, PUT + DELETE /notes/{id},
-                   Telegram ve Jira webhook'ları
+                   GET /notes + /clusters, CORS, Telegram ve Jira webhook'ları
 core/sync          Remote arayüzü, worker, PostgreSQL transportu
 cmd/evomem         17 alt komut (mcp, serve, pull, restore, transcribe, endorse dahil)
 apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good_analysis, l10n)
@@ -137,14 +137,16 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-0. **Kümeleri tarayıcı göremiyor — ADR-0023'ün bıraktığı iş.** Ajan MCP ile
-   **Go ikilisinin** deposuna konuşuyor; Flutter uygulamasının kendi deposu
-   ayrı ve senkronizasyon tek yönlü (tarayıcı/telefon → Go). Yani bir ajanın
-   yaptığı gruplama, tam da denenmek istenen yerde görünmüyor. Flutter'ın
-   zaten HTTP ile konuştuğu sunucuya bir okuma yolu (`GET /clusters`) en
-   küçük adım gibi duruyor; ayrı karar.
+0. **Üçüncü taraf kaynaklar için çekme bağlayıcıları yok.** Jira ve Telegram
+   bugün **webhook** ile geliyor — onlar bize itiyor. İstenen ise platformun
+   kendi API'lerini çağırması: "web'de sync'e bas, o kaynaktan çek". Kaynak
+   başına kimlik bilgisi, kaynak başına imleç ve bir tetikleyici gerekiyor —
+   panelin API anahtarının duracağı yer de burası. Kendi kararını istiyor.
 
-1. **Tarayıcıda ses kaydı çalışmıyor.** `record`'un web desteği var ama kaydı
+1. **Kümeleri istemci arayüzü henüz göstermiyor.** Okuma yolu **var**
+   (`GET /clusters`), Flutter tarafı onu henüz çağırmıyor.
+
+2. **Tarayıcıda ses kaydı çalışmıyor.** `record`'un web desteği var ama kaydı
    yazdığımız yolu `path_provider` veriyor ve onun web uygulaması yok.
    Tarayıcının tam bir test yüzeyi olmasının önündeki sıradaki engel.
 
@@ -154,12 +156,27 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    ama **gerçek bir mikrofonla hiç denenmedi ve bu dosyalar olmadan
    denenemez**. `record` 7.1.1'in istediği minSdk 23 ve iOS 12 de yazılacak
    bir yer bulamadı (manifest ve Info.plist'e yorum olarak düşüldü).
-3. **Toplu onay yok.** `evomem endorse` tek notu alıyor; proje ya da kaynak
+4. **Toplu onay yok.** `evomem endorse` tek notu alıyor; proje ya da kaynak
    bazında onay ADR-0021'de bilinçli olarak dışarıda bırakıldı (sürtünme
    koruma sayıldı). Bunun tiyatro mu koruma mı olduğu kullanımla anlaşılacak.
-4. **Sunucuda silinen not telefonda kalıyor.** `evomem pull` notları okuyor,
+5. **Sunucuda silinen not telefonda kalıyor.** `evomem pull` notları okuyor,
    mezar taşlarını okumuyor. Diğer yön; pull tarafının `deletions` tablosunu
    da okuması gerekiyor. ADR-0020 kapsam dışı bıraktı.
+
+**Okuma yolu açıldı** (ADR-0024): `GET /notes`, `GET /clusters`,
+`GET /clusters/{id}` — hepsi aynı token'ın arkasında, token yoksa endpoint de
+yok. **Otorite türe göre ayrıldı**: not yazıldığı cihaza ait ve tek yönlü
+itilir (ADR-0012 korunuyor), küme yalnızca sunucuda yaşar ve istemciler onu
+HTTP ile okur. İki yönlü sync açılmadan telefonun kümeleri görmesi böyle
+mümkün oluyor; bedeli kümelerin çevrimdışı görünmemesi.
+
+**`EVOMEM_CORS_ORIGIN`** olmadan tarayıcı bu uçları çağıramaz. Boş bırakmak
+hiçbir origin'e izin vermiyor ve `*` kabul edilmiyor.
+
+**Mobil artık bir kaynak** (ADR-0024): telefon notları `manual` yerine
+`mobile` olarak gönderiyor, yani `GET /notes?source=mobile` çalışıyor.
+Tarayıcıda yazılan not `manual` kalıyor — tarayıcı bir kaynak değil, hafızanın
+üzerinde çalışılan yer.
 
 **Kümeleme tamam** (ADR-0023, Go tarafı): ajan MCP ile notları gruplayabiliyor.
 Beş yeni araç (`create_cluster`, `update_cluster`, `delete_cluster`,

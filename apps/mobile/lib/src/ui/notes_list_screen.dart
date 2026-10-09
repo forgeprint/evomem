@@ -50,6 +50,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
         .add(
           rawContent: _addController.text,
           projectId: ref.read(currentProjectProvider),
+          sourceType: ref.read(currentSourceProvider),
         );
     setState(() => _problem = problem);
     if (problem == null) {

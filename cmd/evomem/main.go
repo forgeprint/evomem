@@ -80,6 +80,7 @@ serve reads its secrets from the environment, never from a flag:
   EVOMEM_JIRA_SECRET      the Jira webhook's secret
   EVOMEM_JIRA_PROJECT     overrides the issue's own project key
   EVOMEM_ADDR             address to listen on
+  EVOMEM_CORS_ORIGIN      origins a browser may call from; unset allows none
 
 sync reads its connection string from the environment for the same reason:
   EVOMEM_POSTGRES_DSN     postgres://user:password@host:5432/db

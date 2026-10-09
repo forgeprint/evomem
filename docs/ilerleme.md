@@ -1931,3 +1931,59 @@ konuşuyor, Flutter uygulamasının kendi deposu ayrı, senkronizasyon tek yönl
 (tarayıcı → Go). Yani bir ajanın yaptığı gruplama, tam da denenmek istenen
 yerde görünmüyor. Flutter'ın zaten HTTP ile konuştuğu sunucuya bir okuma yolu
 en küçük adım gibi duruyor; ayrı bir karar.
+
+---
+
+## 2026-10-09 (devam) — Sunucunun okuma tarafı (ADR-0024)
+
+Kullanıcı ürünün ne olduğunu en net haliyle anlattı ve bu, iki kayıtlı kararı
+yeniden açtı. Hafızaya ve `durum.md`'ye yazıldı.
+
+**Amaç:** her not — elle yazılan ya da Jira, Apple Notes, Telegram'dan gelen —
+kullanıcının **hafızası** olacak ve MCP ile Claude'a açılacak. Telefon
+sunucuya senkronize olur, sunucu kümeler, telefon da o kümeleri görüp
+düzenleyebilir.
+
+**Kaynak kimin olduğuna göre yön değişiyor:** telefon *benim*, o yüzden
+telefonda sync'e basınca yukarı iter. Jira ve Apple Notes *başkasının*, o
+yüzden web'de sync'e basınca platform onların API'sinden çeker. İkinci yön
+**yok**: bugün Jira ve Telegram webhook ile geliyor, yani onlar bize itiyor.
+
+### Kullanıcının seçtiği mimari
+
+**Otorite türe göre ayrıldı.** Not *yazılır* — yazıldığı cihaza aittir, tek
+yönlü itilir, ADR-0012 korunur, çevrimdışı çalışır. Küme *türetilir* —
+hepsine birden bakabilen bir şey tarafından sunucuda üretilir ve **yalnızca
+orada** yaşar; istemciler HTTP ile okur ve düzenler. Çakışma çözümünü gerekli
+kılan şey — aynı şeyin iki yerde üretilmesi — böylece hiç doğmuyor. Bedeli:
+kümeler çevrimdışı görünmüyor.
+
+### Yazılanlar
+
+- `GET /notes` (proje, kaynak, `q` ile arama, limit/offset), `GET /clusters`,
+  `GET /clusters/{id}`. Hepsi aynı token'ın arkasında; token yoksa endpoint de
+  yok (ADR-0010).
+- Okuma tarafı **uyarı metni taşımıyor**: işaretler metadata'da, istemci
+  onları kendi gösterir. MCP'deki satırlar modelin düzyazı okuması yüzünden
+  var.
+- **CORS**, `EVOMEM_CORS_ORIGIN` ile. Boş = hiçbir origin, ve `*` kabul
+  edilmiyor: birinin hafızasını `*`'a servis eden bir uç, o kişinin girdiği
+  her sayfanın okuyabileceği bir uçtur.
+- **Mobil bir kaynak oldu.** Telefon `manual` gönderiyordu, yani sunucuda
+  komut satırından yazılandan ayırt edilemiyordu ve `?source=mobile` boş
+  dönerdi. Artık `mobile` gönderiyor; tarayıcıda yazılan not `manual` kalıyor
+  çünkü tarayıcı bir kaynak değil.
+
+Bunu yazarken projenin kendi kuralına çarptım: karar `lib/src/rules`'a
+konulamıyor, çünkü orası Flutter import edemiyor (bir test bunu zorluyor) ve
+`kIsWeb` Flutter'dan geliyor. Karar durum katmanına, bir provider'a taşındı.
+
+### Doğrulama
+
+- Go 353+ test, `./scripts/ci.sh` yeşil; Flutter 77 test
+- **Canlı sunucuya karşı**: üç kaynaktan not yazıldı, `?source=jira` ve
+  `?source=mobile` doğru filtreledi, `q=` arama çalıştı
+- **CORS**: izinli origin başlıkları ve `Vary: Origin` aldı, preflight 204
+  döndü, izinsiz origin hiçbir `Access-Control-Allow-Origin` almadı
+- **Zincirin tamamı**: ajan MCP ile küme yaptı → bir istemci onu HTTP ile
+  okudu, içindeki notlarla birlikte; token olmadan 401

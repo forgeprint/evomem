@@ -34,6 +34,7 @@ func cmdServe(args []string, out io.Writer) error {
 		TelegramChatProjects: parseChatProjects(os.Getenv("EVOMEM_TELEGRAM_CHAT_PROJECTS")),
 		JiraSecret:           os.Getenv("EVOMEM_JIRA_SECRET"),
 		JiraProject:          os.Getenv("EVOMEM_JIRA_PROJECT"),
+		CORSOrigins:          os.Getenv("EVOMEM_CORS_ORIGIN"),
 		Recordings:           recordings(),
 	}
 

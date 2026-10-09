@@ -35,11 +35,19 @@ const (
 	SourceShortcut SourceType = "shortcut"
 	SourceMCP      SourceType = "mcp"
 	SourceAudio    SourceType = "audio"
+
+	// SourceMobile is the phone app. It is a source like any other — Jira
+	// and Telegram are the neighbours, not the exception — so a note that
+	// came off a phone says so and can be filtered by it. Before this it
+	// arrived as "manual" and was indistinguishable from one typed into
+	// the command line.
+	SourceMobile SourceType = "mobile"
 )
 
 // KnownSourceTypes is what this build ships adapters for.
 var KnownSourceTypes = []SourceType{
 	SourceManual, SourceTelegram, SourceJira, SourceShortcut, SourceMCP, SourceAudio,
+	SourceMobile,
 }
 
 // Validation failures a caller is expected to handle and report.
