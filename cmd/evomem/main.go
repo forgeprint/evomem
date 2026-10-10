@@ -58,6 +58,7 @@ usage:
   evomem restore [-confirm]
   evomem sync-status
   evomem transcribe [-batch <n>] [-dry-run] [-timeout <d>]
+  evomem audio  [-convert]
   evomem archive [-months <n>] [-project <id>] [-vacuum] [-dry-run]
 
 The mcp command speaks the Model Context Protocol on stdin and stdout; it is
@@ -162,6 +163,8 @@ func run(args []string, out io.Writer, in io.Reader) error {
 		return cmdSyncStatus(rest, out)
 	case "transcribe":
 		return cmdTranscribe(rest, out)
+	case "audio":
+		return cmdAudio(rest, out)
 	case "endorse":
 		return cmdEndorse(rest, out)
 	case "clusters":
@@ -515,6 +518,23 @@ func storePath() string {
 
 // recordings is the one place the audio directory is decided: beside the
 // database, wherever that is.
+//
+// It converts what it is given into the one format every client can play,
+// when there is an ffmpeg to do it with (ADR-0036). There usually is not:
+// `evomem` is one static binary with no runtime dependencies, and a local
+// install has whatever the machine happens to have. The server's image
+// carries one on purpose. Either way the recording is kept.
 func recordings() *audio.Store {
-	return audio.StoreBeside(storePath())
+	store := audio.StoreBeside(storePath())
+	converter := audio.FFmpeg{}
+	if !converter.Available() {
+		return store
+	}
+	return store.WithConverter(converter, func(noteID, from, to string, err error) {
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "audio: %s stays %s: %v\n", noteID, from, err)
+			return
+		}
+		fmt.Fprintf(os.Stderr, "audio: %s converted %s to %s\n", noteID, from, to)
+	})
 }

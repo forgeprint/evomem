@@ -11,6 +11,7 @@
 package audio
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -73,6 +74,26 @@ func ExtensionFor(mediaType string) (string, bool) {
 // A Store is a directory of recordings.
 type Store struct {
 	dir string
+
+	// Convert turns a recording into the one format every client can
+	// play, when the one that arrived is not (ADR-0036).
+	//
+	// Nil means keep what arrived. That is the right answer for a local
+	// `evomem` — one static binary with no runtime dependencies — and the
+	// clients that can play the original still can. The server's image
+	// carries ffmpeg and sets this.
+	Convert Converter
+
+	// OnConvert is told what happened, for a server that keeps a log.
+	// Nil means say nothing.
+	OnConvert func(noteID, from, to string, err error)
+}
+
+// WithConverter returns the store, set up to convert what it is given. It
+// returns the store so a caller can wire it in one line.
+func (s *Store) WithConverter(c Converter, report func(noteID, from, to string, err error)) *Store {
+	s.Convert, s.OnConvert = c, report
+	return s
 }
 
 // StoreBeside opens the store that belongs to a database file: the `audio`
@@ -152,7 +173,44 @@ func (s *Store) Save(noteID, mediaType string, r io.Reader) (string, error) {
 	if err := os.Rename(tmp.Name(), name); err != nil {
 		return "", fmt.Errorf("audio: storing the recording: %w", err)
 	}
+
+	// Converted after it is safely stored, never instead of storing it.
+	// A conversion that fails leaves the recording exactly as it arrived,
+	// which is worse for one client and no worse than before for any of
+	// them — losing the audio would be worse than both.
+	if converted, err := s.convert(noteID, name); err == nil && converted != "" {
+		return converted, nil
+	}
 	return name, nil
+}
+
+// convert replaces a stored recording with one every client can play.
+//
+// Returns the new name, or empty when nothing was done. The error is
+// reported through OnConvert rather than returned, because every caller of
+// Save would have to decide to ignore it: the upload succeeded.
+func (s *Store) convert(noteID, name string) (string, error) {
+	if s.Convert == nil || !NeedsConverting(name) {
+		return "", nil
+	}
+	target, err := s.path(noteID, PlayableExt)
+	if err != nil {
+		return "", err
+	}
+
+	err = s.Convert.Convert(context.Background(), name, target)
+	if s.OnConvert != nil {
+		s.OnConvert(noteID, filepath.Ext(name), PlayableExt, err)
+	}
+	if err != nil {
+		return "", err
+	}
+	// Only now: the original is what a retry would convert again, and
+	// until the new one exists it is the only copy there is.
+	if err := os.Remove(name); err != nil {
+		return "", fmt.Errorf("audio: removing %s after converting it: %w", name, err)
+	}
+	return target, nil
 }
 
 // Open returns a note's recording and the name it is stored under, which is

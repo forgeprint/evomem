@@ -25,7 +25,15 @@ FROM alpine:3.22
 
 # Certificates, because the server calls Jira and a model over TLS. tzdata
 # so timestamps in logs are not all UTC-or-nothing.
-RUN apk add --no-cache ca-certificates tzdata \
+#
+# ffmpeg is the one runtime dependency in this image, and it is deliberate
+# (ADR-0036). A browser records Opus in WebM, which Apple platforms have no
+# demuxer for, so a note recorded in a browser could not be played on a
+# phone. The server converts on arrival into AAC in an m4a, which all three
+# clients play. 608 KiB installed, and the binary itself is unchanged: it
+# looks for ffmpeg and keeps the recording as it arrived when there is none,
+# so a local `evomem` with no ffmpeg still works.
+RUN apk add --no-cache ca-certificates tzdata ffmpeg \
 	&& adduser -D -u 10001 evomem \
 	&& mkdir -p /data && chown evomem:evomem /data
 

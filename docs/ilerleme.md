@@ -3500,3 +3500,38 @@ Yazarken bir hata yaptım ve test yakaladı: log en dışta elindeki request'i
 tutuyor, kimliği öğrenen ara katman ise `WithContext` ile **yeni** bir
 request üretiyor; ilk sürüm yetkilendirdiği istekler dahil her satıra `as=-`
 yazıyordu. Bağlama önceden konan bir işaretçi ikisi tarafından paylaşılıyor.
+
+## 2026-10-11 — Her kayıt her yerde çalınıyor (ADR-0036)
+
+**Kullanıcı kararı:** ffmpeg olsun, her ses kaydı her yerde dinlenebilsin.
+
+**Çekirdek ikili bağımlılıksız kaldı** — CLAUDE.md'deki kural bu ve delinmedi:
+`evomem` ffmpeg'i arıyor, **yoksa kaydı geldiği gibi tutuyor**. ffmpeg
+yalnızca sunucunun Docker imajında (alpine'da 608 KiB). ffmpeg'siz yerel bir
+kurulum eskisi gibi davranıyor; yeni hiçbir şey bozulmuyor.
+
+**Nerede:** `Store.Save`, kaydı **sakladıktan sonra** dönüştürüyor — yerine
+değil. Dönüştürme başarısız olursa kayıt geldiği gibi kalıyor ve yükleme yine
+başarılı; sesi kaybetmek, bir istemcinin çalamamasından kötü. Orijinal
+yalnızca yenisi var olduktan **sonra** siliniyor.
+
+**Neyi çevirdiği:** yalnızca `.webm` ve `.ogg` — yani Apple platformlarının
+okuyamadıkları. "m4a olmayan her şey" değil: mp3 ve wav zaten her yerde
+çalınıyor, yeniden kodlamak boşuna kayıp olurdu.
+
+**Komut dosyadan okunmadı, çalıştırıldı.** alpine:3.22 içinde ffmpeg 6.1.2 ile
+gerçek bir telefon kaydından tarayıcı biçimi (Opus/WebM, 48 kHz) üretildi,
+sonra geri çevrildi: AAC/m4a, mono 16 kHz, tepe genlik 4348 → 4331. Ses
+korunuyor.
+
+**Uçtan uca doğrulandı:** `POST /ingest/audio` ile `audio/webm` yüklendi →
+diskte `.m4a`, 98 ms, logda `converted .webm to .m4a`; `GET
+/notes/{id}/audio` artık `Content-Type: audio/mp4` veriyor, 10,05 s, tepe
+4331. Eskiden yüklenmiş bir webm için `evomem audio` önce ne yapacağını
+söyledi, `-convert` yaptı.
+
+**Maliyetler yazıldı:** ikinci bir kayıplı geçiş; orijinal gidiyor; imajda
+artık vendor edilmemiş bir çalışma-zamanı bağımlılığı var (ADR-0002'nin
+"imajdaki her bağımlılık bu depoda incelenebilir" cümlesi artık bir eksikle
+doğru); ffmpeg güvenilmeyen medya ayrıştırıyor; dönüştürme istek içinde
+oluyor ve beş dakikayla sınırlı.

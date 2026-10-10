@@ -234,11 +234,16 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    tepe genliği 10/32767 idi; sonrakiler dolu. Emülatör `-allow-host-audio`
    ile açılmalı, yoksa sessizlik gönderiyor.
 
-3. **Tarayıcıda kaydedilen not telefonda çalınamıyor.** Telefonda ses çalma
-   **yazıldı ve iOS'ta doğrulandı** (audioplayers 6.8.1). Ama tarayıcı Opus'u
-   WebM kabında yazıyor ve AVFoundation WebM okumuyor — uygulama bunu önden
-   söylüyor ("tarayıcıda hâlâ çalınıyor") ama çözmüyor. Çözüm transcode;
-   kararı verilmedi. (ADR-0031 eki)
+3. **Her kayıt her yerde çalınıyor.** (tamam) Sunucu, gelen kaydı
+   **AAC/m4a**'ya çeviriyor — tarayıcının yazdığı Opus/WebM'i AVFoundation
+   okuyamıyordu. Dönüştürme **sakladıktan sonra** yapılıyor, yani başarısız
+   olursa kayıt geldiği gibi duruyor ve yükleme yine başarılı; telefondaki ret
+   mesajı o durum için ağ olarak kalıyor.
+
+   **Çekirdek ikili bağımlılıksız kaldı:** `evomem` ffmpeg'i arıyor, yoksa
+   kaydı olduğu gibi tutuyor. ffmpeg yalnızca sunucunun Docker imajında (608
+   KiB). Eskiden yüklenmiş kayıtlar için `evomem audio -convert`.
+   → ADR-0036
 
 4. **Toplu onay yok — ve şimdilik yapılmamalı.** ADR-0021 bunu açık bir
    koşula bağlamış: "sürtünme koruma mı tiyatro mu, kullanımla anlaşılacak."
