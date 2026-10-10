@@ -427,6 +427,11 @@ döküm, dağıtım ve gerçek dünya denemeleri.
 
 ## Bilinen sınırlar (hata değil, karar)
 
+- **Proje adları cihazda tutuluyor, sunucuda değil.** Bir projeyi telefonda
+  açıp içine hiç yazmazsan, o ad yalnızca o cihazda bilinir — web'de ya da
+  başka bir telefonda görünmez. Proje hâlâ hiçbir tabloda satır değil; altına
+  not dosyalanınca her yerde var olur.
+
 - **Web'de ayarlar origin başına.** `flutter_secure_storage` tarayıcıda
   `localStorage` kullanıyor; `localhost:8080`'de kaydedilen sunucu adresi
   `127.0.0.1:8080`'de yok. Uygulama hiç yapılandırılmamış gibi görünür ve

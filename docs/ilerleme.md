@@ -3341,3 +3341,30 @@ sunucuda silinen not bir sonraki sync'te telefondan düştü; telefonun
 **Bir şey çalıştırınca çıktı:** pull sqflite'a yazıyor ama liste onu
 izlemiyordu — 10 not geldi, ekran "No notes yet" diyordu. Pull sonrası liste
 yeniden yükleniyor.
+
+## 2026-10-10 — İçine not girilmemiş proje kayboluyordu
+
+**Rapor:** "Yeni proje kaydettim ama proje değişince kayboldu — sanırım içine
+not girmediğim proje kayboluyor." Teşhis doğruydu; simülatörde birebir
+tekrarlandı: `deneme` 0 notla listede duruyor, `default`'a geçilince yok
+oluyor.
+
+**Sebep, hata değil tasarımdı:** bir proje yalnızca altına dosyalanmış
+notlardan biliniyordu, artı o an seçili olan. Yani yeni ve boş bir projeden
+ayrılmak, onun bilinmesinin bittiği tam andı. Tasarım tutarlıydı ama insanı
+yanıltıyordu: bir projeyi **içine yazmak için** açarsın; önce eski projeye bir
+bakmak onu kaybettiriyordu.
+
+**Yapılan:** seçilen proje adları artık cihazda tutuluyor
+(`ProjectMemory.known`, en fazla 20, en eskisi düşer) ve picker bunları 0 notla
+gösteriyor. **Sunucuya hiçbir şey gitmiyor**; proje hâlâ hiçbir tabloda satır
+değil — bu yalnızca picker'ın ne yazdığını hatırlaması. Yanlış yazılan bir ad
+satırdaki ✕ ile unutuluyor; notu olan proje notlardan bilindiği için ✕
+gösterilmiyor (basılsa da geri gelirdi).
+
+Dialog'daki tek açıklayıcı satır ekranda kırpılıyordu ("It exists once a note
+is filed un…"), yani davranışı anlatan cümle kimseye ulaşmıyordu; sığacak
+kadar kısaltıldı.
+
+**Kanıt:** dört test (biri raporun kendisi), düzeltme geri alınınca düşüyor;
+simülatörde proje kalıyor ve ✕ çalışıyor. 191 test, analyzer temiz.

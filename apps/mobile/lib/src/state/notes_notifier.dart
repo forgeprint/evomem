@@ -79,23 +79,66 @@ final notesDaoProvider = Provider<NotesStore>(
   (ref) => NotesDao(ref.watch(databaseHelperProvider)),
 );
 
-/// The projects the store holds notes for, with the chosen one always among
-/// them.
+/// The projects to offer: the ones with notes, plus the names chosen on this
+/// device, plus whichever is current.
 ///
 /// A project nobody has written to yet does not exist as far as the store is
-/// concerned, so a freshly created one would vanish from the list the moment
-/// it was picked. Including the current one keeps the picker honest about
-/// what it is showing.
+/// concerned. That used to be the whole answer, and it meant a project
+/// somebody had just created vanished the moment they switched away — which
+/// is exactly what somebody does after creating one: go and look at the old
+/// project first. Only the current one was kept, so switching off it lost it.
+///
+/// So a name somebody chose is remembered on the device as well
+/// ([ProjectMemory.known]). It is still not a row in any table and it is not
+/// sent anywhere: a project is brought into existence by a note being filed
+/// under it, and this is the picker remembering what was typed.
 final projectsProvider = FutureProvider<List<ProjectCount>>((ref) async {
   final current = ref.watch(currentProjectProvider);
   // Rebuilt when the notes change, so a project that has just received its
   // first note appears without a reload.
-  ref.watch(notesProvider);
+  ref
+    ..watch(notesProvider)
+    // And when a name is remembered or forgotten.
+    ..watch(projectNamesRevisionProvider);
 
-  final known = await ref.watch(notesDaoProvider).projects();
-  if (known.any((p) => p.projectId == current)) return known;
-  return [...known, ProjectCount(current, 0)];
+  final withNotes = await ref.watch(notesDaoProvider).projects();
+  final counted = {for (final p in withNotes) p.projectId: p};
+
+  final names = <String>[
+    ...withNotes.map((p) => p.projectId),
+    ...await ref.watch(projectMemoryProvider).known(),
+    current,
+  ];
+
+  final seen = <String>{};
+  return [
+    for (final name in names)
+      if (seen.add(name)) counted[name] ?? ProjectCount(name, 0),
+  ];
 });
+
+/// Bumped when the remembered names change, so the picker reads them again.
+///
+/// [ProjectMemory] is a port over a platform store, not something that can be
+/// watched. This is the smallest thing that makes a write visible.
+final projectNamesRevisionProvider = NotifierProvider<ProjectNames, int>(
+  ProjectNames.new,
+);
+
+/// Holds the revision and the two ways to change the remembered names.
+class ProjectNames extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  /// Takes [projectId] off the device's list of names.
+  ///
+  /// Only the name. A project with notes under it is known from the notes
+  /// and comes straight back, which is what makes this safe to offer.
+  Future<void> forget(String projectId) async {
+    await ref.read(projectMemoryProvider).forget(projectId);
+    state++;
+  }
+}
 
 /// Holds the list. Every decision it makes comes from `lib/src/rules`; this
 /// class applies them and owns the identifiers, nothing else.

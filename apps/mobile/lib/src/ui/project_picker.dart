@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
 import 'package:evomem_mobile/src/storage/notes_store.dart';
 import 'package:flutter/material.dart';
@@ -46,10 +48,29 @@ class ProjectPicker extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Expanded(child: Text(project.projectId)),
                 const SizedBox(width: 8),
-                Text(
-                  '${project.notes}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                // Only an empty one can be forgotten, and only the name is:
+                // a project with notes under it is known from the notes and
+                // would come straight back, so offering it there would be a
+                // button that does nothing.
+                if (project.notes == 0 && project.projectId != current)
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 16),
+                    tooltip: 'Forget this name',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      unawaited(
+                        ref
+                            .read(projectNamesRevisionProvider.notifier)
+                            .forget(project.projectId),
+                      );
+                    },
+                  )
+                else
+                  Text(
+                    '${project.notes}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
               ],
             ),
           ),
@@ -80,8 +101,12 @@ class ProjectPicker extends ConsumerWidget {
     );
   }
 
-  /// Asks for a name. A new project is nothing but a name: the first note
-  /// filed under it is what brings it into existence.
+  /// Asks for a name.
+  ///
+  /// A project is still nothing but a name until a note is filed under it.
+  /// The difference is that the name is now kept on this device, so one that
+  /// has just been typed does not vanish the moment somebody looks at
+  /// another project first.
   Future<String?> _askForName(BuildContext context) {
     final controller = TextEditingController();
     return showDialog<String>(
@@ -93,7 +118,10 @@ class ProjectPicker extends ConsumerWidget {
           autofocus: true,
           decoration: const InputDecoration(
             labelText: 'Name',
-            helperText: 'It exists once a note is filed under it',
+            // Short enough to fit: the old sentence was clipped to
+            // "It exists once a note is filed un…", so the one line that
+            // explained the behaviour never reached anybody.
+            helperText: 'Kept here until you write in it',
             border: OutlineInputBorder(),
           ),
           onSubmitted: (value) => Navigator.of(context).pop(value.trim()),

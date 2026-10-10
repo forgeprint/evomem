@@ -15,8 +15,22 @@ class FakeProjectMemory implements ProjectMemory {
   @override
   Future<String> remembered() async => value;
 
+  /// The names chosen here, newest first, like the real one keeps.
+  final List<String> chosen = [];
+
   @override
-  Future<void> remember(String projectId) async => value = projectId;
+  Future<void> remember(String projectId) async {
+    value = projectId;
+    chosen
+      ..remove(projectId)
+      ..insert(0, projectId);
+  }
+
+  @override
+  Future<List<String>> known() async => List.unmodifiable(chosen);
+
+  @override
+  Future<void> forget(String projectId) async => chosen.remove(projectId);
 }
 
 ProviderContainer containerWith(FakeProjectMemory memory) {
@@ -128,4 +142,88 @@ void main() {
       );
     },
   );
+  // The report: "I created a new project and it disappeared when I switched
+  // projects." It did. A project was known only from the notes filed under
+  // it, plus whichever one was selected — so switching off a brand new,
+  // empty one was the exact moment it stopped being known.
+  test('a project with no notes survives switching away from it', () async {
+    final memory = FakeProjectMemory();
+    final container = containerWith(memory);
+
+    container.read(currentProjectProvider.notifier).select('deneme');
+    await settle();
+
+    container.read(currentProjectProvider.notifier).select(defaultProjectId);
+    await settle();
+    final projects = await container.read(projectsProvider.future);
+
+    expect(
+      projects.map((p) => p.projectId),
+      contains('deneme'),
+      reason: 'the project somebody just made is gone from the picker',
+    );
+    expect(
+      projects.firstWhere((p) => p.projectId == 'deneme').notes,
+      0,
+      reason: 'it is still empty, and should say so',
+    );
+  });
+
+  test('a name typed by mistake can be dropped', () async {
+    final memory = FakeProjectMemory();
+    final container = containerWith(memory);
+
+    container.read(currentProjectProvider.notifier).select('yanlis');
+    await settle();
+    container.read(currentProjectProvider.notifier).select(defaultProjectId);
+    await settle();
+    expect(
+      (await container.read(projectsProvider.future)).map((p) => p.projectId),
+      contains('yanlis'),
+    );
+
+    await container
+        .read(projectNamesRevisionProvider.notifier)
+        .forget('yanlis');
+    await settle();
+
+    expect(
+      (await container.read(projectsProvider.future)).map((p) => p.projectId),
+      isNot(contains('yanlis')),
+    );
+  });
+
+  test('the chosen project is always offered, even if nothing remembers it',
+      () async {
+    final container = containerWith(FakeProjectMemory());
+
+    // Nothing has been remembered and no note is filed under it; it is
+    // still what the app is showing, so the picker has to say so.
+    container.read(currentProjectProvider.notifier).select('simdi');
+    await settle();
+
+    expect(
+      (await container.read(projectsProvider.future)).map((p) => p.projectId),
+      contains('simdi'),
+    );
+  });
+
+  test('a name is offered once, with its real count', () async {
+    final memory = FakeProjectMemory();
+    final container = containerWith(memory);
+
+    // Chosen, so remembered; and it is also the default, which has notes.
+    container.read(currentProjectProvider.notifier).select('baska');
+    await settle();
+    container.read(currentProjectProvider.notifier).select(defaultProjectId);
+    await settle();
+
+    final projects = await container.read(projectsProvider.future);
+    final names = projects.map((p) => p.projectId).toList();
+    expect(
+      names.length,
+      names.toSet().length,
+      reason: 'the same project is offered twice',
+    );
+  });
 }
