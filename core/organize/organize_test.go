@@ -373,9 +373,13 @@ func TestFromConnectionFindsTheModelAndNotASource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := FromConnection(connections, key)
+	grouper, err := FromConnection(connections, key)
 	if err != nil {
 		t.Fatal(err)
+	}
+	svc, ok := grouper.(*Service)
+	if !ok {
+		t.Fatalf("an OpenAI-compatible row built a %T", grouper)
 	}
 	if svc.cfg.BaseURL != "https://model.invalid" || svc.cfg.Model != "a-model" {
 		t.Fatalf("picked the wrong row: %+v", svc.cfg)
@@ -396,5 +400,42 @@ func TestFromConnectionWithNoModelIsTheFeatureBeingOff(t *testing.T) {
 	connections, _ := db.Connections(ctx)
 	if _, err := FromConnection(connections, key); !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("expected ErrNotConfigured, got %v", err)
+	}
+}
+
+// Which API a row speaks is what the source type records, because the two
+// agree on almost nothing above the transport.
+func TestAnthropicRowBuildsTheAnthropicService(t *testing.T) {
+	db := store(t)
+	ctx := context.Background()
+	key, err := database.ParseSecretKey(testKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conn := &database.Connection{
+		SourceType: database.AnthropicSourceType,
+		ProjectID:  "p",
+		BaseURL:    "https://api.anthropic.invalid",
+		Query:      "claude-sonnet-4-6",
+	}
+	if err := db.AddConnection(ctx, conn, "sk-ant-test", key); err != nil {
+		t.Fatal(err)
+	}
+	connections, err := db.Connections(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	grouper, err := FromConnection(connections, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, ok := grouper.(*AnthropicService)
+	if !ok {
+		t.Fatalf("an anthropic row built a %T", grouper)
+	}
+	if svc.cfg.Model != "claude-sonnet-4-6" {
+		t.Fatalf("model: %q", svc.cfg.Model)
 	}
 }

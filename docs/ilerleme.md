@@ -3090,3 +3090,55 @@ uygulamasının yazdığı **2 not** geldi.
 
 **Söylenmesi gereken**: artık `~/.claude.json` veritabanı parolasını
 içeriyor. O dosya depoda değil, ama bilinmeli.
+
+
+## Yirmi altıncı oturum — Claude kendi API'siyle gruplayabiliyor
+
+Grupları yapay zekâ yapacaksa ve o yapay zekâ Claude'sa, panelden Claude
+anahtarı girilebilmeliydi. ADR-0027 bunu bilerek dışarıda bırakmıştı;
+artık karara bağlandı.
+
+### Her satır resmî dokümandan okundu (2026-10-10)
+
+`platform.claude.com/docs/en/api/messages` ve `.../api/versioning`:
+
+- `/v1/messages`, `x-api-key` — bearer token **değil**
+- `anthropic-version` zorunlu; versiyon sayfası `2023-06-01` diyor
+- `model`, `max_tokens`, `messages` zorunlu — `max_tokens`'ın varsayılanı
+  yok, öbür tarafta atlanabiliyordu
+- **Sistem istemi üst düzey bir alan.** Sayfa açıkça "girdi mesajlarında
+  `system` rolü yoktur" diyor. Bunu mesaj olarak göndermek, sahte bir
+  sunucunun kabul edip gerçeğinin reddedeceği türden bir hata.
+- Metin `content[]` içindeki `type: "text"` bloklarında
+- Kesilme `stop_reason: max_tokens`
+
+Hepsinin testi var; sistem istemi için iki test — biri üst düzey alanda
+olduğunu, diğeri mesajlar arasında `system` rolü **olmadığını** sabitliyor.
+
+### İkinci bir uygulama, bayrak değil
+
+İki API taşımanın üstünde neredeyse hiçbir şeyde anlaşmıyor; tek bir tip
+içinde iki kod yolu, tek isim taşıyan iki uygulama olurdu.
+
+Sağlayıcı **kayıtlı, tahmin edilmiyor**: bağlantı satırının `source_type`'ı
+`anthropic` ya da `model`. Adresten çıkarmak, biri herhangi birini bir
+proxy'ye yönelttiginde kırılırdı — ki bu API'lerde tam da yapılan şey.
+
+**JSON modu yok.** Anthropic'te `response_format` yok; istem JSON istiyor ve
+yanıt ilk JSON nesnesi bulunarak ayrıştırılıyor. Ayrıştırıcı başından beri
+böyle yazılmıştı, hiç değiştirilmedi.
+
+### Doğrulanan
+
+Derlenmiş ikiliyle, Anthropic'i taklit eden bir sunucuya karşı:
+
+```
+path=/v1/messages  x-api-key=sk-ant-sahte  authorization=null
+anthropic-version=2023-06-01  max_tokens=8000
+has_system_field=true  roles=["user"]
+```
+
+İki not tek gruba girdi. Panelde seçici var: **Claude** / **OpenAI-uyumlu**,
+ve seçim yalnızca varsayılanları taşıyor — elle yazılan adres korunuyor.
+
+147 Flutter testi, Go geçidi yeşil.

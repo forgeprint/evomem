@@ -1,6 +1,6 @@
 # ADR-0027: The server can group notes itself, with a key somebody typed into the panel
 
-**Status:** accepted · **Date:** 2026-10-09 · **Amends:** ADR-0023
+**Status:** accepted · **Date:** 2026-10-09 · **Amended:** 2026-10-10 · **Amends:** ADR-0023
 
 ## Context
 
@@ -142,11 +142,55 @@ undoes it. `evomem clusters` shows what happened and `-delete` reverses it.
 
 ### Explicitly not decided here
 
-- **Anthropic's own Messages API.** Reaching Claude through this endpoint
-  needs a compatibility layer in front. Adding a second implementation behind
-  an interface is a later decision, not a shape this closes off.
+- ~~**Anthropic's own Messages API.**~~ Decided on 2026-10-10; see below.
 - **Re-grouping.** Nothing here improves a grouping that came out wrong; the
   only tools are delete and press again.
 - **Budgets, rate limits or token accounting.**
 - **Clusters still do not sync** (ADR-0023), so a grouping made here stays on
   the machine that made it.
+
+## Amendment, 2026-10-10: Claude speaks its own API
+
+This record left Anthropic's Messages API out and said a second
+implementation behind the interface would be a later decision. It is this
+one. The reason is that the product's whole point is Claude reading these
+notes, and asking somebody to put a translating proxy in front of their own
+API key to get there was never going to be the answer.
+
+**A second `Grouper`, not a flag on the first.** The two APIs agree on
+almost nothing above the transport, and one type with two code paths is two
+implementations wearing one name:
+
+| | OpenAI-compatible | Anthropic |
+| - | - | - |
+| path | `/v1/chat/completions` | `/v1/messages` |
+| key | `Authorization: Bearer` | `x-api-key` |
+| version | — | `anthropic-version`, required |
+| token cap | `max_completion_tokens`, optional | `max_tokens`, **required** |
+| system prompt | a message with `role: system` | a **top-level `system` field** |
+| the text | `choices[].message.content` | the `text` blocks of `content[]` |
+| truncated | `finish_reason: length` | `stop_reason: max_tokens` |
+
+Every row of that was read from Anthropic's own documentation on 2026-10-10
+— `platform.claude.com/docs/en/api/messages` and `.../api/versioning` — and
+each is pinned by a test. The system prompt is the one worth naming twice:
+the page says there is **no `system` role for input messages**, so sending
+one as a message is a mistake that would be accepted by a fake and refused
+by the real thing.
+
+**The provider is recorded, not inferred.** A connection row's `source_type`
+is `anthropic` or `model`, and `FromConnection` switches on it. Guessing
+from the base URL would break the first time somebody pointed either one at
+a proxy, which is exactly the kind of thing people do with these.
+
+**No JSON mode.** Anthropic has no `response_format`. The prompt asks for
+JSON and the reply is parsed by finding its first JSON object — which is why
+that parser was built that way in the first place, and it needed no change.
+
+### What this costs
+
+- **Two wire formats to keep right**, and a vendor can change either.
+- **`max_tokens` is required there and guessed here.** 8000, the same figure
+  the other side uses. A model that needs more says `stop_reason:
+  max_tokens`, and that is reported as "fewer notes per run" rather than as
+  a parse failure.

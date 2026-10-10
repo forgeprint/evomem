@@ -45,6 +45,9 @@ func cmdOrganize(args []string, out io.Writer) error {
 		fmt.Fprintln(out, "No model is connected, so nothing here calls one and no note leaves this machine.")
 		fmt.Fprintln(out, "\nevomem connect -add model -project <id> \\")
 		fmt.Fprintln(out, "  -url https://api.openai.com -query gpt-4o-mini")
+		fmt.Fprintln(out, "\nor Claude, which speaks its own API:")
+		fmt.Fprintln(out, "\nevomem connect -add anthropic -project <id> \\")
+		fmt.Fprintln(out, "  -url https://api.anthropic.com -query claude-sonnet-4-6")
 		fmt.Fprintln(out, "\nAn agent connected over MCP can group notes without any of this.")
 		return nil
 	}

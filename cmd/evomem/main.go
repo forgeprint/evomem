@@ -70,7 +70,8 @@ a label over notes that are already stored: it changes nothing a note says,
 and deleting it takes the label off and leaves the notes.
 
 organize is the other way to get one: a model connected with "connect -add
-model" is asked to group the notes nothing has grouped yet. It runs when it
+model" (an OpenAI-compatible server) or "connect -add anthropic" (Claude's
+own API) is asked to group the notes nothing has grouped yet. It runs when it
 is asked and never on a timer, it only ever adds groups, and with no model
 connected it is off and no note leaves this machine. Pressing it does send
 the text of those notes to whatever server the key points at.

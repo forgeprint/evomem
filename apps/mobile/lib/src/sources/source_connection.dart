@@ -71,15 +71,21 @@ class SourceConnection {
   /// The server keeps both in one keyring (ADR-0027). The panel has to tell
   /// them apart because a model is never pulled from and a source never
   /// groups anything.
-  bool get isModel => sourceType == modelSourceType;
+  bool get isModel =>
+      sourceType == modelSourceType || sourceType == anthropicSourceType;
 
   /// Which model a model row names. The server puts it in the query field,
   /// which for a model means which model.
   String get modelName => query;
 }
 
-/// What the server calls a row in the keyring that holds a model key.
+/// What the server calls a row holding a key for an OpenAI-compatible
+/// server.
 const modelSourceType = 'model';
+
+/// And one holding a key for Anthropic's own API, which is a different wire
+/// format and so a different row (ADR-0027).
+const anthropicSourceType = 'anthropic';
 
 /// What one grouping run did.
 class OrganizeOutcome {

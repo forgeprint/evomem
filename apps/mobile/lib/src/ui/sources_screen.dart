@@ -398,11 +398,26 @@ class _ModelForm extends ConsumerStatefulWidget {
 }
 
 class _ModelFormState extends ConsumerState<_ModelForm> {
-  final _url = TextEditingController(text: 'https://api.openai.com');
-  final _model = TextEditingController(text: 'gpt-4o-mini');
+  final _url = TextEditingController(text: _anthropic.url);
+  final _model = TextEditingController(text: _anthropic.model);
   final _secret = TextEditingController();
   final _project = TextEditingController(text: 'default');
+
+  /// Which API the key is for. The two are different wire formats, so this
+  /// is what the row records rather than something guessed from the
+  /// address (ADR-0027).
+  _Provider _provider = _anthropic;
   bool _busy = false;
+
+  void _useProvider(_Provider provider) {
+    setState(() {
+      // Only the defaults move; anything typed is left alone, because
+      // somebody pointing at a local server has already changed them.
+      if (_url.text == _provider.url) _url.text = provider.url;
+      if (_model.text == _provider.model) _model.text = provider.model;
+      _provider = provider;
+    });
+  }
 
   @override
   void dispose() {
@@ -417,7 +432,7 @@ class _ModelFormState extends ConsumerState<_ModelForm> {
     try {
       final service = await ref.read(sourceServiceProvider.future);
       await service.connect(
-        sourceType: modelSourceType,
+        sourceType: _provider.sourceType,
         projectId: _project.text.trim(),
         baseUrl: _url.text.trim(),
         // The server keeps which model in the query column, which for a
@@ -463,12 +478,21 @@ class _ModelFormState extends ConsumerState<_ModelForm> {
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
+          SegmentedButton<_Provider>(
+            segments: const [
+              ButtonSegment(value: _anthropic, label: Text('Claude')),
+              ButtonSegment(value: _openAI, label: Text('OpenAI-compatible')),
+            ],
+            selected: {_provider},
+            onSelectionChanged: (s) => _useProvider(s.first),
+          ),
+          const SizedBox(height: 12),
           TextField(
             controller: _url,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Server address',
-              helperText: 'Any OpenAI-compatible server, including a local one',
-              border: OutlineInputBorder(),
+              helperText: _provider.addressHint,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 12),
@@ -508,3 +532,44 @@ class _ModelFormState extends ConsumerState<_ModelForm> {
     );
   }
 }
+
+/// One of the two model APIs the server can speak.
+///
+/// They agree on almost nothing above the transport — one takes a bearer
+/// token and a `messages` array with a system role, the other an `x-api-key`
+/// and a top-level `system` field — so which one it is has to be recorded
+/// rather than inferred from the address (ADR-0027).
+class _Provider {
+  const new({
+    required this.sourceType,
+    required this.url,
+    required this.model,
+    required this.addressHint,
+  });
+
+  /// What the server calls this kind of row.
+  final String sourceType;
+
+  /// Where it lives, unless somebody says otherwise.
+  final String url;
+
+  /// A model that exists, so the field is never empty.
+  final String model;
+
+  /// What to say under the address field.
+  final String addressHint;
+}
+
+const _anthropic = _Provider(
+  sourceType: anthropicSourceType,
+  url: 'https://api.anthropic.com',
+  model: 'claude-sonnet-4-6',
+  addressHint: "Claude's own API",
+);
+
+const _openAI = _Provider(
+  sourceType: modelSourceType,
+  url: 'https://api.openai.com',
+  model: 'gpt-4o-mini',
+  addressHint: 'Any OpenAI-compatible server, including a local one',
+);

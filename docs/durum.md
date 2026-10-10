@@ -123,7 +123,7 @@ evomem tokens -revoke <id>            # tek bir cihazı kes
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler (okuma ve düzenleme), proje seçimi, günlük, ses çalma, cihaz token'ları — 145 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler (okuma ve düzenleme), proje seçimi, günlük, ses çalma, cihaz token'ları — 147 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
   sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve
@@ -206,11 +206,6 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-0. **Anthropic'in kendi Messages API'si konuşulamıyor.** `core/organize`
-   OpenAI-uyumlu `chat completions`'ı hedefliyor; Claude'u bu uçtan
-   konuşturmak için önüne bir uyum katmanı gerekir. `Grouper` arayüzü buna
-   kapalı değil (ADR-0027).
-
 3. **Telefonda ses çalma yok.** `RecordingPlayer`'ın tarayıcı uygulaması
    gerçek, telefon tarafı "çalamıyorum" diyor — bir paket gerekiyor ve
    telefon zaten derlenemiyor. Android/iOS dosyaları gelince birlikte
@@ -289,6 +284,13 @@ SHA-256, bcrypt değil: token `crypto/rand`'dan 32 bayt, tahmin edilecek bir
 şey yok. `EVOMEM_API_TOKEN` çalışmaya devam ediyor ve ilk cihaz token'ını
 yapan o. **Sınırı yazılı**: bu yalnızca HTTP'yi koruyor; veritabanı dosyası
 ya da DSN elinde olan her şeye sahip.
+
+**Claude kendi API'siyle gruplayabiliyor** (ADR-0027'nin değişikliği):
+panelde **Claude** / **OpenAI-uyumlu** seçimi var. İki API taşımanın üstünde
+neredeyse hiçbir şeyde anlaşmıyor (`/v1/messages` + `x-api-key` +
+`anthropic-version`, sistem istemi **üst düzey alan**, metin `content[]`
+içindeki `text` bloklarında), o yüzden ikinci bir `Grouper` — bayrak değil.
+Sağlayıcı `source_type`'ta **kayıtlı**, adresten çıkarılmıyor.
 
 **Sunucu kendi gruplayabiliyor** (ADR-0027): panele yazılan bir model
 anahtarıyla `evomem organize` ve panelin "Group notes" düğmesi kümesiz

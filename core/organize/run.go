@@ -136,11 +136,15 @@ func Run(
 	return result, nil
 }
 
-// FromConnection builds a service from a model row in the keyring.
+// FromConnection builds a grouper from a model row in the keyring.
+//
+// Which one depends on the row's source type: the two APIs agree on almost
+// nothing above the transport, so the provider is what the row records and
+// what this switches on (ADR-0027's amendment).
 //
 // Returns ErrNotConfigured when there is no model connected, which callers
 // report as the feature being off rather than as a failure.
-func FromConnection(connections []*database.Connection, key database.SecretKey) (*Service, error) {
+func FromConnection(connections []*database.Connection, key database.SecretKey) (Grouper, error) {
 	for _, c := range connections {
 		if !c.IsModel() {
 			continue
@@ -149,11 +153,15 @@ func FromConnection(connections []*database.Connection, key database.SecretKey) 
 		if err != nil {
 			return nil, err
 		}
-		return New(Config{
+		cfg := Config{
 			BaseURL: c.BaseURL,
 			Token:   secret,
 			Model:   c.ModelName(),
-		})
+		}
+		if c.SourceType == database.AnthropicSourceType {
+			return NewAnthropic(cfg)
+		}
+		return New(cfg)
 	}
 	return nil, ErrNotConfigured
 }

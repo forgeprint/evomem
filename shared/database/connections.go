@@ -39,17 +39,27 @@ type Connection struct {
 	sealed []byte
 }
 
-// ModelSourceType marks a row in this table that is not a source at all: a
-// model's API key, sealed the same way and listed by the same panel
-// (ADR-0027).
+// Rows in this table that are not sources at all: a model's API key, sealed
+// the same way and listed by the same panel (ADR-0027).
 //
 // Reusing the keyring rather than building a second one is the decision; the
-// cost is that two kinds of row are told apart by a string, and the two
-// places that have to care say so where they do it.
-const ModelSourceType = "model"
+// cost is that kinds of row are told apart by a string, and the places that
+// have to care say so where they do it.
+const (
+	// ModelSourceType is a key for an OpenAI-compatible server.
+	ModelSourceType = "model"
+
+	// AnthropicSourceType is a key for Anthropic's own API, which is a
+	// different shape and so a different row (ADR-0027's amendment).
+	// Named by provider rather than by a flag on the model row, because
+	// which one it is decides which wire format is spoken.
+	AnthropicSourceType = "anthropic"
+)
 
 // IsModel reports whether this row holds a model key rather than a source.
-func (c *Connection) IsModel() bool { return c.SourceType == ModelSourceType }
+func (c *Connection) IsModel() bool {
+	return c.SourceType == ModelSourceType || c.SourceType == AnthropicSourceType
+}
 
 // ModelName is which model a model connection names.
 //

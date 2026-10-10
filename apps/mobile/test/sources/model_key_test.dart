@@ -99,5 +99,40 @@ void main() {
         ),
       );
     });
+
+    // The two APIs are different wire formats, so which one a row is for
+    // has to be recorded rather than guessed from the address (ADR-0027).
+    test('an anthropic row is a model row too', () {
+      final claude = SourceConnection.fromJson(<String, dynamic>{
+        'id': 'a',
+        'source_type': 'anthropic',
+        'project_id': 'default',
+        'base_url': 'https://api.anthropic.com',
+        'query': 'claude-sonnet-4-6',
+      });
+      expect(claude!.isModel, isTrue);
+      expect(claude.modelName, 'claude-sonnet-4-6');
+      // It is not pulled from, like every model row.
+      expect(claude.sourceType, anthropicSourceType);
+    });
+
+    test('connecting Claude says which API it is', () async {
+      final panel = await FakePanel.start(
+        answers: [const Answer(201, '{"connection":{"id":"a"}}')],
+      );
+      addTearDown(panel.close);
+
+      await serviceFor(panel).connect(
+        sourceType: anthropicSourceType,
+        projectId: 'default',
+        baseUrl: 'https://api.anthropic.com',
+        query: 'claude-sonnet-4-6',
+        secret: 'sk-ant-test',
+      );
+
+      final sent = json.decode(panel.bodies.single) as Map<String, dynamic>;
+      expect(sent['source_type'], 'anthropic');
+      expect(sent['query'], 'claude-sonnet-4-6');
+    });
   });
 }

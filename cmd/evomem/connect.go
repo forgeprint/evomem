@@ -28,7 +28,7 @@ func secretKey() (database.SecretKey, error) {
 // every process on the machine (ADR-0010).
 func cmdConnect(args []string, out io.Writer, in io.Reader) error {
 	fs := flag.NewFlagSet("connect", flag.ContinueOnError)
-	add := fs.String("add", "", "add a source: jira, or a model key: model")
+	add := fs.String("add", "", "add a source: jira, or a model key: model, anthropic")
 	remove := fs.String("remove", "", "forget a connection, and its token, by id")
 	project := fs.String("project", "", "the project pulled notes are filed under")
 	baseURL := fs.String("url", "", "the source's base address, e.g. https://you.atlassian.net")
