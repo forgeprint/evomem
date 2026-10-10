@@ -2947,3 +2947,59 @@ Yol boyunca: `serverSettingsProvider` çekirdek yokken fırlatıyordu
 (`ProjectMemory` ile aynı sınıf). Artık her şeyi yakalayıp "ayar yok"
 diyor — kilitli bir keychain, site verisi engellenmiş bir tarayıcı ve
 çekirdeksiz bir test hepsi aynı anlama geliyor.
+
+
+## Yirmi üçüncü oturum — "uygulamada kullanıcı girişi yok" (ADR-0030)
+
+Soru doğruydu, ama cevabı "unutulmuş" değil. Şemada ne `user_id` var ne
+`owner`; kimlik doğrulama tek paylaşılan bearer token. ADR-0010 bunu zaten
+"no account model" diye yazıyor.
+
+Konuşup karar verildi: **tek kişi kalsın, ama cihaz başına token olsun.**
+
+### Neden hesap değil
+
+- **MCP HTTP'den hiç geçmiyor.** Ajan `evomem mcp`'yi kullanıcının kendi
+  makinesinde başlatıyor ve depoyu doğrudan açıyor. HTTP'ye giriş koymak
+  bir kapıyı kilitleyip diğerini açık bırakmak olurdu.
+- **Panelin mühürlü kimlik bilgileri kuruluma ait**, bir kişiye değil.
+- **`project_id` bir sınır değil**, etiket. Onu sınır yapmak çok
+  kullanıcılılığın işinin çoğu demek.
+
+### Ne yazıldı
+
+`tokens` tablosu (şema **6**), ve **hash saklanıyor, token değil**.
+`connections`'ın aksine burada düz metne bir daha ihtiyaç yok — yalnızca
+doğrulanıyor — yani tek yönlü hash kesinlikle daha iyi.
+
+**SHA-256, bcrypt değil, bilerek.** Yavaş hash'ler insanın seçtiği parolayı
+tahmin etmeyi pahalılaştırmak için var. Bu token'lar `crypto/rand`'dan 32
+bayt; tahmin edilecek bir şey yok, ve her istekte yavaş bir hash karşılığı
+olmayan bir maliyet olurdu.
+
+- `evomem tokens [-add <ad> | -revoke <id>]`
+- `GET/POST /tokens`, `DELETE /tokens/{id}`
+- Panelde **Devices** ekranı: liste, ad vererek üretme, tek tek iptal
+- `EVOMEM_API_TOKEN` çalışmaya devam ediyor — ilk cihaz token'ını yapan o,
+  ve her mevcut kurulum yükseltmede kırılmasın diye
+
+**Son kullanım dakikada bir yazılıyor.** Her istekte yazmak istek başına bir
+yazma demek ve SQLite'ta tek yazıcıya kuyruk olur (ADR-0004). Bir dakikalık
+bayatlık, "bu cihaz son ne zaman görüldü" sorusu için fazlasıyla ince.
+
+### Doğrulanan
+
+Derlenmiş ikiliyle: token üretildi, sır veritabanı dosyasında **yok**
+(`strings | grep` → 0).
+
+Çalışan sunucuya karşı (PostgreSQL): üretme 201 ve sır bir kez, o token'la
+okuma **200**, listede sır **yok**, iptal 204, sonra aynı token **401**, ve
+ortam token'ı hâlâ **200**. `last_used_at` yazılıyor.
+
+Go: iki geçit de yeşil, suite PostgreSQL'e karşı da koştu. Flutter: 138 test.
+
+### Kaydedilen sınır
+
+Bu yalnızca **HTTP'yi** koruyor. Veritabanı dosyası ya da `EVOMEM_STORE_DSN`
+elinde olan her şeye sahip; `evomem mcp`, `evomem add` ve `psql` bunun
+dışında. Tek kullanıcılı yerel bir deponun şekli bu ve burada değişmiyor.

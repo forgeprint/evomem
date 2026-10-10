@@ -135,6 +135,7 @@ type Server struct {
 	recordings  Recordings
 	puller      PullFunc
 	organizer   OrganizeFunc
+	tokens      Tokens
 	cfg         Config
 
 	// routes is what was actually served, for the caller to report. A
@@ -164,6 +165,9 @@ func New(store Store, cfg Config) (*Server, error) {
 	}
 	if connections, ok := store.(Connections); ok {
 		s.connections = connections
+	}
+	if tokens, ok := store.(Tokens); ok {
+		s.tokens = tokens
 	}
 	s.puller = cfg.Pull
 	s.organizer = cfg.Organize
@@ -204,6 +208,18 @@ func New(store Store, cfg Config) (*Server, error) {
 			s.routes = append(s.routes,
 				"GET /connections", "POST /connections",
 				"DELETE /connections/{id}", "POST /connections/pull")
+
+			// Which devices can get in (ADR-0030). Beside the
+			// connections because the panel manages both, and
+			// behind the same token: a credential that could not
+			// make another one would need a second way in.
+			if s.tokens != nil {
+				mux.Handle("GET /tokens", s.authenticated(http.HandlerFunc(s.handleListTokens)))
+				mux.Handle("POST /tokens", s.authenticated(http.HandlerFunc(s.handleNewToken)))
+				mux.Handle("DELETE /tokens/{id}", s.authenticated(http.HandlerFunc(s.handleRevokeToken)))
+				s.routes = append(s.routes,
+					"GET /tokens", "POST /tokens", "DELETE /tokens/{id}")
+			}
 
 			// The other button (ADR-0027). Registered beside the
 			// pull because it reads the same keyring, and it is
@@ -320,7 +336,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	}
 }
 
-// authenticated requires the bearer token on Config.Token.
+// authenticated requires the environment's token or a device token.
 func (s *Server) authenticated(next http.Handler) http.Handler {
 	return limitBody(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.authorized(r) {
@@ -334,13 +350,35 @@ func (s *Server) authenticated(next http.Handler) http.Handler {
 }
 
 // authorized checks the bearer token in constant time.
+// authorized accepts the environment's token or an unrevoked device token
+// (ADR-0030).
+//
+// The environment's is checked first and in constant time: it is the common
+// case for the machine's own tooling, and it is the one that has to keep
+// working so there is a way to make the first device token.
 func (s *Server) authorized(r *http.Request) bool {
 	header := r.Header.Get("Authorization")
-	scheme, token, found := strings.Cut(header, " ")
+	scheme, presented, found := strings.Cut(header, " ")
 	if !found || !strings.EqualFold(scheme, "Bearer") {
 		return false
 	}
-	return constantTimeEqual(token, s.cfg.Token)
+	if constantTimeEqual(presented, s.cfg.Token) {
+		return true
+	}
+	if s.tokens == nil {
+		return false
+	}
+
+	token, err := s.tokens.TokenFor(r.Context(), presented)
+	if err != nil {
+		// Not found, revoked, or the store is unreachable. All three
+		// mean the same thing to a request: no.
+		return false
+	}
+	// Recorded so a person revoking one can tell which device is which.
+	// A failure here must not refuse a request that was authorised.
+	_ = s.tokens.TouchToken(r.Context(), token)
+	return true
 }
 
 // limitBody caps what a handler can be made to read.

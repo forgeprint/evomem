@@ -1,6 +1,7 @@
 import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/ui/cluster_detail_screen.dart';
 import 'package:evomem_mobile/src/ui/clusters_screen.dart';
+import 'package:evomem_mobile/src/ui/devices_screen.dart';
 import 'package:evomem_mobile/src/ui/log_screen.dart';
 import 'package:evomem_mobile/src/ui/missing_screen.dart';
 import 'package:evomem_mobile/src/ui/note_detail_screen.dart';
@@ -50,6 +51,10 @@ GoRouter buildRouter({String initialLocation = NotesListRoute.path}) {
       GoRoute(
         path: SourcesRoute.path,
         builder: (context, state) => const SourcesScreen(),
+      ),
+      GoRoute(
+        path: DevicesRoute.path,
+        builder: (context, state) => const DevicesScreen(),
       ),
       GoRoute(
         path: LogRoute.path,

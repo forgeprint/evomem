@@ -1,4 +1,5 @@
 import 'package:evomem_mobile/src/clusters/cluster_service.dart';
+import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/sources/source_connection.dart';
 import 'package:evomem_mobile/src/sources/source_providers.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
@@ -7,6 +8,7 @@ import 'package:evomem_mobile/src/ui/clusters_screen.dart'
 import 'package:evomem_mobile/src/ui/waiting_on_server.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 /// The sources the server pulls from, and the button that pulls.
 ///
@@ -115,6 +117,11 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
       appBar: AppBar(
         title: const Text('Sources'),
         actions: [
+          IconButton(
+            tooltip: 'Devices',
+            icon: const Icon(Icons.devices_outlined),
+            onPressed: () => context.go(const DevicesRoute().location),
+          ),
           IconButton(
             tooltip: 'Reload',
             icon: const Icon(Icons.refresh),

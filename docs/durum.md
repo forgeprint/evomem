@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-09 (on sekizinci oturum) · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-10 (yirmi üçüncü oturum) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -45,7 +45,7 @@ apps/mobile        Flutter 3.47 (Riverpod 3, go_router, sqflite, http, very_good
                    sqflite_common_ffi_web 1.2.0 (tarayıcı deposu)
 ```
 
-Şema sürümü **5**. Kayıtlar şemada değil, veritabanının yanındaki `audio/`
+Şema sürümü **6**. Kayıtlar şemada değil, veritabanının yanındaki `audio/`
 dizininde. Bağımlılıklar: `modernc.org/sqlite`, `jackc/pgx/v5`,
 ikisi de vendor'lı ve saf Go.
 
@@ -92,6 +92,9 @@ evomem connect                        # bağlı kaynaklar ve son durumları
 evomem connect -add jira …            # kaynak bağla (token stdin'den)
 evomem pull-sources                   # bağlı kaynakların API'sinden çek
 evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
+evomem tokens                         # hangi cihazlar girebiliyor
+evomem tokens -add <ad>               # bir cihaza token üret (bir kez gösterilir)
+evomem tokens -revoke <id>            # tek bir cihazı kes
 ```
 
 ## Neyin doğrulandığı, neyin doğrulanmadığı
@@ -112,7 +115,7 @@ evomem organize [-dry-run]            # bağlı modele kümesiz notları gruplat
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük, ses çalma — 132 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük, ses çalma, cihaz token'ları — 138 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
   sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve
@@ -266,6 +269,17 @@ not durduğu sürece vardır; seçili olan, henüz notu olmasa da listede
 tutuluyor. Seçim hatırlanıyor (`ProjectMemory` portu). Yol boyunca iki hata
 çıktı: proje değişince `build()` yeniden koştuğu için `late final` alanlar
 patlıyordu, ve `add()` notu projesine bakmadan listeye koyuyordu.
+
+**Giriş yok, cihaz başına token var** (ADR-0030): Evomem tek kişinin
+hafızası — hesap, parola, oturum yok. Sebebi kaydedildi: **MCP HTTP'den hiç
+geçmiyor**, depoyu doğrudan açıyor; HTTP'ye giriş koymak bir kapıyı kilitleyip
+diğerini açık bırakmak olurdu. Değişen şey iptal birimi: `tokens` tablosu
+(şema **6**), ad verilmiş cihaz token'ları, tek tek iptal. **Hash saklanıyor,
+token değil** — `connections`'ın aksine burada düz metne bir daha ihtiyaç yok.
+SHA-256, bcrypt değil: token `crypto/rand`'dan 32 bayt, tahmin edilecek bir
+şey yok. `EVOMEM_API_TOKEN` çalışmaya devam ediyor ve ilk cihaz token'ını
+yapan o. **Sınırı yazılı**: bu yalnızca HTTP'yi koruyor; veritabanı dosyası
+ya da DSN elinde olan her şeye sahip.
 
 **Sunucu kendi gruplayabiliyor** (ADR-0027): panele yazılan bir model
 anahtarıyla `evomem organize` ve panelin "Group notes" düğmesi kümesiz

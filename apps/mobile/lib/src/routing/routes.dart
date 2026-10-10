@@ -70,6 +70,18 @@ class SourcesRoute {
   String get location => path;
 }
 
+/// Which devices can reach the server (ADR-0030).
+class DevicesRoute {
+  /// Creates the route to the devices screen.
+  const new();
+
+  /// The pattern `GoRouter` matches on.
+  static const String path = '/devices';
+
+  /// Where to send `context.go`.
+  String get location => path;
+}
+
 /// What the app has been doing, for when something did not work.
 class LogRoute {
   /// Creates the route to the log.

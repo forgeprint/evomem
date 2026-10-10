@@ -118,6 +118,19 @@ var postgresSchema = []string{
 		updated_at     TEXT NOT NULL
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_connections_source ON connections(source_type, project_id)`,
+
+	// A token per device (ADR-0030). The hash, never the token: this side
+	// only verifies, so there is nothing to hand back.
+	`CREATE TABLE IF NOT EXISTS tokens (
+		id           TEXT PRIMARY KEY,
+		name         TEXT NOT NULL,
+		prefix       TEXT NOT NULL,
+		hash         TEXT NOT NULL UNIQUE,
+		created_at   TEXT NOT NULL,
+		last_used_at TEXT,
+		revoked_at   TEXT
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_tokens_hash ON tokens(hash)`,
 }
 
 // postgresSearchSchema builds the full-text objects.

@@ -50,6 +50,7 @@ usage:
   evomem connect [-add jira -project <id> -url <base> -account <email> -query <jql>]
   evomem pull-sources
   evomem organize [-project <id>] [-dry-run]
+  evomem tokens [-add <name> | -revoke <id>]
   evomem mcp    [-quiet]
   evomem serve  [-addr <host:port>]
   evomem sync   [-once] [-init-remote] [-interval <d>]
@@ -78,6 +79,12 @@ Anything an adapter wrote is marked as coming from outside, and the MCP tools
 tell a model so. endorse is how a person says they have read one and stand
 behind it: the mark goes, the note records that it was there, and a machine
 transcription stays marked as one. It cannot be undone.
+
+tokens is how a device says it is yours. Evomem has no accounts and no
+login: this is one person's memory on their own machine, and $EVOMEM_API_TOKEN
+is the server's own key. A device token is one you can revoke on its own, so
+losing a phone costs a phone rather than everything (ADR-0030). The secret is
+shown once and the store keeps only a hash.
 
 The store is $EVOMEM_DB, or ~/.evomem/evomem.db. With $EVOMEM_STORE_DSN set
 it is that PostgreSQL instead, which is how the server runs; the file is what
@@ -164,6 +171,8 @@ func run(args []string, out io.Writer, in io.Reader) error {
 		return cmdPullSources(rest, out)
 	case "organize":
 		return cmdOrganize(rest, out)
+	case "tokens":
+		return cmdTokens(rest, out)
 	case "sync":
 		return cmdSync(rest, out)
 	case "pull":

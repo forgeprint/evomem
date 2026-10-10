@@ -39,6 +39,16 @@ network until you change that deliberately, and `evomem serve` offers no TLS
 In the web app's settings, the server URL is `http://localhost:8787` and the
 token is `EVOMEM_API_TOKEN`.
 
+Better, once it is running: make the app its own token, so losing a device
+costs that device rather than everything (ADR-0030).
+
+```bash
+docker compose exec server evomem tokens -add browser
+```
+
+The secret is printed once — the server keeps only a hash. The panel's
+**Devices** screen does the same thing, and is where you revoke one.
+
 ## What runs where
 
 **The server keeps its memory in PostgreSQL** (ADR-0028). Notes, search,
@@ -62,6 +72,7 @@ has to be entered again.
 
 ```bash
 docker compose logs -f server                  # what it is serving, and what failed
+docker compose exec server evomem tokens       # which devices can get in
 docker compose exec server evomem search -query x
 docker compose exec db psql -U evomem evomem
 docker compose down                # stop; the volumes stay

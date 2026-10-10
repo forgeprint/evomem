@@ -12,7 +12,7 @@ import (
 // Unlike a derived index, this file is the only copy of the user's notes: a
 // version it does not recognise is an error the caller has to see, never a
 // reason to start again.
-const schemaVersion = 5
+const schemaVersion = 6
 
 // The schema. Two things in it are worth explaining.
 //
@@ -169,6 +169,26 @@ CREATE TABLE IF NOT EXISTS connections (
 );
 
 CREATE INDEX IF NOT EXISTS idx_connections_source ON connections(source_type, project_id);
+
+-- Schema 6: a token per device (ADR-0030).
+--
+-- hash, not the token. This side only ever verifies, unlike connections
+-- which has to hand Jira its token back and therefore seals it; a one-way
+-- hash is strictly better when nothing needs the plaintext again.
+--
+-- prefix is in the clear so a person can tell one row from another without
+-- the secret.
+CREATE TABLE IF NOT EXISTS tokens (
+	id           TEXT PRIMARY KEY,
+	name         TEXT NOT NULL,
+	prefix       TEXT NOT NULL,
+	hash         TEXT NOT NULL UNIQUE,
+	created_at   DATETIME NOT NULL,
+	last_used_at DATETIME,
+	revoked_at   DATETIME
+);
+
+CREATE INDEX IF NOT EXISTS idx_tokens_hash ON tokens(hash);
 `
 
 // migrate creates the schema if it is absent, brings an older file forward,
@@ -252,6 +272,7 @@ var migrations = []func(context.Context, *txn) error{
 	nil,            // 2 -> 3
 	addClusters,    // 3 -> 4
 	addConnections, // 4 -> 5
+	nil,            // 5 -> 6: the declarative schema was the whole change
 }
 
 // addConnections creates the table ADR-0025 introduced.
