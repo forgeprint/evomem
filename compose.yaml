@@ -61,6 +61,16 @@ services:
       EVOMEM_TELEGRAM_PROJECT: ${EVOMEM_TELEGRAM_PROJECT:-}
       EVOMEM_JIRA_SECRET: ${EVOMEM_JIRA_SECRET:-}
       EVOMEM_JIRA_PROJECT: ${EVOMEM_JIRA_PROJECT:-}
+      # Speech to text, on this machine (ADR-0016, ADR-0037). evomem is the
+      # client; which server answers the URL is the operator's business, and
+      # here it is the `whisper` service below. No token: it is not published
+      # to the host and only this network can reach it.
+      EVOMEM_TRANSCRIPTION_URL: ${EVOMEM_TRANSCRIPTION_URL:-http://whisper:9000}
+      # Set, not guessed. ADR-0016: a model left to work out the language of
+      # short Turkish audio returns a confident translation of something
+      # nobody said. The cost is that an English voice note is read as
+      # Turkish; change this when that becomes the common case.
+      EVOMEM_TRANSCRIPTION_LANGUAGE: ${EVOMEM_TRANSCRIPTION_LANGUAGE:-tr}
     volumes:
       # The recordings. The notes are in PostgreSQL now; what still belongs
       # beside the process is the audio a note stands for (ADR-0018).
@@ -73,6 +83,33 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  # Speech to text, local and unpaid (ADR-0037).
+  #
+  # faster-whisper behind an OpenAI-compatible API, which is the interface
+  # evomem already speaks — "OpenAI-compatible" is the wire format, not a
+  # vendor. Nothing leaves this machine and nothing is billed.
+  whisper:
+    image: hwdsl2/whisper-server:latest
+    restart: unless-stopped
+    environment:
+      # No key. The image generates one on a fresh persistent install;
+      # empty turns authentication off, which is what makes sense for a
+      # service that is not published to the host and is reachable only
+      # from this compose network.
+      WHISPER_API_KEY: ""
+      # `base` is the image's default and is poor at Turkish. `small` is
+      # ~465 MB and markedly better; `medium` is ~1.5 GB and better again,
+      # at a speed that tells on a CPU. Downloaded on first start and
+      # cached in the volume.
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      WHISPER_LANGUAGE: ${WHISPER_LANGUAGE:-tr}
+      WHISPER_THREADS: ${WHISPER_THREADS:-4}
+    volumes:
+      # The model, so it is fetched once rather than on every start.
+      - whisper-data:/var/lib/whisper
+    # Deliberately no `ports`. Nothing outside this network needs it, and
+    # with authentication off that is what keeps it private.
 
   web:
     build:
@@ -88,3 +125,4 @@ services:
 volumes:
   db-data:
   server-data:
+  whisper-data:

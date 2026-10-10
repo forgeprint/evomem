@@ -450,6 +450,13 @@ döküm, dağıtım ve gerçek dünya denemeleri.
 
 ## Bilinen sınırlar (hata değil, karar)
 
+- **Transkripsiyon dili `tr` olarak sabit** (`compose.yaml`). ADR-0016 tahmine
+  bırakmanın kısa Türkçe seste yanlış sonuç verdiğini yazıyor; bedeli
+  İngilizce bir ses notunun Türkçe okunması. Tek değişkenle değişir.
+- **Transkripsiyon başarısızlığı sonsuza kadar yeniden deneniyor.** Geçici
+  hatalar için doğru; "ses dosyası yok" geçici değil. Sesi yok edilmiş iki not
+  her çalıştırmada düşüyor. → ADR-0037
+
 - **Sunucu erişim logu dönmüyor.** Her istek stderr'e bir satır yazıyor
   (ADR-0035); kimse budamıyor. Kişisel bir sunucuda yıllarca sorun değil,
   yoğun bir kurulumda Docker'ın `max-size`'ı ya da `logrotate` gerekir.

@@ -3565,3 +3565,52 @@ dökümanda derleme adımı, bu hatanın ne anlama geldiği, ve hangi depoya
 bağlanılacağı yazıyor — `EVOMEM_DB` ile Docker kurulumundaki notlar
 görünmüyor, `EVOMEM_STORE_DSN` gerekiyor. Örnek yapılandırma da buna göre
 güncellendi, DSN'in parola taşıdığı uyarısıyla.
+
+## 2026-10-11 — Sesten metin, bu makinede, token'sız (ADR-0037)
+
+**Kullanıcı:** "speech to text için local'de server tarafında yapalım, token
+ile değil." Kayıt kullanıcıyı doğruladı: ADR-0016 zaten *"hangi uygulamanın o
+URL'i sunduğu operatörün işi"* diyor ve `service.go`'da *"A self-hosted server
+usually does not"* yazıyor. **"OpenAI uyumlu" tel formatı, sağlayıcı değil.**
+evomem'de tek satır değişmedi — token zaten isteğe bağlıydı.
+
+**Ayrı compose servisi**, sunucu imajının içine değil. Kullanıcı önce "ayrı
+servis ayaklandırmayalım" dedi; ölçüp sundum: imaj 186 MB'dan ~900 MB'a
+çıkıyor, üstelik Alpine (musl) olduğu için faster-whisper'ın glibc
+tekerlekleri ya Debian'a geçmeyi ya whisper.cpp'yi imajda derlemeyi
+gerektiriyor — ADR-0016'nın açıkça reddettiği şey. Sayıları görünce ayrı
+servis seçildi. Bugünkü ffmpeg bunun emsali değil: o 608 KiB.
+
+**Token yok, port yok.** `WHISPER_API_KEY: ""` ve `ports` bloğu hiç yok.
+İkisi birbirine bağlı: anahtar kapalı çünkü dışarıdan erişilemiyor, ve
+erişilemez kalmalı çünkü anahtar kapalı.
+
+**Model `small`** (varsayılan `base` Türkçede zayıf), **dil `tr`** — ADR-0016
+kısa Türkçe sesin dilini tahmin eden modelin "kimsenin söylemediği bir şeyin
+kendinden emin çevirisini" döndürdüğünü yazmıştı. Maliyeti: İngilizce ses notu
+Türkçe okunur.
+
+**Çalıştırınca bir hata çıktı ve düzeltildi.** Kuru çalıştırma şunu dedi:
+sesi **olmayan** iki not işlenecek, sesi **olan** tek not *"nothing here
+fetches shortcut audio"* diye atlanacak. Sebep: fetcher `source_type`'a göre
+seçiliyordu, oysa `/ingest/audio` kaydı **notun kimliğiyle** saklıyor (ADR-0018)
+ve olağan akış iki istekli — not `/ingest`'ten gelince `shortcut` oluyor. Yani
+yüklenmiş bir kayıt saklanıyor, `GET /notes/{id}/audio` ile sunuluyor,
+uygulamada çalınıyor ve transkripsiyona **görünmüyordu**. `reach()` artık
+"ses nerede" diye soruyor. Üç kaynak türü için test yazıldı; eski kural geri
+konunca düşüyor. Eski kuralı kodlayan iki test de yeni kurala göre yeniden
+yazıldı.
+
+**Kanıt:** macOS'un Türkçe sesiyle söylenen cümle, m4a'ya çevrilip `/ingest`
+ile oluşturulan bir nota yüklendi — yani eskiden görünmeyen akış:
+
+    söylenen:  Veritabanı kilitlendi, düğüm çözülemedi. Bu bir sesli not denemesidir.
+    çıkan:     veri tabanı kilitlendi, düğüm çözülemedi. Bu bir sesli not denemesidir.
+
+6 saniyelik ses, CPU'da 1,5 saniye. Bütün Türkçe harfler yerinde. Öncesinde
+konuşma içermeyen bir dosya (1 kHz ton) boş döndü ve whisper logu sebebini
+söyledi: *"VAD filter removed 00:10.055 of audio"*.
+
+**Açık kalan:** başarısızlık "bekliyor" işaretini koruyup sonsuza kadar
+yeniden deniyor (ADR-0016'nın geçici hatalar için seçimi). Sesi yok edilmiş
+iki not her çalıştırmada düşecek.

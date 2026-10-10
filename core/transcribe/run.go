@@ -84,25 +84,10 @@ func Run(
 			return result, err
 		}
 
-		fetcher, ok := fetchers[note.SourceType]
+		fetcher, ref, where, ok := reach(note, fetchers)
 		if !ok {
 			result.Skipped++
-			fmt.Fprintf(log, "%s  skipped: nothing here fetches %s audio\n",
-				note.ID, note.SourceType)
-			continue
-		}
-
-		ref, ok := audioRef(note)
-		if !ok {
-			// Nothing to fetch with. Recorded on the note rather
-			// than skipped: a note marked as awaiting a transcript
-			// with no way to reach the audio is a bug in whatever
-			// wrote it, and it would otherwise be retried forever
-			// in silence.
-			result.Failed++
-			if err := fail(ctx, db, note, "no audio reference in metadata", opts, log); err != nil {
-				return result, err
-			}
+			fmt.Fprintf(log, "%s  skipped: nothing here fetches %s\n", note.ID, where)
 			continue
 		}
 
@@ -147,21 +132,37 @@ func Run(
 	return result, nil
 }
 
-// audioRef finds what to fetch the audio with.
+// reach picks what can fetch this note's audio, and what to fetch it with.
 //
-// What the reference is depends on the source. A Telegram recording is named
-// by the file_id the webhook recorded; one uploaded to /ingest/audio is named
-// by the note itself, because that is what it was stored under (ADR-0018). A
-// new source adds its case here and a Fetcher beside it; the metadata column
-// is why that needs no migration.
-func audioRef(n *models.Note) (string, bool) {
-	if n.SourceType == models.SourceAudio {
-		return n.ID, true
-	}
+// **By where the audio can be, not by what the note's source is called.**
+// That distinction is the whole of this function and it was wrong: the
+// fetcher used to be chosen by `source_type`, so only a note filed as
+// `audio` could reach a recording on this disk. But `POST /ingest/audio`
+// stores a recording under the **note's identifier** whatever the note's
+// source is (ADR-0018), and the ordinary way to make one is two requests —
+// `/ingest` creates the note, the upload follows. A note created that way is
+// `manual` or `shortcut`, so its recording was stored, served by
+// `GET /notes/{id}/audio`, playable in the app, and invisible to this.
+//
+// A Telegram file_id wins when there is one: that recording lives on
+// Telegram's servers and was never written here.
+//
+// Otherwise the local store is asked. It answers ErrNoRecording for a note
+// it holds nothing for, which is recorded on the note rather than skipped —
+// a note awaiting a transcript with no reachable audio would otherwise be
+// retried for ever in silence.
+func reach(n *models.Note, fetchers map[models.SourceType]Fetcher) (Fetcher, string, string, bool) {
 	if ref, ok := n.MetaString("telegram_file_id"); ok && ref != "" {
-		return ref, true
+		f, ok := fetchers[models.SourceTelegram]
+		return f, ref, "telegram recordings", ok
 	}
-	return "", false
+	// A Telegram note with no file_id has no audio anywhere: the recording
+	// is on Telegram's servers and the reference is the only way back to
+	// it. Nothing on this disk is named after the note either, because
+	// nothing wrote it. Left to the local store, which answers
+	// ErrNoRecording, so it is recorded on the note rather than skipped.
+	f, ok := fetchers[models.SourceAudio]
+	return f, n.ID, "recordings on this disk", ok
 }
 
 // fail records on the note why there is still no transcript.

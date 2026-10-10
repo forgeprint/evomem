@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/forgeprint/evomem/shared/audio"
 	"github.com/forgeprint/evomem/shared/database"
 	"github.com/forgeprint/evomem/shared/models"
 )
@@ -177,7 +178,13 @@ func TestRunCarriesOnAfterAFailure(t *testing.T) {
 	ctx := context.Background()
 
 	result, err := Run(ctx, db, serviceReturning(t, "second one"),
-		map[models.SourceType]Fetcher{models.SourceTelegram: fakeFetcher{audio: "ogg", name: "v.oga"}},
+		map[models.SourceType]Fetcher{
+			models.SourceTelegram: fakeFetcher{audio: "ogg", name: "v.oga"},
+			// The local store is in the map in any real build. The
+			// note with no file_id falls through to it and it has
+			// nothing, which is what gets written on the note.
+			models.SourceAudio: fakeFetcher{err: audio.ErrNoRecording},
+		},
 		Options{}, io.Discard)
 	if err != nil {
 		t.Fatal(err)
@@ -187,17 +194,15 @@ func TestRunCarriesOnAfterAFailure(t *testing.T) {
 	}
 }
 
+// A build with no Telegram token cannot reach a Telegram recording. That is
+// the build's limitation, not a fault of the note, so it is skipped and left
+// unmarked for a build that can.
 func TestRunSkipsASourceNothingCanFetch(t *testing.T) {
 	db := openStore(t)
-	n := &models.Note{ProjectID: "evomem", Content: "Recording, 0:30", SourceType: models.SourceAudio}
-	n.SetMeta(models.MetaAwaitingTranscription, true)
-	n.SetMeta("telegram_file_id", "irrelevant")
-	if err := db.Create(context.Background(), n); err != nil {
-		t.Fatal(err)
-	}
+	n := voiceNote(t, db, "AwACAgQ")
 
 	result, err := Run(context.Background(), db, serviceReturning(t, "unused"),
-		map[models.SourceType]Fetcher{models.SourceTelegram: fakeFetcher{}}, Options{}, io.Discard)
+		map[models.SourceType]Fetcher{}, Options{}, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,5 +262,52 @@ func TestRunWorksOldestFirst(t *testing.T) {
 	// losing to whatever just arrived, run after run.
 	if !strings.Contains(log.String(), first.ID) {
 		t.Errorf("the oldest note was not the one done: %q", log.String())
+	}
+}
+
+// The ordinary way a recording is made is two requests: `/ingest` creates the
+// note, `/ingest/audio` uploads against the identifier it answered with
+// (ADR-0018). A note made that way is `manual` or `shortcut`, never `audio`.
+//
+// The fetcher used to be chosen by `source_type`, so that recording was
+// stored under the note's identifier, served by `GET /notes/{id}/audio`,
+// playable in the app — and invisible here. Found by running it: the one note
+// on the server that had audio was the one this skipped.
+func TestARecordingUploadedAgainstAnyNoteIsTranscribed(t *testing.T) {
+	db := openStore(t)
+	ctx := context.Background()
+
+	for _, source := range []models.SourceType{
+		models.SourceShortcut, models.SourceManual, models.SourceAudio,
+	} {
+		n := &models.Note{
+			ProjectID: "evomem", Content: "Voice note, 0:10", SourceType: source,
+		}
+		n.SetMeta(models.MetaAwaitingTranscription, true)
+		if err := db.Create(ctx, n); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := Run(ctx, db, serviceReturning(t, "what was said"),
+			map[models.SourceType]Fetcher{
+				models.SourceAudio: fakeFetcher{audio: "m4a", name: n.ID + ".m4a"},
+			}, Options{}, io.Discard)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Transcribed != 1 {
+			t.Errorf("source %s: %+v, want one transcribed", source, result)
+		}
+
+		stored, err := db.Get(ctx, n.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(stored.Content, "what was said") {
+			t.Errorf("source %s: content = %q", source, stored.Content)
+		}
+		if err := db.Delete(ctx, n.ID); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
