@@ -17,6 +17,17 @@ const (
 	CursorNotes = "notes"
 	// CursorDeletions is how far it has got through tombstones.
 	CursorDeletions = "deletions"
+	// CursorPulled is how far it has got through the mirror's notes,
+	// coming the other way.
+	//
+	// Its own row, not CursorNotes. Both are positions in an (updated_at,
+	// id) ordering, but over two different tables: one counts local notes
+	// that have reached the mirror, the other counts the mirror's notes
+	// that have reached here. Sharing a row meant a pull set the push
+	// watermark to a position in somebody else's ordering, and every local
+	// note behind it stopped being pending — still here, never sent, with
+	// nothing anywhere saying the two sides disagree.
+	CursorPulled = "pulled"
 )
 
 // A Cursor is a position in the (updated_at, id) order.
@@ -508,4 +519,31 @@ func (d *DB) fileSize(ctx context.Context) int64 {
 		return 0
 	}
 	return pageCount * pageSize
+}
+
+// ResetCursor puts a watermark back to the beginning.
+//
+// SetCursor deliberately refuses to move one backwards, because a cursor
+// that slipped back would re-send everything after it and the bug would be
+// noticed by the bill. This is the one caller that means it: a restore
+// throws the local copy away and reads the mirror from the start, so the
+// watermark has to start again too. It is a separate method rather than a
+// flag so that the refusal stays the default and this reads as a decision.
+func (d *DB) ResetCursor(ctx context.Context, key string) error {
+	tx, err := d.write.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("database: resetting the %s cursor: %w", key, err)
+	}
+	defer tx.Rollback()
+
+	for _, suffix := range []string{".at", ".id"} {
+		if _, err := tx.ExecContext(ctx,
+			`DELETE FROM sync_state WHERE key = ?`, key+suffix); err != nil {
+			return fmt.Errorf("database: resetting the %s cursor: %w", key, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("database: resetting the %s cursor: %w", key, err)
+	}
+	return nil
 }

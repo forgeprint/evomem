@@ -503,3 +503,77 @@ func (d *DB) AwaitingTranscriptionCount(ctx context.Context) (int, error) {
 	}
 	return n, nil
 }
+
+// Absorb writes a note exactly as the far end holds it, inserting it or
+// replacing what is here.
+//
+// Not Create. Create fails on an identifier that already exists, which made
+// a pull abort the moment it reached a note this machine had pushed itself —
+// so a pull worked once, on an empty store, and errored every time after.
+// ADR-0015 called pull idempotent; this is what makes that true.
+//
+// Not Update either: Update is for a note somebody edited here and moves
+// updated_at to now. A pulled note keeps the mirror's timestamps, because
+// they are what the watermark on both sides is counted in.
+//
+// Local is still the authority for what this machine *writes* (ADR-0012):
+// an incoming note that is **not newer** than the copy here is skipped,
+// which is what stops a pull overwriting an edit made on this machine that
+// has not been pushed yet. The mirror's ordering says nothing about a local
+// edit, so without the check an older remote copy could land on top of a
+// newer local one and then be pushed back over it.
+//
+// It reports whether it wrote anything.
+func (d *DB) Absorb(ctx context.Context, n *models.Note) (bool, error) {
+	if n == nil {
+		return false, errors.New("database: no note given")
+	}
+	if err := n.Validate(); err != nil {
+		return false, err
+	}
+	id, err := models.NormalizeULID(n.ID)
+	if err != nil {
+		return false, err
+	}
+	n.ID = id
+	if n.CreatedAt.IsZero() || n.UpdatedAt.IsZero() {
+		return false, fmt.Errorf("database: absorbing note %s: it has no timestamps", n.ID)
+	}
+
+	var existing string
+	err = d.read.QueryRowContext(ctx,
+		`SELECT updated_at FROM notes WHERE id = ?`, n.ID).Scan(&existing)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		// Nothing here yet; take it.
+	case err != nil:
+		return false, fmt.Errorf("database: absorbing note %s: %w", n.ID, err)
+	default:
+		at, err := parseTime(existing)
+		if err != nil {
+			return false, fmt.Errorf("database: absorbing note %s: %w", n.ID, err)
+		}
+		if !n.UpdatedAt.After(at) {
+			return false, nil
+		}
+	}
+
+	metadata, err := n.MarshalMetadata()
+	if err != nil {
+		return false, err
+	}
+
+	_, err = d.write.ExecContext(ctx, d.write.dialect.insertOrReplace("notes",
+		"id, project_id, content, source_type, created_at, updated_at, metadata",
+		"?, ?, ?, ?, ?, ?, ?",
+		"id",
+		"project_id = EXCLUDED.project_id, content = EXCLUDED.content, "+
+			"source_type = EXCLUDED.source_type, created_at = EXCLUDED.created_at, "+
+			"updated_at = EXCLUDED.updated_at, metadata = EXCLUDED.metadata"),
+		n.ID, n.ProjectID, n.Content, string(n.SourceType),
+		formatTime(n.CreatedAt), formatTime(n.UpdatedAt), metadata)
+	if err != nil {
+		return false, fmt.Errorf("database: absorbing note %s: %w", n.ID, err)
+	}
+	return true, nil
+}

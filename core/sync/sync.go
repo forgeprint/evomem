@@ -302,22 +302,42 @@ func (w *Worker) backoff(failures int) time.Duration {
 	return wait + rand.N(wait/4+1)
 }
 
-// Pull pulls notes from the remote that are newer than the local cursor.
-// Returns the new cursor position.
+// Pull reads notes the mirror has that this machine has not, and returns
+// how far it got.
+//
+// It counts in CursorPulled, which is its own watermark. It used to share
+// CursorNotes with the push, and the two are positions in different
+// orderings over different tables: a pull set the push watermark to a
+// position in the mirror's ordering, and every local note behind that point
+// stopped being pending. The note stayed here, never reached the mirror, and
+// nothing said so.
 func (w *Worker) Pull(ctx context.Context) (database.Cursor, error) {
-	cursor, err := w.db.Cursor(ctx, database.CursorNotes)
+	cursor, err := w.db.Cursor(ctx, database.CursorPulled)
 	if err != nil {
 		return database.Cursor{}, err
 	}
 
-	notes, nextUpdatedAtStr, nextID, err := w.remote.PullNotes(ctx, cursor.UpdatedAt.Format(time.RFC3339), cursor.ID, w.cfg.BatchSize)
+	// RFC3339Nano, matching what the remote hands back and what this parses
+	// it with. Sent as RFC3339 the cursor was truncated to a whole second,
+	// so every note written in that second came back on every pull — and
+	// the watermark was then set to the position it was already at, which
+	// SetCursor refuses. A pull that had caught up failed for ever.
+	notes, nextUpdatedAtStr, nextID, err := w.remote.PullNotes(ctx, cursor.UpdatedAt.Format(time.RFC3339Nano), cursor.ID, w.cfg.BatchSize)
 	if err != nil {
 		return database.Cursor{}, err
+	}
+	// Nothing new. Returning the position it is already at, rather than
+	// trying to parse an empty timestamp into one.
+	if len(notes) == 0 {
+		return cursor, nil
 	}
 
 	for _, note := range notes {
-		if err := w.db.Create(ctx, note); err != nil {
-			return database.Cursor{}, fmt.Errorf("pull: creating note %s: %w", note.ID, err)
+		// Absorb, not Create: a note this machine pushed itself comes
+		// back with an identifier that is already here, and Create fails
+		// on it. That made a pull work once and error every time after.
+		if _, err := w.db.Absorb(ctx, note); err != nil {
+			return database.Cursor{}, fmt.Errorf("pull: absorbing note %s: %w", note.ID, err)
 		}
 	}
 
@@ -328,7 +348,7 @@ func (w *Worker) Pull(ctx context.Context) (database.Cursor, error) {
 
 	next := database.Cursor{UpdatedAt: nextUpdatedAt, ID: nextID}
 
-	if err := w.db.SetCursor(ctx, database.CursorNotes, next); err != nil {
+	if err := w.db.SetCursor(ctx, database.CursorPulled, next); err != nil {
 		return database.Cursor{}, err
 	}
 
@@ -343,12 +363,15 @@ func (w *Worker) Restore(ctx context.Context) error {
 		return fmt.Errorf("restore: clearing local notes: %w", err)
 	}
 
-	// Reset cursor
-	if err := w.db.SetCursor(ctx, database.CursorNotes, database.Cursor{}); err != nil {
-		return fmt.Errorf("restore: resetting cursor: %w", err)
+	// ResetCursor, not SetCursor with a zero: SetCursor refuses to move a
+	// watermark backwards, so this line failed and every restore stopped
+	// here — before a single note had been read back.
+	if err := w.db.ResetCursor(ctx, database.CursorPulled); err != nil {
+		return fmt.Errorf("restore: resetting the pull watermark: %w", err)
 	}
 
 	// Pull all notes in batches
+	var last database.Cursor
 	offset := 0
 	for {
 		notes, err := w.remote.PullAll(ctx, 1000, offset)
@@ -359,9 +382,12 @@ func (w *Worker) Restore(ctx context.Context) error {
 			break
 		}
 		for _, note := range notes {
-			if err := w.db.Create(ctx, note); err != nil {
-				return fmt.Errorf("restore: creating note %s: %w", note.ID, err)
+			if _, err := w.db.Absorb(ctx, note); err != nil {
+				return fmt.Errorf("restore: absorbing note %s: %w", note.ID, err)
 			}
+			// PullAll comes back in (updated_at, id) order, so the last
+			// note of the last page is the far edge of what was read.
+			last = database.Cursor{UpdatedAt: note.UpdatedAt, ID: note.ID}
 		}
 		offset += len(notes)
 		if len(notes) < 1000 {
@@ -369,6 +395,14 @@ func (w *Worker) Restore(ctx context.Context) error {
 		}
 	}
 
-	// Update cursor to end
+	// Where the pull should carry on from. Without this the watermark
+	// stayed at zero and the next `evomem pull` walked the whole mirror
+	// again, rewriting every note it had just restored.
+	if last.IsZero() {
+		return nil
+	}
+	if err := w.db.SetCursor(ctx, database.CursorPulled, last); err != nil {
+		return fmt.Errorf("restore: setting the pull watermark: %w", err)
+	}
 	return nil
 }

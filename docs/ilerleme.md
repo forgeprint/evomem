@@ -3223,3 +3223,42 @@ oluşturulan not sunucudan, seed'lenen satırlar simülatörden silindi.
 **Açık:** Android'de çalma denenmedi. Tarayıcı kaydını telefonda çalınır
 kılmak transcode ister; kararı verilmedi. Çalma konumu/scrub yok.
 → ADR-0031 (ek)
+
+## 2026-10-10 — Pull yönünün kendi imleci (ADR-0032)
+
+**Başlanan iş:** "Sunucuda silinen not telefonda kalıyor." **Bulunan:** o işin
+önünde duran dört ayrı kusur. Hiçbiri koda bakarak görünmüyordu; dördü de
+ADR'lerin zaten iddia ettiği davranışı test yazınca çıktı.
+
+1. **Push ve pull tek imleci paylaşıyordu.** `Pull`, `pushNotes`'un kullandığı
+   `CursorNotes` satırını yazıyordu. İkisi de `(updated_at, id)` sırasında bir
+   konum ama **farklı tablolar** üzerinde. Yani bir pull, push imlecini
+   başkasının sıralamasındaki bir noktaya taşıyordu ve o noktanın gerisindeki
+   her yerel not "bekleyen" olmaktan çıkıyordu. Not makinede duruyor, aynaya
+   hiç gitmiyor, hiçbir yer "iki taraf ayrıştı" demiyor. **Sessiz, kalıcı veri
+   kaybı.** Ters yönü de aynı.
+2. **Pull ikinci çalıştırmada patlıyordu.** `db.Create` var olan id'de hata
+   veriyor; makinenin kendi push'ladığı ilk nota gelince bütün pull düşüyordu.
+   ADR-0015 "idempotent" diyor — boş depoda tam bir kez öyleydi.
+3. **İmleç tam saniyeye yuvarlanıyordu.** Uzak taraf `RFC3339Nano` veriyor,
+   `Pull` `RFC3339` gönderiyordu. PostgreSQL'de `updated_at > $1` o saniyede
+   yazılmış her notu **her pull'da** yeniden seçiyor; yetişmiş bir pull imleci
+   zaten olduğu yere koymaya çalışıyor, `SetCursor` bunu reddediyor —
+   **pull o andan sonra kalıcı olarak hata veriyor.** Testlerdeki sahte uzak
+   taraf bunu gizliyordu; yalnızca gerçek PostgreSQL gösteriyor.
+4. **`evomem restore` hiç çalışamıyordu.** `SetCursor(..., Cursor{})` tasarım
+   gereği reddediliyor; komut ikinci ifadesinde, tek not okumadan düşüyordu.
+
+**Yapılan:** `CursorPulled` ayrı satır; `database.Absorb` (yerelden **yeni
+değilse** yazmaz — ADR-0012, yerel otorite); `ResetCursor` ayrı metot; imleç
+tam hassasiyette.
+
+**Kanıt:** Dört kusurun her biri için önce **düşen** test yazıldı. 3. madde
+gerçek PostgreSQL'e karşı doğrulandı (geçici `evomem_synctest` veritabanı,
+sonra silindi) — düzeltme geri alınınca test yine düşüyor. Go kapısı yeşil.
+
+**Kapanmayan madde:** Silmelerin aşağı yönde gelmesi **yapılmadı**, çünkü
+aynada tombstone tablosu olmaması kayıtlı bir karar (`postgres.go` yorumu ve
+`TestRemoteSchemaShape`). Üstelik bugün daha kötüsü görünüyor: diğer makine
+notu hâlâ tuttuğu ve push imlecinin ilerisinde olduğu için **silinen notu geri
+yüklüyor**. Bu, commit değil cevap isteyen bir karar. → ADR-0032

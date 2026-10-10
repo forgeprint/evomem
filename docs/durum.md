@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-10 (yirmi altıncı oturum) · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-10 (yirmi altıncı oturum, üçüncü parça) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -226,9 +226,13 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 4. **Toplu onay yok.** `evomem endorse` tek notu alıyor; proje ya da kaynak
    bazında onay ADR-0021'de bilinçli olarak dışarıda bırakıldı (sürtünme
    koruma sayıldı). Bunun tiyatro mu koruma mı olduğu kullanımla anlaşılacak.
-5. **Sunucuda silinen not telefonda kalıyor.** `evomem pull` notları okuyor,
-   mezar taşlarını okumuyor. Diğer yön; pull tarafının `deletions` tablosunu
-   da okuması gerekiyor. ADR-0020 kapsam dışı bıraktı.
+5. **[KARAR BEKLİYOR] Silmeler aşağı yönde gelmiyor.** Aynada tombstone
+   tablosu **yok** ve bu kayıtlı bir karar (`postgres.go`, `TestRemoteSchemaShape`,
+   ADR-0012 "tek yönlü"). Bugün görülen, maddenin yazdığından kötü: diğer
+   makine notu hâlâ tuttuğu ve push imlecinin ilerisinde olduğu için **silinen
+   notu aynaya geri yüklüyor**. Düzeltmesi aynaya tablo eklemeyi, saklama
+   kuralını ve ekonun önlenmesini gerektiriyor — kararı kullanıcının.
+   → ADR-0032'nin son bölümü
 
 **Günlük var**: `Logbook` bellekte son 300 girdiyi tutuyor, `/log` ekranı
 gösteriyor, "Copy all" panoya alıyor. Diske yazılmıyor. Sebebi: bu
