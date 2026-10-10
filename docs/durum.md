@@ -217,24 +217,22 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    `~/Library/Android/sdk`. Flutter'a `flutter config --android-sdk
    --jdk-dir` ile gösterildi. Emülatör: `evomem` adlı AVD.
 
-2. **Telefonda kayıt çalışıyor; mikrofonun ne duyduğu hâlâ kanıtlanmadı.**
-   (yarım)
+2. **Telefonda kayıt çalışıyor — gerçek sesle kanıtlandı.** (tamam)
 
-   Android emülatöründe uçtan uca denendi: `RECORD_AUDIO` izni soruluyor,
-   kayıt başlıyor (**Android'in yeşil mikrofon göstergesi yanıyor** — yani
-   işletim sistemi mikrofonun kullanıldığını onaylıyor), 19,9 saniye
-   kaydedip duruyor, dosya **1 kanal / 16 kHz / AAC** çıkıyor —
-   `speechRecordConfig`'in istediğinin tam olarak aynısı — ve not
-   "Voice note, 0:20" olarak yazılıyor.
+   Android emülatöründe uçtan uca: `RECORD_AUDIO` izni soruluyor, kayıt
+   başlıyor (Android'in yeşil mikrofon göstergesi yanıyor), duruyor, dosya
+   **1 kanal / 16 kHz / AAC** çıkıyor — `speechRecordConfig`'in istediğinin
+   aynısı — ve not yazılıyor.
 
-   **Ama dosyanın içi sessiz** (tepe genlik 32767'de 10). Mac'in
-   hoparlöründen 1 kHz ton çalarken tekrar kaydettim, yine 10. Emülatör
-   `-allow-host-audio` ile açıldı ve *"Allowing host microphone input"*
-   diyor; eksik olan **macOS'un emülatöre mikrofon izni vermesi**.
+   **Sesin gerçekten girdiği ölçüldü:** Mac'in hoparlöründen **1000 Hz** ton
+   çalarken 9,9 saniye kaydedildi; dosyanın en yüksek saniyesinde sıfır
+   geçişlerinden **~983 Hz** ölçüldü, tepe genlik 4348. Yani dosyadaki ses
+   odadaki ses — gürültü ya da tahmin değil.
 
-   **Senin yapman gereken:** Sistem Ayarları → Gizlilik ve Güvenlik →
-   Mikrofon'da emülatöre (ya da onu başlatan terminale) izin ver. Kod
-   tarafında yapacak bir şey kalmadı.
+   Bunun için macOS'ta emülatöre mikrofon izni verilmesi gerekti (Sistem
+   Ayarları → Gizlilik ve Güvenlik → Mikrofon). İzinden önceki kayıtların
+   tepe genliği 10/32767 idi; sonrakiler dolu. Emülatör `-allow-host-audio`
+   ile açılmalı, yoksa sessizlik gönderiyor.
 
 3. **Tarayıcıda kaydedilen not telefonda çalınamıyor.** Telefonda ses çalma
    **yazıldı ve iOS'ta doğrulandı** (audioplayers 6.8.1). Ama tarayıcı Opus'u

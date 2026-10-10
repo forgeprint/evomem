@@ -3446,3 +3446,23 @@ kaydedici dosyayı başarısız olmadan önce yaratıyor, ve başarısız her de
 diskte kalıcı bir parça bırakıyordu. `_abandon()` eklendi; üç başarısızlık
 yolu da (hata, asılma, "kaydetmiyorum" demesi) teste bağlandı ve düzeltme
 geri alınınca üçü de düşüyor.
+
+### Mikrofon izni verildi: kayıt gerçek sesle kanıtlandı
+
+macOS'ta emülatöre mikrofon izni verildikten (ve emülatör yeniden
+başlatıldıktan) sonra kayıtlar doldu. Kontrollü deneme: Mac hoparlöründen
+**1000 Hz** ton çalarken 9,9 saniye kaydedildi, dosyanın en yüksek saniyesinde
+sıfır geçişlerinden **~983 Hz** ölçüldü (tepe 4348, RMS 1300). İzinden önceki
+kayıtlarda tepe 10/32767 idi.
+
+Yani zincirin tamamı ölçüldü: izin → kayıt → doğru kodek ve örnekleme →
+not. "Telefonda kayıt hiç denenmedi" maddesi kapandı.
+
+Not: emülatör **`-allow-host-audio`** ile açılmazsa sessizlik gönderiyor
+(emülatörün kendi yardımı böyle diyor), ve macOS izni verilmeden de sessizlik
+geliyor — ikisi dışarıdan aynı görünüyor.
+
+**Henüz cihazda denenmeyen:** `_abandon()` düzeltmesi (başarısız start'ın
+dosyayı bırakmaması) testlerde kanıtlı ama emülatördeki APK düzeltmeden
+önceki derleme; izin artık verili olduğu için orada başarısız bir start'ı
+isteyerek üretmek kolay değil.
