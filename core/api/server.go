@@ -136,6 +136,7 @@ type Server struct {
 	puller      PullFunc
 	organizer   OrganizeFunc
 	tokens      Tokens
+	groupings   Groupings
 	cfg         Config
 
 	// routes is what was actually served, for the caller to report. A
@@ -168,6 +169,9 @@ func New(store Store, cfg Config) (*Server, error) {
 	}
 	if tokens, ok := store.(Tokens); ok {
 		s.tokens = tokens
+	}
+	if groupings, ok := store.(Groupings); ok {
+		s.groupings = groupings
 	}
 	s.puller = cfg.Pull
 	s.organizer = cfg.Organize
@@ -232,6 +236,18 @@ func New(store Store, cfg Config) (*Server, error) {
 			mux.Handle("GET /notes", s.authenticated(http.HandlerFunc(s.handleListNotes)))
 			mux.Handle("GET /clusters", s.authenticated(http.HandlerFunc(s.handleListClusters)))
 			mux.Handle("GET /clusters/{id}", s.authenticated(http.HandlerFunc(s.handleGetCluster)))
+
+			// Changing one, for the app. The authority split is
+			// unchanged: a cluster still lives on the server, and
+			// this is a client asking it to change one — the same
+			// act the MCP agent already performs, through a
+			// different door (ADR-0024's amendment).
+			if s.groupings != nil {
+				mux.Handle("PUT /clusters/{id}", s.authenticated(http.HandlerFunc(s.handleEditCluster)))
+				mux.Handle("DELETE /clusters/{id}", s.authenticated(http.HandlerFunc(s.handleDeleteCluster)))
+				s.routes = append(s.routes,
+					"PUT /clusters/{id}", "DELETE /clusters/{id}")
+			}
 			s.routes = append(s.routes,
 				"GET /notes", "GET /clusters", "GET /clusters/{id}")
 		}

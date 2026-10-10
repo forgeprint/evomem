@@ -34,6 +34,7 @@ shared/database    tek yazıcılı iki havuz, FTS5 arama, delta izleme,
 core/mcp           stdio JSON-RPC, 10 araç (6 okur, 1 önerir, 3 gruplar)
 core/api           POST /ingest, /ingest/audio, PUT + DELETE /notes/{id},
                    GET /notes + /clusters + /notes/{id}/audio,
+                   PUT + DELETE /clusters/{id}, /tokens,
                    /connections + /organize (panel), CORS,
                    Telegram ve Jira webhook'ları
 core/organize      kümesiz notları OpenAI-uyumlu bir modele gruplatır
@@ -115,7 +116,7 @@ evomem tokens -revoke <id>            # tek bir cihazı kes
   uçtan uca — derlenmiş ikiliyle, gerçek HTTP; `getFile` bir kez gerçek
   Telegram'a da gitti ve `Unauthorized` döndü (hata yolu ve token gizleme
   doğrulandı)
-- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler, proje seçimi, günlük, ses çalma, cihaz token'ları — 138 test,
+- **Flutter mobil**: sqflite persistence, sync, settings, ses kaydı, kümeler (okuma ve düzenleme), proje seçimi, günlük, ses çalma, cihaz token'ları — 145 test,
   `flutter analyze` temiz, web release build'i geçiyor
 - **Kümeler uçtan uca, tarayıcıda**: ajan MCP ile iki notu grupladı → Go
   sunucusu `GET /clusters` ile verdi → Flutter web uygulaması listeledi ve
@@ -203,14 +204,6 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    konuşturmak için önüne bir uyum katmanı gerekir. `Grouper` arayüzü buna
    kapalı değil (ADR-0027).
 
-2. **Tarayıcıda kayıt hâlâ çalışmıyor, ama sebebi artık görünecek.**
-   `record_web`'in `MediaRecorderDelegate.start`'ı her hatayı yakalayıp
-   `debugPrint`'e yazıyor ve **fırlatmıyor** — yani `start()` başarıyla
-   dönüyor, kaydedici ölü, `stop()` null veriyor. Logdaki "started" sonra
-   "handle=null" tam buydu. Artık `isRecording()` ile doğrulanıyor ve
-   `debugPrint` günlüğe akıyor; paketin kendi hata metni bir sonraki
-   denemede `/log`'da görünecek.
-
 3. **Telefonda ses çalma yok.** `RecordingPlayer`'ın tarayıcı uygulaması
    gerçek, telefon tarafı "çalamıyorum" diyor — bir paket gerekiyor ve
    telefon zaten derlenemiyor. Android/iOS dosyaları gelince birlikte
@@ -269,6 +262,15 @@ not durduğu sürece vardır; seçili olan, henüz notu olmasa da listede
 tutuluyor. Seçim hatırlanıyor (`ProjectMemory` portu). Yol boyunca iki hata
 çıktı: proje değişince `build()` yeniden koştuğu için `late final` alanlar
 patlıyordu, ve `add()` notu projesine bakmadan listeye koyuyordu.
+
+**Kümeler uygulamadan düzenlenebiliyor** (ADR-0024'ün değişikliği):
+`PUT`/`DELETE /clusters/{id}` — yeniden adlandırma, özet, bir notu gruptan
+çıkarma, grubu silme. Yetki ayrımı değişmedi: küme hâlâ yalnızca sunucuda
+yaşıyor ve bu istemcinin sunucudan değiştirmesini istemesi. **Notun ne
+söylediğine dokunamıyor** — gruptan çıkarılan not duruyor; bir tarayıcıya
+açmanın güvenli olmasının sebebi bu. Ad ve özet nullable: "verilmedi" ile
+"boşa çek" farklı şeyler. Küme **yaratmak** hâlâ elle yapılmıyor: ajan MCP
+ile (ADR-0023) ya da panel modele sorarak (ADR-0027).
 
 **Giriş yok, cihaz başına token var** (ADR-0030): Evomem tek kişinin
 hafızası — hesap, parola, oturum yok. Sebebi kaydedildi: **MCP HTTP'den hiç

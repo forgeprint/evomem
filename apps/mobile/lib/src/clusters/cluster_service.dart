@@ -104,8 +104,15 @@ class ClusterService {
   }
 
   /// One grouping and the notes in it.
-  Future<ClusterDetail> get(String id) async {
-    final body = await _get('/clusters/${Uri.encodeComponent(id)}');
+  Future<ClusterDetail> get(String id) async =>
+      _detailFrom(await _get('/clusters/${Uri.encodeComponent(id)}'));
+
+  /// Reads a grouping and its notes out of a reply.
+  ///
+  /// Shared by reading one and editing one, because the server answers an
+  /// edit with what the grouping now is — so the caller never has to guess,
+  /// and there is one place that knows the shape.
+  static ClusterDetail _detailFrom(Map<String, dynamic> body) {
     final cluster = Cluster.fromJson(body['cluster']);
     if (cluster == null) {
       throw const ClusterFailure(
@@ -117,11 +124,101 @@ class ClusterService {
     final notes = <Note>[];
     if (rawNotes is List) {
       for (final one in rawNotes) {
-        final note = _noteFromJson(one);
-        if (note != null) notes.add(note);
+        // One unreadable entry drops out rather than losing the rest.
+        notes.addAll([?_noteFromJson(one)]);
       }
     }
     return ClusterDetail(cluster: cluster, notes: notes);
+  }
+
+  /// Renames a grouping, re-summarises it, or changes who is in it.
+  ///
+  /// Null means "leave it": renaming a group must not wipe its summary, and
+  /// an empty string must still be able to clear one. That is why these are
+  /// nullable rather than defaulted.
+  ///
+  /// A cluster still lives on the server and nowhere else (ADR-0024); this
+  /// asks the server to change one, which is what the MCP agent already
+  /// does. What a note *says* is not touched here and cannot be.
+  Future<ClusterDetail> edit(
+    String id, {
+    String? name,
+    String? summary,
+    List<String> remove = const [],
+  }) async {
+    // Null means "leave it alone"; an empty string is a deliberate clear.
+    // The server tells them apart because the field is absent rather than
+    // empty, which is why these are built conditionally.
+    final body = <String, Object?>{
+      'name': ?name,
+      'summary': ?summary,
+      if (remove.isNotEmpty) 'remove': remove,
+    };
+    if (body.isEmpty) {
+      throw const ClusterFailure(
+        ClusterProblem.unreadable,
+        'nothing to change',
+      );
+    }
+    final answer = await _send(
+      'PUT',
+      '/clusters/${Uri.encodeComponent(id)}',
+      body: body,
+    );
+    return _detailFrom(answer);
+  }
+
+  /// Takes a grouping off. The notes stay — that is the whole reason this
+  /// is safe to offer (ADR-0023).
+  Future<void> delete(String id) async {
+    await _send('DELETE', '/clusters/${Uri.encodeComponent(id)}');
+  }
+
+  Future<Map<String, dynamic>> _send(
+    String method,
+    String path, {
+    Map<String, Object?>? body,
+  }) async {
+    if (!isConfigured) {
+      throw const ClusterFailure(ClusterProblem.notConfigured);
+    }
+
+    final request = http.Request(method, Uri.parse('$serverUrl$path'))
+      ..headers['Authorization'] = 'Bearer $apiToken';
+    if (body != null) {
+      request.headers['Content-Type'] = 'application/json';
+      request.body = json.encode(body);
+    }
+
+    final http.Response response;
+    try {
+      final streamed = await client.send(request).timeout(timeout);
+      response = await http.Response.fromStream(streamed);
+    } on Exception catch (e) {
+      throw ClusterFailure(ClusterProblem.unreachable, e.toString());
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      // The server's own sentence: it says things the client cannot know,
+      // like which field was empty.
+      throw ClusterFailure(
+        ClusterProblem.unreachable,
+        response.body.trim().isEmpty
+            ? 'the server answered ${response.statusCode}'
+            : response.body.trim(),
+      );
+    }
+
+    if (response.body.trim().isEmpty) return const {};
+    try {
+      final decoded = json.decode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const ClusterFailure(ClusterProblem.unreadable, 'not an object');
+      }
+      return decoded;
+    } on FormatException catch (e) {
+      throw ClusterFailure(ClusterProblem.unreadable, e.message);
+    }
   }
 
   Future<Map<String, dynamic>> _get(String path) async {

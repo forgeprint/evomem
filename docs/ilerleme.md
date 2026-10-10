@@ -3003,3 +3003,46 @@ Go: iki geçit de yeşil, suite PostgreSQL'e karşı da koştu. Flutter: 138 tes
 Bu yalnızca **HTTP'yi** koruyor. Veritabanı dosyası ya da `EVOMEM_STORE_DSN`
 elinde olan her şeye sahip; `evomem mcp`, `evomem add` ve `psql` bunun
 dışında. Tek kullanıcılı yerel bir deponun şekli bu ve burada değişmiyor.
+
+
+## Yirmi dördüncü oturum — kümeler uygulamadan düzenlenebiliyor
+
+Yön cümlesinde başından beri vardı: *"mobil uygulamada da bu kümeleri
+görebilme düzenleyebilme"*. Okuma ADR-0024'te gelmişti; yazma eksikti ve
+`durum.md`'nin listesinden de düşmüştü.
+
+`PUT /clusters/{id}` ve `DELETE /clusters/{id}`. Uygulamada: yeniden
+adlandırma, özet düzenleme, bir notu gruptan çıkarma, grubu silme.
+
+**Yetki ayrımı değişmedi** — bu yüzden yeni bir karar değil, ADR-0024'e
+bir değişiklik notu. Küme hâlâ yalnızca sunucuda yaşıyor; bu, istemcinin
+sunucudan değiştirmesini istemesi — MCP ajanının ADR-0023'ten beri yaptığı
+şeyin başka bir kapıdan hali.
+
+**Notun ne söylediğine dokunamıyor.** Buradaki tek şey etiket ve üyelik;
+bir notu gruptan çıkarmak notu bırakıyor. Bunu bir tarayıcıya açmanın
+güvenli olmasının sebebi bu.
+
+### İki ayrıntı
+
+- **Ad ve özet istekte nullable.** "Verilmedi" ile "boşa çek" farklı şeyler:
+  yeniden adlandırmak özeti silmemeli, ama özeti bilerek temizlemek de
+  çalışmalı. Boş alan değil, **olmayan** alan.
+- **Yanıt kümenin son halini taşıyor**, yani ekran tekrar sormuyor ve
+  gönderdiğini sandığı şeyi çizerek sunucudan ayrışamıyor.
+
+### Bir testim yanlıştı
+
+"Boş özet temizlenmiyor" diye kırmızı verdi. Kod doğruydu: `Cluster.Summary`
+`omitempty`, yani boş özet JSON'dan düşüyor, ve aynı yapıyı ikinci kez
+unmarshal edince eski değer yerinde kalıyor. Test, kod ne yaparsa yapsın
+geçebilecek bir testti; taze bir değişkenle düzeltildi.
+
+### Doğrulanan
+
+Çalışan sunucuya karşı (PostgreSQL), küme MCP ile oluşturulup: yalnızca ad
+değiştirildi → **özet yerinde kaldı**; bir not çıkarıldı → grup 1 nota
+düştü ve **not duruyor**; grup silindi → 204, grup sayısı 0, **iki not da
+duruyor**; token'siz **401**.
+
+145 Flutter testi, Go geçidi yeşil.

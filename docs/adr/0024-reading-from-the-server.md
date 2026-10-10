@@ -1,6 +1,6 @@
 # ADR-0024: Authority is split by kind, and the server gains a read side
 
-**Status:** accepted · **Date:** 2026-10-09 · Amends ADR-0012 and ADR-0023.
+**Status:** accepted · **Amended:** 2026-10-10 · **Date:** 2026-10-09 · Amends ADR-0012 and ADR-0023.
 
 ## Context
 
@@ -129,3 +129,37 @@ somebody's memory to `*` is an endpoint that any page they visit can read.
   over MCP and rejected evomem calling a model service; the user wants that
   path back as an option, configured from a panel. It is an amendment to
   ADR-0023 and is not made here.
+
+## Amendment, 2026-10-10: a client can change a grouping too
+
+This record gave clients a read side and said clusters live on the server
+and are read over HTTP. The direction asked for more than that — *"mobil
+uygulamada da bu kümeleri görebilme düzenleyebilme"* — and reading was only
+half of it.
+
+`PUT /clusters/{id}` renames a grouping, re-summarises it and changes who is
+in it; `DELETE /clusters/{id}` takes one off.
+
+**The authority split is unchanged**, which is why this is an amendment
+rather than a new decision. A cluster still lives on the server and nowhere
+else; there is still no second copy to reconcile. This is a client *asking*
+the server to change one, which is exactly what the MCP agent has been doing
+since ADR-0023 — the same act through a different door.
+
+**It cannot touch what a note says.** ADR-0023 drew that line and it still
+holds: the only things here are the label and the membership, and taking a
+note out of a group leaves the note. That is the whole reason this is safe
+to expose to a browser at all — the worst a mistake can do is undo a
+grouping, which an agent can make again.
+
+Two details worth naming:
+
+- **Name and summary are nullable in the request.** "Not given" and "set to
+  empty" are different: renaming a group must not wipe its summary, and
+  clearing one deliberately must still work. Absent fields, not empty ones.
+- **The reply carries the grouping as it now stands**, so a client is told
+  rather than having to ask again, and a screen cannot drift from the
+  server by rendering what it hoped it sent.
+
+Creating a grouping is still not something a client does by hand: an agent
+makes one over MCP (ADR-0023), or the panel asks a model to (ADR-0027).
