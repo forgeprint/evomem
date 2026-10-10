@@ -240,10 +240,11 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    iki imleci, `absorb` ve `forgetByRemoteId`. Sync düğmesi iki yönü de
    yapıyor. iOS simülatöründe uçtan uca doğrulandı. → ADR-0034
 
-   Açık kalanlar: telefon artık sunucunun **tamamını** çekiyor (proje ya da
-   tarih sınırı yok); `POST /ingest`'te mezar taşı koruması yok, yani
-   pull'dan önce push eden bir cihaz silinmiş notu **yeni bir kimlikle**
-   yeniden yaratabilir (kopya, diriliş değil — ama aynı şeklin sorunu).
+   Açık kalan: telefon artık sunucunun **tamamını** çekiyor (proje ya da
+   tarih sınırı yok). ADR-0034'ün ilk hâlinde yazdığım "`/ingest` silinmiş
+   notu diriltebilir" maliyeti **kontrol edildi ve geri çekildi** — sunucunun
+   gördüğü not kimliğini taşıdığı için düzenleme `PUT` gidiyor, `/ingest`'e
+   hiç düşmüyor; teste bağlandı.
 
 **Günlük var**: `Logbook` bellekte son 300 girdiyi tutuyor, `/log` ekranı
 gösteriyor, "Copy all" panoya alıyor. Diske yazılmıyor. Sebebi: bu

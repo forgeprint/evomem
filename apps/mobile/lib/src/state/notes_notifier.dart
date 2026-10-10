@@ -108,6 +108,10 @@ final projectsProvider = FutureProvider<List<ProjectCount>>((ref) async {
     ...withNotes.map((p) => p.projectId),
     ...await ref.watch(projectMemoryProvider).known(),
     current,
+    // Always, even with nothing filed under it and never deliberately
+    // chosen. It is where the app starts, so on a fresh store somebody who
+    // switched away from it had no way back but typing the word.
+    defaultProjectId,
   ];
 
   final seen = <String>{};

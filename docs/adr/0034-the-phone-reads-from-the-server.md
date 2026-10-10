@@ -109,13 +109,29 @@ to UTF-8 and adds the charset to the header itself.
 - **Last writer by `updated_at` wins**, with nothing warning anybody, which is
   the same policy ADR-0019 and ADR-0032 settled on. Two devices editing one
   note means one edit is gone.
-- **Deletion is not resurrection-proof here.** On the mirror path the server
-  refuses a note it holds a tombstone for (ADR-0033). `POST /ingest` has no
-  such guard, so a device that pushes before it pulls could re-create a
-  deleted note under a **new identifier** — a copy, not a resurrection, which
-  is why it is a cost and not a defect, but it is the same shape of problem.
+- **An edit made against a note the server has deleted is lost silently.**
+  The push sends it as a `PUT`, the server answers 404, the phone leaves the
+  note alone, and the next pull's tombstone removes it. Deletion is the later
+  word, which is the policy — but nobody is told that what they just typed
+  went nowhere.
 - **An unreadable row is skipped silently.** One bad note drops out of a page
   rather than wedging the pull; nothing counts how many.
+
+## A cost this record claimed, checked and withdrawn
+
+The first version of this record said `POST /ingest` has no tombstone guard,
+so a device pushing before it pulls could re-create a deleted note under a new
+identifier. **That is not true, and the claim is withdrawn.**
+
+A note the server has ever seen carries its identifier, so `_pushNotesBatch`
+sends an edit as a `PUT` and never posts it to `/ingest` — the branch that
+posts is only reached by a note with no `remote_id`, which by definition the
+server has never held and so cannot have deleted. A 404 on the `PUT` is
+treated as "there is nothing there", and the note is left for the pull's
+tombstone to remove.
+
+Pinned by a test, because a claim in a record that nobody checked is how a
+later reader ends up fixing something that was not broken.
 
 ## Verified
 

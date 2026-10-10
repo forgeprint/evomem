@@ -507,4 +507,56 @@ void main() {
     await dao.delete('local-1');
     expect(await dao.getById('local-1'), isNull);
   });
+  // ADR-0034 listed a cost that, checked, is not there: that a device pushing
+  // before it pulls could re-create a note the server had deleted, under a
+  // new identifier. It cannot.
+  //
+  // A note the server has seen carries its identifier, so an edit goes as a
+  // PUT, never as a POST to /ingest. A 404 on that PUT means the server has
+  // deleted it; the phone leaves it alone and the tombstone removes it on the
+  // next pull. The edit is lost — deletion is the later word — but nothing is
+  // re-created.
+  test('an edit to a note the server deleted does not re-create it', () async {
+    final note = await storeNote('local-gone', 'edited after it was deleted');
+    final server = await FakeIngest.start();
+    addTearDown(server.close);
+
+    // The server accepted it once.
+    await dao.setRemoteId(
+      note.id,
+      '01M4JXXXXXXXXXXXXXXXXXXXXX',
+      DateTime.utc(2026, 10, 8),
+    );
+    // And it has been edited here since.
+    await dao.update(
+      Note(
+        id: note.id,
+        projectId: note.projectId,
+        content: 'edited after it was deleted',
+        sourceType: note.sourceType,
+        createdAt: note.createdAt,
+        updatedAt: DateTime.utc(2026, 10, 9),
+      ),
+    );
+
+    // The note is gone over there.
+    server.putStatus = 404;
+
+    final result = await pushWith(server);
+
+    expect(result.success, isTrue, reason: result.error);
+    expect(
+      server.paths,
+      isNot(contains('/ingest')),
+      reason: 'the deleted note was posted back and lives again under a new id',
+    );
+    // The edit went as a PUT, under the identifier the server gave it.
+    // (Other requests in this list are tombstones left by earlier tests in
+    // this file, which share one database file.)
+    expect(server.putBodies, hasLength(1));
+    expect(
+      server.paths,
+      contains('/notes/01M4JXXXXXXXXXXXXXXXXXXXXX'),
+    );
+  });
 }

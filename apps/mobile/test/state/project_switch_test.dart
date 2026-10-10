@@ -226,4 +226,39 @@ void main() {
       reason: 'the same project is offered twice',
     );
   });
+
+  // On a fresh store nothing is filed under `default` and nobody has chosen
+  // it on purpose, so it fell out of the picker the moment somebody switched
+  // away — and the only way back was typing the word. Seen in the browser,
+  // where the store starts empty.
+  test('the project the app starts in is always reachable', () async {
+    final container = containerWith(FakeProjectMemory());
+
+    container.read(currentProjectProvider.notifier).select('web-deneme');
+    await settle();
+
+    expect(
+      (await container.read(projectsProvider.future)).map((p) => p.projectId),
+      contains(defaultProjectId),
+      reason: 'there is no way back to the project the app opens in',
+    );
+  });
+
+  // Forgetting it would be a button that appears to do nothing, because the
+  // list always puts it back.
+  test('the starting project cannot be forgotten away', () async {
+    final memory = FakeProjectMemory();
+    final container = containerWith(memory);
+
+    container.read(currentProjectProvider.notifier).select(defaultProjectId);
+    await container
+        .read(projectNamesRevisionProvider.notifier)
+        .forget(defaultProjectId);
+    await settle();
+
+    expect(
+      (await container.read(projectsProvider.future)).map((p) => p.projectId),
+      contains(defaultProjectId),
+    );
+  });
 }

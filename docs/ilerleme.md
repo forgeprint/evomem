@@ -3368,3 +3368,28 @@ kadar kısaltıldı.
 
 **Kanıt:** dört test (biri raporun kendisi), düzeltme geri alınınca düşüyor;
 simülatörde proje kalıyor ve ✕ çalışıyor. 191 test, analyzer temiz.
+
+## 2026-10-10 — Web kontrolü ve yanlış yazılmış bir maliyetin geri çekilmesi
+
+**Bugünün her şeyi yalnızca iOS'ta denenmişti.** Web imajı yeniden kuruldu ve
+tarayıcıda açıldı; proje picker düzeltmesi orada da çalışıyor.
+
+**Web'de bir şey daha çıktı:** depo boş bir tarayıcıda `default`'un altında
+hiç not yok ve kimse onu bilerek seçmemiş oluyor — yani ondan ayrılınca
+listeden düşüyordu ve geri dönmenin tek yolu adını yeniden yazmaktı.
+`defaultProjectId` artık listede her zaman var, ve üstünde ✕ **yok**: liste
+onu zaten geri koyduğu için ✕ hiçbir şey yapmıyormuş gibi görünürdü.
+
+**ADR-0034'te yazdığım bir maliyet kontrol edildi ve geri çekildi.**
+"`POST /ingest`'te mezar taşı koruması yok, pull'dan önce push eden cihaz
+silinmiş notu yeni bir kimlikle diriltebilir" demiştim. **Değil:** sunucunun
+gördüğü notun kimliği var, düzenleme `PUT` gidiyor, `/ingest`'e düşen dal
+yalnızca `remote_id`'si olmayan — yani sunucunun hiç görmediği, dolayısıyla
+silmiş olamayacağı — notlar için. `PUT`'a 404 gelince telefon notu olduğu gibi
+bırakıyor, bir sonraki pull'un mezar taşı siliyor. Teste bağlandı; kayıttaki
+yanlış cümle, sonradan okuyan birinin bozuk olmayan bir şeyi "düzeltmesine"
+yol açardı.
+
+Yerine yazılan gerçek maliyet: **sunucuda silinmiş bir nota yapılan düzenleme
+sessizce kayboluyor.** Silme sonraki söz — politika bu — ama kimse yazdığı
+şeyin hiçbir yere gitmediğini öğrenmiyor.

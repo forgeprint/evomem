@@ -52,7 +52,12 @@ class ProjectPicker extends ConsumerWidget {
                 // a project with notes under it is known from the notes and
                 // would come straight back, so offering it there would be a
                 // button that does nothing.
-                if (project.notes == 0 && project.projectId != current)
+                // Nor for the project the app starts in: it is always
+                // offered, so forgetting it would be a button that appears
+                // to do nothing.
+                if (project.notes == 0 &&
+                    project.projectId != current &&
+                    project.projectId != defaultProjectId)
                   IconButton(
                     icon: const Icon(Icons.close, size: 16),
                     tooltip: 'Forget this name',
