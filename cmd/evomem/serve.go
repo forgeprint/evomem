@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/forgeprint/evomem/core/api"
 	"github.com/forgeprint/evomem/core/connect"
@@ -39,7 +40,11 @@ func cmdServe(args []string, out io.Writer) error {
 		JiraSecret:           os.Getenv("EVOMEM_JIRA_SECRET"),
 		JiraProject:          os.Getenv("EVOMEM_JIRA_PROJECT"),
 		CORSOrigins:          os.Getenv("EVOMEM_CORS_ORIGIN"),
-		SecretKey:            os.Getenv("EVOMEM_SECRET_KEY"),
+		// One line per request, on stderr with everything else the
+		// server says about itself. EVOMEM_ACCESS_LOG=off turns it
+		// off for somebody who would rather not keep one (ADR-0035).
+		AccessLog: accessLog(),
+		SecretKey: os.Getenv("EVOMEM_SECRET_KEY"),
 		Pull: func(ctx context.Context, key database.SecretKey) (connect.Result, error) {
 			// The panel asks; this is where the connectors are named.
 			return connect.Run(ctx, db, key, map[string]connect.Puller{
@@ -104,4 +109,18 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// accessLog is where request lines go: stderr, or nowhere when
+// EVOMEM_ACCESS_LOG is "off".
+//
+// On by default. The cost of keeping it is a line per request on stderr; the
+// cost of not keeping it was a day when ten notes were deleted through the
+// API and the only honest answer to "by whom" was that nothing had recorded
+// it.
+func accessLog() io.Writer {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("EVOMEM_ACCESS_LOG")), "off") {
+		return nil
+	}
+	return os.Stderr
 }

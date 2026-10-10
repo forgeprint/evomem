@@ -3466,3 +3466,37 @@ geliyor — ikisi dışarıdan aynı görünüyor.
 dosyayı bırakmaması) testlerde kanıtlı ama emülatördeki APK düzeltmeden
 önceki derleme; izin artık verili olduğu için orada başarısız bir start'ı
 isteyerek üretmek kolay değil.
+
+## 2026-10-10 — Sunucudaki notlar silindi, geri yüklendi; sunucu artık kim sorduğunu yazıyor
+
+**Olan:** ffmpeg işi için bir webm aramaya gittiğimde sunucuda **hiç not
+kalmadığını** gördüm. PostgreSQL'deki mezar taşlarına göre **10 not
+13:47:17Z'de yarım saniye içinde** API üzerinden silinmiş. **Kimin sildiğini
+bulamadım:** sunucu istek kaydı tutmuyordu. iOS simülatörü 9 notun hepsini
+tutuyordu ve kuyruğunda silme yoktu (yani o değil), Android uygulamasında
+sunucu ayarı hiç yok, benim o dakikada çalıştırdığım komutlarda silme yok.
+Tahmin yürütmedim.
+
+**Kurtarma:** iOS simülatörünün kopyası önce `~/evomem-kurtarma/` altına
+yedeklendi, sonra 9 not **orijinal ULID'leriyle** geri yazıldı ve o kimliklerin
+mezar taşları silindi. Kullanıcı bu yolu seçti; `POST /ingest` ile eklemek
+yeni kimlik verirdi ve küme üyelikleriyle MCP referanslarını koparırdı.
+
+Bir tuzak vardı: telefon zaman damgalarını **6 haneli** kesirle, sunucu
+**9 haneli** yazıyor (`timeLayout`). Metin olarak karşılaştırıldıkları için
+(sync imleci öyle yürüyor) `…202098Z` ile `…202098000Z` farklı sıralanır;
+geri yazarken 9 haneye normalleştirildi.
+
+**Kayıplar:** ses dosyaları geri gelmedi — `evomem delete` notun sesini de
+siliyor (ADR-0018) ve `/data/audio` boştu.
+
+**Asıl düzeltme:** sunucu artık her isteğe bir satır yazıyor (ADR-0035).
+Yol **sorgu dizesi olmadan** (çünkü `?q=` kullanıcının kendi içeriği),
+**kim** olarak cihaz jetonunun adı ya da `environment`, jetonun kendisi asla.
+En dışta duruyor, yani 404 ve reddedilen istekler de kaydediliyor —
+sonradan sorulan tam olarak onlar. `GET /healthz` atlanıyor.
+
+Yazarken bir hata yaptım ve test yakaladı: log en dışta elindeki request'i
+tutuyor, kimliği öğrenen ara katman ise `WithContext` ile **yeni** bir
+request üretiyor; ilk sürüm yetkilendirdiği istekler dahil her satıra `as=-`
+yazıyordu. Bağlama önceden konan bir işaretçi ikisi tarafından paylaşılıyor.

@@ -73,6 +73,14 @@ type Config struct {
 	// Addr to listen on. Empty means DefaultAddr.
 	Addr string
 
+	// AccessLog is where one line per request goes, or nil for none.
+	//
+	// `evomem serve` points it at stderr. It exists because ten notes were
+	// once deleted through this API and nothing could say by whom: the
+	// store had the tombstones and the times, and there was no record of a
+	// request anywhere (ADR-0035).
+	AccessLog io.Writer
+
 	// Token authenticates /ingest, the endpoint Apple Shortcuts and any
 	// other automation posts to. Without it that endpoint is not served.
 	Token string
@@ -273,11 +281,12 @@ func New(store Store, cfg Config) (*Server, error) {
 		if cfg.Recordings != nil {
 			s.recordings = cfg.Recordings
 			mux.Handle("POST /ingest/audio", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if !s.authorized(r) {
+				who, ok := s.authorized(r)
+				if !ok {
 					http.Error(w, "unauthorized", http.StatusUnauthorized)
 					return
 				}
-				s.handleAudio(w, r)
+				s.handleAudio(w, withWho(r, who))
 			}))
 			// Reading one back is ordinary: the token guards it
 			// like every other read (ADR-0029).
@@ -312,9 +321,14 @@ func New(store Store, cfg Config) (*Server, error) {
 		return nil, errors.New("api: nothing is configured; set a token or an adapter secret")
 	}
 
+	// Outermost, so a request that never reaches a route — a 404, a
+	// refused token — is recorded too. Those are the ones somebody asks
+	// about afterwards.
+	handler := logRequests(cfg.AccessLog, withCORS(mux, corsOrigins(cfg.CORSOrigins)))
+
 	s.http = &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           withCORS(mux, corsOrigins(cfg.CORSOrigins)),
+		Handler:           handler,
 		ReadTimeout:       readTimeout,
 		ReadHeaderTimeout: readTimeout,
 		WriteTimeout:      writeTimeout,
@@ -368,13 +382,14 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 // authenticated requires the environment's token or a device token.
 func (s *Server) authenticated(next http.Handler) http.Handler {
 	return limitBody(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !s.authorized(r) {
+		who, ok := s.authorized(r)
+		if !ok {
 			// No WWW-Authenticate challenge: there is nothing for a
 			// browser to prompt for, and this is not a login.
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, withWho(r, who))
 	}))
 }
 
@@ -385,29 +400,32 @@ func (s *Server) authenticated(next http.Handler) http.Handler {
 // The environment's is checked first and in constant time: it is the common
 // case for the machine's own tooling, and it is the one that has to keep
 // working so there is a way to make the first device token.
-func (s *Server) authorized(r *http.Request) bool {
+// It also returns a name for whoever was let in, for the access log: the
+// name on the device token, or `environment` for the one in the server's own
+// configuration. Never the token or any part of it.
+func (s *Server) authorized(r *http.Request) (string, bool) {
 	header := r.Header.Get("Authorization")
 	scheme, presented, found := strings.Cut(header, " ")
 	if !found || !strings.EqualFold(scheme, "Bearer") {
-		return false
+		return "", false
 	}
 	if constantTimeEqual(presented, s.cfg.Token) {
-		return true
+		return "environment", true
 	}
 	if s.tokens == nil {
-		return false
+		return "", false
 	}
 
 	token, err := s.tokens.TokenFor(r.Context(), presented)
 	if err != nil {
 		// Not found, revoked, or the store is unreachable. All three
 		// mean the same thing to a request: no.
-		return false
+		return "", false
 	}
 	// Recorded so a person revoking one can tell which device is which.
 	// A failure here must not refuse a request that was authorised.
 	_ = s.tokens.TouchToken(r.Context(), token)
-	return true
+	return token.Name, true
 }
 
 // limitBody caps what a handler can be made to read.

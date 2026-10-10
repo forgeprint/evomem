@@ -445,6 +445,10 @@ döküm, dağıtım ve gerçek dünya denemeleri.
 
 ## Bilinen sınırlar (hata değil, karar)
 
+- **Sunucu erişim logu dönmüyor.** Her istek stderr'e bir satır yazıyor
+  (ADR-0035); kimse budamıyor. Kişisel bir sunucuda yıllarca sorun değil,
+  yoğun bir kurulumda Docker'ın `max-size`'ı ya da `logrotate` gerekir.
+
 - **Proje adları cihazda tutuluyor, sunucuda değil.** Bir projeyi telefonda
   açıp içine hiç yazmazsan, o ad yalnızca o cihazda bilinir — web'de ya da
   başka bir telefonda görünmez. Proje hâlâ hiçbir tabloda satır değil; altına
