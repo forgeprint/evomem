@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:evomem_mobile/src/audio/recording_controller.dart';
@@ -79,6 +80,53 @@ class SilentlyDeadRecorder implements VoiceRecorder {
 
   @override
   Future<void> dispose() async {}
+}
+
+/// What record does on an iOS device whose audio input cannot be opened:
+/// `start` never completes and never throws. Measured on an iOS 27
+/// simulator on 2026-10-10, where CoreAudio refuses the input device — the
+/// button went dead, the log stayed empty, and the only sign anything had
+/// happened was a line in the system log.
+class HangingRecorder implements VoiceRecorder {
+  /// Whether anybody tried to put the recorder back.
+  bool cancelled = false;
+
+  @override
+  Future<bool> hasPermission() async => true;
+
+  @override
+  Future<void> start(String path) => Completer<void>().future;
+
+  @override
+  Future<bool> isRecording() async => false;
+
+  @override
+  Future<String?> stop() async => null;
+
+  @override
+  Future<void> cancel() async => cancelled = true;
+
+  @override
+  Future<void> dispose() async {}
+}
+
+/// A store that cannot say where a recording should go.
+///
+/// `getApplicationDocumentsDirectory` can fail, and the call to it used to
+/// sit outside every try in start(): the exception left the method without
+/// touching the state, the log, or the message the screen shows.
+class UnusableStore implements RecordingStore {
+  @override
+  Future<String> newTarget() async => throw const FileSystemException('full');
+
+  @override
+  Future<int?> claim(String handle) async => null;
+
+  @override
+  Future<RecordingBytes?> read(String handle) async => null;
+
+  @override
+  Future<void> remove(String handle) async {}
 }
 
 void main() {
@@ -164,5 +212,53 @@ void main() {
     final entry = container.read(logbookProvider).first;
     expect(entry.level, LogLevel.error);
     expect(entry.message, contains('not recording'));
+  });
+
+  // The button that would not work and would not say why — the same shape
+  // of failure the logbook was built for in a browser, found again on a
+  // phone. A recorder that hangs is now a failure with a reason, after a
+  // bounded wait.
+  test('a recorder that hangs gives up and says so', () async {
+    final recorder = HangingRecorder();
+    final container = containerWith(recorder);
+
+    final problem = await container
+        .read(recordingControllerProvider.notifier)
+        .start();
+
+    expect(problem, RecordingProblem.recorderFailed);
+    expect(container.read(recordingControllerProvider).isRecording, isFalse);
+
+    final entry = container.read(logbookProvider).first;
+    expect(entry.level, LogLevel.error);
+    expect(entry.message, contains('never started'));
+    expect(
+      recorder.cancelled,
+      isTrue,
+      reason: 'a half-open recorder makes the next attempt fail too',
+    );
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('nowhere to put the recording is a reported failure', () async {
+    final container = ProviderContainer(
+      overrides: [
+        voiceRecorderProvider.overrideWithValue(SilentlyDeadRecorder()),
+        recordingStoreProvider.overrideWithValue(UnusableStore()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final problem = await container
+        .read(recordingControllerProvider.notifier)
+        .start();
+
+    expect(
+      problem,
+      RecordingProblem.recorderFailed,
+      reason: 'the exception escaped start() and the screen said nothing',
+    );
+    final entry = container.read(logbookProvider).first;
+    expect(entry.level, LogLevel.error);
+    expect(entry.message, contains('nowhere to put'));
   });
 }

@@ -3142,3 +3142,51 @@ has_system_field=true  roles=["user"]
 ve seçim yalnızca varsayılanları taşıyor — elle yazılan adres korunuyor.
 
 147 Flutter testi, Go geçidi yeşil.
+
+## 2026-10-10 — Uygulama ilk kez bir telefonda çalıştı
+
+**Yapılan:** `flutter create --platforms=android,ios` ile derleme dosyaları
+üretildi, üretilenin varsayılanları düzeltildi ve sabitlendi. Uygulama iOS 27
+simülatöründe (iPhone 17) çalıştırıldı; mikrofon izni soruldu ve alındı.
+
+**Üretilenin değiştirilenleri:**
+- `com.evomem.evomem_mobile` → `com.evomem.mobile` (iOS paket kimliği zaten
+  buydu; tek uygulama için iki kimlik kazara dağıtım demek).
+- `minSdk = flutter.minSdkVersion` → `minSdk = 24`. Taban Flutter'ın değil,
+  eklentilerin: `record_android` 2.2.0 ve `flutter_secure_storage` 11.2.0
+  kendi `build.gradle`'larında 24 diyor (pub cache'ten okundu, 2026-10-10).
+- Manifest'teki `package=` kaldırıldı — AGP bunu reddediyor.
+- Stok `widget_test.dart` silindi; üretilmiş `GeneratedPluginRegistrant`
+  dosyaları ve `.flutter-plugins-dependencies` takipten çıkarıldı.
+
+**Yalnızca çalıştırınca görünen üç şey:**
+
+1. **UIScene manifest'i yoktu, uygulama açılışta düşüyordu.** iOS 27 bunu
+   zorunlu kılıyor. `flutter create` `SceneDelegate`'i yazıyor ama **var olan**
+   `Info.plist`'e dokunmuyor — ve bu dosya Xcode projesinden önce elle
+   yazılmıştı. Derleme tertemiz; uygulama `EXC_BREAKPOINT` ile, tek satır Dart
+   çalışmadan ölüyordu. Flutter 3.47.5'in şablonundan kopyalandı.
+
+2. **Kayıt düğmesi ölüydü ve hiçbir şey söylemiyordu.** `record`'un `start`'ı
+   ne dönüyor ne hata atıyor — simülatörün ses girişini CoreAudio reddedince
+   çağrı asılı kalıyor. Logbook bomboştu. Artık `start()` ve `isRecording()`
+   on saniyeyle sınırlı (`recorderPatience`); izin sorusu **sınırsız**, çünkü
+   o çağrı bir insanın dialog okumasını bekliyor. Zaman aşımında kaydedici
+   iptal ediliyor. Ayrıca `_store.newTarget()` hiçbir `try` içinde değildi —
+   oradan çıkan bir hata state'e, loga ve ekrana dokunmadan kaçıyordu.
+
+3. **Log ekranından geri dönüş yoktu.** Ekranlar `context.go` ile açılıyor,
+   yani yığın yok, yani Flutter geri düğmesi koymuyor. Tarayıcıda bunu
+   tarayıcının kendi geri düğmesi gizliyordu. Telefonda Log, Groups, Sources,
+   Devices ve grup detayı kapısız odaydı. `BackTo` eklendi.
+
+**Kanıt:** iOS derlemesi (`flutter build ios --no-codesign`) geçiyor;
+uygulama simülatörde açılıyor; mikrofon dialogu kendi cümlemizle çıkıyor;
+kayıt denemesi artık logda `the recorder never started or failed —
+TimeoutException after 0:00:10` olarak görünüyor; geri düğmesi çalışıyor.
+163 Flutter testi (önce 147), analyzer temiz, Go kapısı yeşil.
+
+**Açık kalanlar:** Android hiç derlenmedi (bu makinede JDK ve Android SDK
+yok). Telefonda kayıt **çalıştığı** gösterilmedi — gösterilen, başarısızlığın
+artık söylendiği. Telefonda ses çalma hâlâ yazılmadı; engel kalktı, paket
+seçimi yapılmadı. → ADR-0031, ADR-0029 (ek)

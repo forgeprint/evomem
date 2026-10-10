@@ -6,9 +6,10 @@
       Shown when the app first asks to record. iOS refuses the microphone
       outright without this key.
 
-      record 7.1.1 needs iOS 12 or later; there is no Podfile or Xcode
-      project in this tree to set a deployment target in, so that has to be
-      done when the iOS build files are created.
+      record_ios 2.1.1 declares iOS 12.0 in its podspec and its
+      Package.swift. The Xcode project is on IPHONEOS_DEPLOYMENT_TARGET
+      15.0, which is above it, so nothing here has to be lowered — and
+      raising the project floor is the thing that would break it.
     -->
     <key>NSMicrophoneUsageDescription</key>
     <string>Evomem records voice notes so you can capture a thought without typing it.</string>
@@ -19,7 +20,7 @@
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
-    <string>com.evomem.mobile</string>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
@@ -32,6 +33,40 @@
     <string>1</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <!--
+      iOS 27 requires an app to adopt the UIScene lifecycle; without this
+      key the app traps at launch (EXC_BREAKPOINT) before any Dart runs.
+      `flutter create` writes the SceneDelegate and the Xcode project, but
+      it leaves an existing Info.plist alone — and this one was written by
+      hand before there was an Xcode project at all, so it had no manifest.
+      The build is clean either way; only running it says anything.
+
+      Copied from the template Flutter 3.47.5 ships, at
+      packages/flutter_tools/templates/app/ios.tmpl/Runner/Info.plist.tmpl
+      (read 2026-10-10). PRODUCT_MODULE_NAME resolves to Runner, so the
+      delegate named here is ios/Runner/SceneDelegate.swift.
+    -->
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+        <key>UISceneConfigurations</key>
+        <dict>
+            <key>UIWindowSceneSessionRoleApplication</key>
+            <array>
+                <dict>
+                    <key>UISceneClassName</key>
+                    <string>UIWindowScene</string>
+                    <key>UISceneConfigurationName</key>
+                    <string>flutter</string>
+                    <key>UISceneDelegateClassName</key>
+                    <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+                    <key>UISceneStoryboardFile</key>
+                    <string>Main</string>
+                </dict>
+            </array>
+        </dict>
+    </dict>
     <key>UILaunchStoryboardName</key>
     <string>LaunchScreen</string>
     <key>UIMainStoryboardFile</key>
@@ -67,5 +102,9 @@
             </dict>
         </dict>
     </dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 </dict>
 </plist>

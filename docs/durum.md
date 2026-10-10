@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-10 (yirmi beşinci oturum) · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-10 (yirmi altıncı oturum) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -14,7 +14,7 @@ CI: **tamamı yeşil** (go, crosscheck, flutter)
 | - | - |
 | 1 Monorepo + SQLite deposu | tamam |
 | 2 MCP sunucusu | tamam |
-| 3 Flutter mobil uygulama | kısmen — iskelet + sqflite + sync + settings + ses kaydı + testler; **Android/iOS derleme dosyaları yok** |
+| 3 Flutter mobil uygulama | kısmen — iskelet + sqflite + sync + settings + ses kaydı + testler; **derleme dosyaları var, iOS'ta çalışıyor**; Android hiç derlenmedi |
 | 4 Telegram + Jira + HTTP girişi | tamam |
 | 5 Sync + arşivleme | tamam |
 
@@ -206,23 +206,21 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-3. **Telefonda ses çalma yok.** `RecordingPlayer`'ın tarayıcı uygulaması
-   gerçek, telefon tarafı "çalamıyorum" diyor — bir paket gerekiyor ve
-   telefon zaten derlenemiyor. Android/iOS dosyaları gelince birlikte
-   bakılacak (ADR-0029).
+1. **Android hiç derlenmedi.** Gradle dosyaları yazıldı ve testle
+   sabitlendi, ama bu makinede JDK de Android SDK de yok — yani hiç
+   çalıştırılmadılar. Eklentilerin beyan ettiğine göre yazıldılar (minSdk
+   24), bu bir derleme değil. Android SDK'sı olan ilk kişi görecek.
+   (ADR-0031)
 
-4. **Telefonda mikrofonla kayıt hiç denenmedi.** Tarayıcıda çalışıyor
-   (kullanıcı doğruladı). Telefon tarafı denenemez, çünkü `android/` ve
-   `ios/` derleme dosyaları yok. Not: Claude'un tarayıcı paneli mikrofonu
-   bilerek engelliyor, yani orada da denenemez — kullanıcının kendi
-   tarayıcısı gerekiyor.
+2. **Telefonda kayıt hâlâ kanıtlanmadı.** Simülatörün ses girişini CoreAudio
+   reddediyor; gösterilen şey kaydın çalıştığı değil, **başarısızlığın artık
+   söylendiği**. Gerçek bir cihaz ya da girişi çalışan bir simülatör gerek.
+   (ADR-0031)
 
-1. **Android/iOS derleme dosyaları yok.** `android/` ve `ios/` ağaçlarında ne
-   `build.gradle`, ne `settings.gradle`, ne `Podfile`, ne `Runner.xcodeproj`
-   var — uygulama bugüne kadar yalnızca web için derlenmiş. Ses kaydı yazıldı
-   ama **gerçek bir mikrofonla hiç denenmedi ve bu dosyalar olmadan
-   denenemez**. `record` 7.1.1'in istediği minSdk 23 ve iOS 12 de yazılacak
-   bir yer bulamadı (manifest ve Info.plist'e yorum olarak düşüldü).
+3. **Telefonda ses çalma yok.** Engel kalktı — uygulama artık telefonda
+   çalışıyor — ama paket seçimi yapılmadı. `NoRecordingPlayer` hâlâ
+   "çalamıyorum" diyor ve neden olduğunu söylüyor (ADR-0029, ADR-0031).
+
 4. **Toplu onay yok.** `evomem endorse` tek notu alıyor; proje ya da kaynak
    bazında onay ADR-0021'de bilinçli olarak dışarıda bırakıldı (sürtünme
    koruma sayıldı). Bunun tiyatro mu koruma mı olduğu kullanımla anlaşılacak.

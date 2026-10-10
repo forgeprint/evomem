@@ -3,6 +3,7 @@ import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/sources/source_connection.dart';
 import 'package:evomem_mobile/src/sources/source_providers.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
+import 'package:evomem_mobile/src/ui/back_to.dart';
 import 'package:evomem_mobile/src/ui/clusters_screen.dart'
     show explainClusterProblem;
 import 'package:evomem_mobile/src/ui/waiting_on_server.dart';
@@ -116,6 +117,7 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sources'),
+        leading: BackTo(const NotesListRoute().location),
         actions: [
           IconButton(
             tooltip: 'Devices',

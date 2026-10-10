@@ -1,6 +1,8 @@
 import 'package:evomem_mobile/src/clusters/cluster_service.dart';
+import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/tokens/device_token.dart';
 import 'package:evomem_mobile/src/tokens/token_providers.dart';
+import 'package:evomem_mobile/src/ui/back_to.dart';
 import 'package:evomem_mobile/src/ui/clusters_screen.dart'
     show explainClusterProblem;
 import 'package:evomem_mobile/src/ui/waiting_on_server.dart';
@@ -131,6 +133,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Devices'),
+        leading: BackTo(const SourcesRoute().location),
         actions: [
           IconButton(
             tooltip: 'Reload',

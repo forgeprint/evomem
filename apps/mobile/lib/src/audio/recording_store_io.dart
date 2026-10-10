@@ -18,10 +18,11 @@ RecordingPlayer newRecordingPlayer() => const NoRecordingPlayer();
 
 /// A player that says it cannot play, so nothing offers the button.
 ///
-/// Playing a file on a phone needs a package this app does not have, and
-/// the phone cannot currently be built at all — there are no android/ios
-/// build files. That is when a player package earns its place, not before
-/// (ADR-0029).
+/// Playing a file on a phone needs a package this app does not have. The
+/// build files exist now and the app runs on a phone (ADR-0031), so the
+/// blocker is gone and only the choice is left: which player package, with
+/// what it costs. That choice has not been made, so this still says no
+/// rather than pretending (ADR-0029).
 class NoRecordingPlayer implements RecordingPlayer {
   /// Creates the player.
   const new();

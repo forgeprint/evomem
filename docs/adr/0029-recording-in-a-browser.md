@@ -150,3 +150,27 @@ place for it (ADR-0010).
 - **Keeping browser recordings across a reload.** IndexedDB would do it.
   Syncing covers the same ground with a store that already exists, so this
   stays deferred.
+
+## Amendment, 2026-10-10: the phone fails the same way, and never answers
+
+Running the app on a phone for the first time (ADR-0031) found the same
+failure this record was written about, reached from the other side.
+
+In a browser, `record_web` catches a failed start, prints it, and returns
+normally — so the caller is told recording began. This record's answer was
+to ask `isRecording()` afterwards rather than believe the return.
+
+On iOS, with an audio input CoreAudio refuses, `record`'s `start` does
+neither: it **never returns and never throws**. `isRecording()` is never
+reached, nothing is logged, and the button simply stops working. Measured on
+an iOS 27 simulator on 2026-10-10.
+
+So the recorder calls that talk to audio hardware are bounded — ten seconds,
+`recorderPatience` — and a timeout is reported as a failure like any other.
+Asking for permission is deliberately left unbounded, because that call is
+waiting for a person to read a dialog.
+
+The logbook this record introduced is what made the difference visible both
+times: in a browser it showed "started" followed by nothing captured; on a
+phone it showed nothing at all, which is what pointed at a call that never
+came back.

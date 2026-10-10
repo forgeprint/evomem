@@ -2,6 +2,7 @@ import 'package:evomem_mobile/src/clusters/cluster.dart';
 import 'package:evomem_mobile/src/clusters/cluster_providers.dart';
 import 'package:evomem_mobile/src/clusters/cluster_service.dart';
 import 'package:evomem_mobile/src/routing/routes.dart';
+import 'package:evomem_mobile/src/ui/back_to.dart';
 import 'package:evomem_mobile/src/ui/waiting_on_server.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -47,6 +48,7 @@ class ClustersScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Groups'),
+        leading: BackTo(const NotesListRoute().location),
         actions: [
           IconButton(
             tooltip: 'Reload',

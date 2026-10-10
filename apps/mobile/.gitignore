@@ -49,3 +49,8 @@ linux/build/
 
 # Windows
 windows/build/
+
+# Written by `flutter pub get` from pubspec.lock and the pub cache, and
+# rewritten on every run. It was tracked before there were any Android or
+# iOS build files, so every pub get showed up as a change to review.
+.flutter-plugins-dependencies

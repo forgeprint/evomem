@@ -29,6 +29,14 @@ const metaRecordingLost = 'recording_lost';
 /// A transcribed note still stands for audio, so it can still be played.
 const metaTranscribed = 'transcribed';
 
+/// How long a call into the recorder may take before it is treated as dead.
+///
+/// Not applied to asking for permission: that call waits for a person to
+/// read a dialog, and ten seconds is a short time to read anything. It is
+/// applied to starting and to asking whether a start worked, which talk to
+/// the audio hardware and nothing else.
+const recorderPatience = Duration(seconds: 10);
+
 /// Why a recording did not start.
 enum RecordingProblem {
   /// The microphone was refused, or the person has not allowed it.
@@ -124,10 +132,38 @@ class RecordingController extends Notifier<RecordingState> {
 
     // On a phone this is where the file goes. In a browser the recorder
     // ignores it and hands back its own handle when it stops (ADR-0029).
-    final path = await _store.newTarget();
+    //
+    // Inside the try, because it was not: asking the platform for the
+    // documents directory can fail, and an exception from here escaped
+    // start() altogether — past the state, past the log, past the message
+    // the screen shows — and left the button looking untouched.
+    final String path;
+    try {
+      path = await _store.newTarget();
+    } on Object catch (e, stack) {
+      _log.error('recording', 'nowhere to put the recording', e, stack);
+      state = const RecordingState.failed(RecordingProblem.recorderFailed);
+      return RecordingProblem.recorderFailed;
+    }
 
     try {
-      await _recorder.start(path);
+      await _recorder.start(path).timeout(recorderPatience);
+    } on TimeoutException catch (e, stack) {
+      // Measured on an iOS 27 simulator with no usable audio input
+      // (2026-10-10): CoreAudio refuses the input device, record's start
+      // never completes and never throws. Without this the button simply
+      // stops working, says nothing, and keeps saying nothing — which is
+      // the failure this app already had once in a browser, and the reason
+      // the logbook exists.
+      _log.error('recording', 'the recorder never started or failed', e, stack);
+      // Best effort: the recorder may be half-open, and leaving it that
+      // way means the next attempt fails too. Nothing here can be done
+      // about a cancel that also hangs, so it is not waited on forever.
+      unawaited(
+        _recorder.cancel().timeout(recorderPatience).catchError((Object _) {}),
+      );
+      state = const RecordingState.failed(RecordingProblem.recorderFailed);
+      return RecordingProblem.recorderFailed;
     } on Object catch (e, stack) {
       _log.error('recording', 'the recorder would not start', e, stack);
       state = const RecordingState.failed(RecordingProblem.recorderFailed);
@@ -140,7 +176,7 @@ class RecordingController extends Notifier<RecordingState> {
     // happens is stop() handing back nothing (ADR-0029).
     bool running;
     try {
-      running = await _recorder.isRecording();
+      running = await _recorder.isRecording().timeout(recorderPatience);
     } on Object catch (e) {
       _log.warn('recording', 'could not tell whether recording began', e);
       running = true;

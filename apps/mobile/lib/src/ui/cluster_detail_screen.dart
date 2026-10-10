@@ -2,6 +2,7 @@ import 'package:evomem_mobile/src/clusters/cluster_providers.dart';
 import 'package:evomem_mobile/src/clusters/cluster_service.dart';
 import 'package:evomem_mobile/src/routing/routes.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
+import 'package:evomem_mobile/src/ui/back_to.dart';
 import 'package:evomem_mobile/src/ui/clusters_screen.dart'
     show explainClusterProblem;
 import 'package:flutter/material.dart';
@@ -184,6 +185,7 @@ class _ClusterDetailScreenState extends ConsumerState<ClusterDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Group'),
+        leading: BackTo(const ClustersRoute().location),
         actions: [
           IconButton(
             tooltip: 'Rename',

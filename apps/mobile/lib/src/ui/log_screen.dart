@@ -1,4 +1,6 @@
 import 'package:evomem_mobile/src/log/log.dart';
+import 'package:evomem_mobile/src/routing/routes.dart';
+import 'package:evomem_mobile/src/ui/back_to.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +22,7 @@ class LogScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Log'),
+        leading: BackTo(const NotesListRoute().location),
         actions: [
           IconButton(
             tooltip: 'Copy all',
