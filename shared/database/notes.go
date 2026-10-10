@@ -577,3 +577,28 @@ func (d *DB) Absorb(ctx context.Context, n *models.Note) (bool, error) {
 	}
 	return true, nil
 }
+
+// Forget removes a note because the far end says it is gone, leaving no
+// tombstone behind.
+//
+// Delete writes one, because a deletion made here has to travel. This one
+// came the other way: recording it again would push it straight back to the
+// mirror that reported it, and the echo would arrive as a deletion the
+// mirror already knows about on every pass for ever.
+//
+// An identifier that is not here is not an error. The mirror is telling
+// every machine about the deletion, including the ones that never saw the
+// note.
+func (d *DB) Forget(ctx context.Context, id string) error {
+	id, err := models.NormalizeULID(id)
+	if err != nil {
+		return err
+	}
+	if _, err := d.write.ExecContext(ctx, `DELETE FROM notes WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("database: forgetting note %s: %w", id, err)
+	}
+	// Same order as Delete: the row first, then the recording it stood
+	// for. ADR-0018 keeps recordings after transcription, which is only
+	// defensible if every path that removes a note reaches them.
+	return d.removeRecording(id)
+}

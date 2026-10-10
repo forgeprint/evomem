@@ -28,6 +28,10 @@ const (
 	// note behind it stopped being pending — still here, never sent, with
 	// nothing anywhere saying the two sides disagree.
 	CursorPulled = "pulled"
+	// CursorPulledDeletions is how far it has got through the mirror's
+	// tombstones. Its own row for the same reason as CursorPulled: it
+	// counts in (deleted_at, id) over the mirror's table, not this one's.
+	CursorPulledDeletions = "pulled_deletions"
 )
 
 // A Cursor is a position in the (updated_at, id) order.
@@ -546,4 +550,15 @@ func (d *DB) ResetCursor(ctx context.Context, key string) error {
 		return fmt.Errorf("database: resetting the %s cursor: %w", key, err)
 	}
 	return nil
+}
+
+// DeletedAtOrZero is the cursor's time formatted for a remote that stores
+// tombstones, at full precision.
+//
+// The same value as UpdatedAt — a Cursor is a position in a (time, id)
+// ordering and does not care which column the time came from — named for the
+// column it is compared against, so a caller reading the pull side is not
+// left wondering whether it has the right one.
+func (c Cursor) DeletedAtOrZero() string {
+	return c.UpdatedAt.UTC().Format(time.RFC3339Nano)
 }

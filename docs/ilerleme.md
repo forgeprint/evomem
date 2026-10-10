@@ -3262,3 +3262,37 @@ aynada tombstone tablosu olmaması kayıtlı bir karar (`postgres.go` yorumu ve
 `TestRemoteSchemaShape`). Üstelik bugün daha kötüsü görünüyor: diğer makine
 notu hâlâ tuttuğu ve push imlecinin ilerisinde olduğu için **silinen notu geri
 yüklüyor**. Bu, commit değil cevap isteyen bir karar. → ADR-0032
+
+## 2026-10-10 — Silmeler aşağı yönde de geliyor (ADR-0033)
+
+**Kullanıcı kararı:** aynaya tombstone tablosu eklensin.
+
+**Neden gerekliydi, maddenin yazdığından fazlası:** ayna silinen notun
+satırını siliyor, arkasında hiçbir şey bırakmıyordu. Diğer makine notu
+tutmaya devam ediyordu — asıl madde — ama bir de notun `updated_at`'i kendi
+push imlecinin ilerisinde olduğu için **notu aynaya geri yüklüyordu**. Yani
+silme yayılmıyor değil, **tutmuyordu**.
+
+**Yapılan:**
+- `evomem_deletions` tablosu; `PushDeletions` mezar taşını satırı silmekle
+  **aynı transaction'da** yazıyor.
+- `insertNoteUnlessDeleted`: ayna, mezar taşı tuttuğu bir notu geri almıyor.
+  İstemci tarafında yapılamazdı — notu push eden makine, zaten silmeyi
+  duymamış olan makine. Bilen tek yer ayna.
+- Pull, mezar taşlarını `Forget` ile uyguluyor (`Delete` değil): gelen mezar
+  taşını yerelde yeniden kaydetmek onu bildiren aynaya geri iterdi, her
+  geçişte, sonsuza kadar.
+- Mezar taşları notlardan **sonra** ve **her geçişte** çekiliyor. İkincisi on
+  dakikalığına hataydı: `Pull` yeni not yoksa erken dönüyordu, oysa yalnızca
+  bir silmenin beklediği geçiş tam da olağan durum.
+- `CursorPulledDeletions` ayrı imleç.
+
+**Kanıt (gerçek PostgreSQL, geçici veritabanı, sonra silindi):** bir makinede
+yapılan silme diğerine ulaşıyor; pull tekrarlamak yerine duruluyor; silinmiş
+notun push'u reddediliyor — koruma kaldırılınca bu son iddia düşüyor, yani
+varsayılmadı, ölçüldü.
+
+**Maliyetler yazıldı:** ayna mezar taşlarını hiç silmiyor (kimin duyduğunu
+bilen bir şey yok — ADR-0030, hesap yok); ret sessiz; saat kayması sırayı
+belirliyor. ADR-0012'ye "tek yönlü" artık **yazarlık** demek, trafik değil
+diye ek düşüldü. → ADR-0033

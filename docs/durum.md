@@ -226,13 +226,11 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 4. **Toplu onay yok.** `evomem endorse` tek notu alıyor; proje ya da kaynak
    bazında onay ADR-0021'de bilinçli olarak dışarıda bırakıldı (sürtünme
    koruma sayıldı). Bunun tiyatro mu koruma mı olduğu kullanımla anlaşılacak.
-5. **[KARAR BEKLİYOR] Silmeler aşağı yönde gelmiyor.** Aynada tombstone
-   tablosu **yok** ve bu kayıtlı bir karar (`postgres.go`, `TestRemoteSchemaShape`,
-   ADR-0012 "tek yönlü"). Bugün görülen, maddenin yazdığından kötü: diğer
-   makine notu hâlâ tuttuğu ve push imlecinin ilerisinde olduğu için **silinen
-   notu aynaya geri yüklüyor**. Düzeltmesi aynaya tablo eklemeyi, saklama
-   kuralını ve ekonun önlenmesini gerektiriyor — kararı kullanıcının.
-   → ADR-0032'nin son bölümü
+5. **Silmeler artık aşağı yönde de geliyor.** (tamam) Aynada
+   `evomem_deletions` var, pull uyguluyor, ve ayna mezar taşı tuttuğu notu
+   geri almıyor — yani silme yayılmakla kalmıyor, **tutuyor**. Gerçek
+   PostgreSQL'e karşı doğrulandı. Açık kalan: mezar taşları hiç silinmiyor
+   (saklama kuralı için "herkes duydu" diyebilen bir şey yok). → ADR-0033
 
 **Günlük var**: `Logbook` bellekte son 300 girdiyi tutuyor, `/log` ekranı
 gösteriyor, "Copy all" panoya alıyor. Diske yazılmıyor. Sebebi: bu

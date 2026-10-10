@@ -65,3 +65,19 @@ the end.
   restoring from the remote is not implemented. Both need their own decision,
   and the mirror's schema is deliberately plain enough to make either
   possible.
+
+## Amendment, 2026-10-10: what "one-directional" still means
+
+It means **authorship**, not traffic. Notes are written on a machine and
+pushed; the mirror is not a place anything is authored. That part stands.
+
+Traffic has gone both ways since ADR-0015 added `evomem pull`, and ADR-0033
+made deletions follow. So the mirror now holds tombstones, a pull reads them,
+and a push of a note the mirror holds a tombstone for is refused.
+
+The thing this record was most anxious about — per-field conflict resolution
+and a clock two machines agree on — is still not here, and is still not
+offered. Where two machines disagree about the same note, the later
+`updated_at` wins outright and the other version is gone, with nothing
+warning anybody (ADR-0019, ADR-0032). That is a policy, not a merge, and the
+clock is load-bearing.

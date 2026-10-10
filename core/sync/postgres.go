@@ -69,9 +69,14 @@ func (p *Postgres) DB() *sql.DB { return p.db }
 //
 // It is not the local schema. There is no FTS table — Postgres has its own
 // full-text machinery and choosing a configuration for it is a decision
-// nobody has asked for yet — and there is no deletions table, because this
-// sync is one-directional: the local file is the authority and a tombstone
-// has nobody else to inform.
+// nobody has asked for yet.
+//
+// There **is** a deletions table, and there did not used to be. The reason
+// given was that the sync is one-directional and a tombstone has nobody else
+// to inform. ADR-0015 added `evomem pull`, which made that false: once a
+// second machine reads from the mirror, a deletion on the first has somebody
+// to inform, and without a tombstone that machine keeps the note for ever —
+// and pushes it back up, undoing the deletion (ADR-0033).
 //
 // synced_at is the remote's own column, not a copy of anything local. It is
 // what answers "when did this machine last reach us".
@@ -92,6 +97,15 @@ CREATE INDEX IF NOT EXISTS evomem_notes_project_idx
 
 CREATE INDEX IF NOT EXISTS evomem_notes_updated_idx
 	ON evomem_notes (updated_at);
+
+CREATE TABLE IF NOT EXISTS evomem_deletions (
+	id         TEXT PRIMARY KEY,
+	project_id TEXT NOT NULL,
+	deleted_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS evomem_deletions_at_idx
+	ON evomem_deletions (deleted_at, id);
 `
 
 // EnsureSchema creates the mirror if it is not there. It is safe to run
@@ -149,6 +163,29 @@ ON CONFLICT (id) DO UPDATE SET
 WHERE evomem_notes.updated_at <= EXCLUDED.updated_at
 `
 
+// insertNoteUnlessDeleted is the same statement with the tombstone checked.
+//
+// A machine that has not yet pulled the deletion still holds the note, and
+// its updated_at is ahead of its own push watermark, so the next push sends
+// it back up. Without this the mirror takes it and the deletion is undone —
+// silently, by a machine that is simply out of date. The mirror is the one
+// place that knows about the tombstone, so it is the one place that can
+// refuse (ADR-0033).
+const insertNoteUnlessDeleted = `
+INSERT INTO evomem_notes
+	(id, project_id, content, source_type, created_at, updated_at, metadata)
+SELECT $1, $2, $3, $4, $5, $6, $7::jsonb
+WHERE NOT EXISTS (SELECT 1 FROM evomem_deletions WHERE id = $1)
+ON CONFLICT (id) DO UPDATE SET
+	project_id  = EXCLUDED.project_id,
+	content     = EXCLUDED.content,
+	source_type = EXCLUDED.source_type,
+	updated_at  = EXCLUDED.updated_at,
+	metadata    = EXCLUDED.metadata,
+	synced_at   = now()
+WHERE evomem_notes.updated_at <= EXCLUDED.updated_at
+`
+
 // PushNotes upserts a batch in one transaction.
 //
 // One transaction, so a batch either arrives or does not. The worker moves
@@ -165,7 +202,7 @@ func (p *Postgres) PushNotes(ctx context.Context, notes []*models.Note) error {
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.PrepareContext(ctx, upsertNote)
+	stmt, err := tx.PrepareContext(ctx, insertNoteUnlessDeleted)
 	if err != nil {
 		return fmt.Errorf("sync: preparing the push: %w", err)
 	}
@@ -215,9 +252,29 @@ func (p *Postgres) PushDeletions(ctx context.Context, deletions []database.Delet
 	}
 	defer stmt.Close()
 
+	// The tombstone, in the same transaction as the removal — for the
+	// reason database.Delete gives locally: once the row is gone there is
+	// nothing left to tell the far end it went.
+	//
+	// ON CONFLICT moves it forward rather than failing, which is what an
+	// identifier deleted twice looks like after a restore.
+	mark, err := tx.PrepareContext(ctx, `
+		INSERT INTO evomem_deletions (id, project_id, deleted_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (id) DO UPDATE SET
+			project_id = EXCLUDED.project_id,
+			deleted_at = EXCLUDED.deleted_at`)
+	if err != nil {
+		return fmt.Errorf("sync: preparing the tombstone: %w", err)
+	}
+	defer mark.Close()
+
 	for _, d := range deletions {
 		if _, err := stmt.ExecContext(ctx, d.ID); err != nil {
 			return fmt.Errorf("sync: deleting note %s: %w", d.ID, err)
+		}
+		if _, err := mark.ExecContext(ctx, d.ID, d.ProjectID, d.DeletedAt.UTC()); err != nil {
+			return fmt.Errorf("sync: recording the deletion of %s: %w", d.ID, err)
 		}
 	}
 
@@ -307,4 +364,44 @@ func (p *Postgres) PullAll(ctx context.Context, limit int, offset int) ([]*model
 		return nil, fmt.Errorf("sync: iterating notes: %w", err)
 	}
 	return notes, nil
+}
+
+// PullDeletions fetches tombstones newer than the cursor, oldest first.
+//
+// Returns them with the new cursor position, the same shape PullNotes uses.
+// The ordering is (deleted_at, id) — the pair, because two deletions in the
+// same instant would otherwise be indistinguishable and a watermark that
+// could only say "this instant" has to either repeat one or skip it.
+func (p *Postgres) PullDeletions(ctx context.Context, cursorDeletedAt, cursorID string, limit int) ([]database.Deletion, string, string, error) {
+	if limit <= 0 {
+		limit = 1000
+	}
+
+	rows, err := p.db.QueryContext(ctx,
+		`SELECT id, project_id, deleted_at
+		 FROM evomem_deletions
+		 WHERE deleted_at > $1 OR (deleted_at = $1 AND id > $2)
+		 ORDER BY deleted_at ASC, id ASC
+		 LIMIT $3`,
+		cursorDeletedAt, cursorID, limit)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("sync: pulling deletions: %w", err)
+	}
+	defer rows.Close()
+
+	var deletions []database.Deletion
+	var nextDeletedAt, nextID string
+	for rows.Next() {
+		var d database.Deletion
+		if err := rows.Scan(&d.ID, &d.ProjectID, &d.DeletedAt); err != nil {
+			return nil, "", "", fmt.Errorf("sync: scanning a deletion: %w", err)
+		}
+		deletions = append(deletions, d)
+		nextDeletedAt = d.DeletedAt.Format(time.RFC3339Nano)
+		nextID = d.ID
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", "", fmt.Errorf("sync: iterating deletions: %w", err)
+	}
+	return deletions, nextDeletedAt, nextID, nil
 }

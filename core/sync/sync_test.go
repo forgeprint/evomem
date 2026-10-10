@@ -19,7 +19,7 @@ type fakeRemote struct {
 	mu sync.Mutex
 
 	notes     map[string]*models.Note
-	deleted   map[string]bool
+	deleted   map[string]database.Deletion
 	pushes    int
 	pingCalls int
 
@@ -29,7 +29,7 @@ type fakeRemote struct {
 }
 
 func newFakeRemote() *fakeRemote {
-	return &fakeRemote{notes: map[string]*models.Note{}, deleted: map[string]bool{}}
+	return &fakeRemote{notes: map[string]*models.Note{}, deleted: map[string]database.Deletion{}}
 }
 
 func (f *fakeRemote) Ping(context.Context) error {
@@ -50,6 +50,12 @@ func (f *fakeRemote) PushNotes(_ context.Context, notes []*models.Note) error {
 	}
 	f.pushes++
 	for _, n := range notes {
+		// What insertNoteUnlessDeleted does on the real mirror: a
+		// machine that has not pulled the deletion yet still holds
+		// the note and pushes it back up (ADR-0033).
+		if _, gone := f.deleted[n.ID]; gone {
+			continue
+		}
 		// An upsert, which is what the interface requires: a retried
 		// batch must not duplicate anything.
 		f.notes[n.ID] = n
@@ -66,7 +72,10 @@ func (f *fakeRemote) PushDeletions(_ context.Context, deletions []database.Delet
 	f.pushes++
 	for _, d := range deletions {
 		delete(f.notes, d.ID)
-		f.deleted[d.ID] = true
+		if d.DeletedAt.IsZero() {
+			d.DeletedAt = time.Now().UTC()
+		}
+		f.deleted[d.ID] = d
 	}
 	return nil
 }
@@ -625,4 +634,36 @@ func parseTime(s string) time.Time {
 	}
 	t, _ := time.Parse(time.RFC3339Nano, s)
 	return t
+}
+
+// PullDeletions hands back tombstones in (deleted_at, id) order, the way the
+// mirror does.
+func (f *fakeRemote) PullDeletions(_ context.Context, cursorDeletedAt, cursorID string, limit int) ([]database.Deletion, string, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	at := parseTime(cursorDeletedAt)
+	var filtered []database.Deletion
+	for _, d := range f.deleted {
+		if d.DeletedAt.After(at) || (d.DeletedAt.Equal(at) && d.ID > cursorID) {
+			filtered = append(filtered, d)
+		}
+	}
+	sort.Slice(filtered, func(i, j int) bool {
+		if filtered[i].DeletedAt.Equal(filtered[j].DeletedAt) {
+			return filtered[i].ID < filtered[j].ID
+		}
+		return filtered[i].DeletedAt.Before(filtered[j].DeletedAt)
+	})
+	if len(filtered) > limit {
+		filtered = filtered[:limit]
+	}
+
+	var nextAt, nextID string
+	if len(filtered) > 0 {
+		last := filtered[len(filtered)-1]
+		nextAt = last.DeletedAt.Format(time.RFC3339Nano)
+		nextID = last.ID
+	}
+	return filtered, nextAt, nextID, nil
 }

@@ -44,6 +44,10 @@ type Remote interface {
 	// Returns notes and the new cursor position.
 	PullNotes(ctx context.Context, cursorUpdatedAt, cursorID string, limit int) ([]*models.Note, string, string, error)
 
+	// PullDeletions fetches tombstones newer than the cursor. Returns
+	// them and the new cursor position, like PullNotes.
+	PullDeletions(ctx context.Context, cursorDeletedAt, cursorID string, limit int) ([]database.Deletion, string, string, error)
+
 	// PullAll fetches all notes from the remote (for restore).
 	PullAll(ctx context.Context, limit int, offset int) ([]*models.Note, error)
 
@@ -326,10 +330,12 @@ func (w *Worker) Pull(ctx context.Context) (database.Cursor, error) {
 	if err != nil {
 		return database.Cursor{}, err
 	}
-	// Nothing new. Returning the position it is already at, rather than
-	// trying to parse an empty timestamp into one.
+	// Nothing new to read. Still the tombstones: a pass that found no
+	// new notes is exactly when a deletion is the only thing waiting, and
+	// returning here meant a deletion never arrived unless a note
+	// happened to arrive with it.
 	if len(notes) == 0 {
-		return cursor, nil
+		return cursor, w.pullDeletions(ctx)
 	}
 
 	for _, note := range notes {
@@ -352,7 +358,62 @@ func (w *Worker) Pull(ctx context.Context) (database.Cursor, error) {
 		return database.Cursor{}, err
 	}
 
+	// After the notes, not before. A note deleted on the mirror after it
+	// was written is in both batches; applying the tombstone second is
+	// what makes the deletion the later word (ADR-0033).
+	if err := w.pullDeletions(ctx); err != nil {
+		return database.Cursor{}, err
+	}
+
 	return next, nil
+}
+
+// pullDeletions applies the mirror's tombstones here.
+//
+// A deletion made on one machine reaches the others this way. Until the
+// mirror kept tombstones there was nothing to read, so a note deleted
+// anywhere stayed on every other machine for ever — and got pushed back up,
+// undoing the deletion (ADR-0033).
+func (w *Worker) pullDeletions(ctx context.Context) error {
+	for {
+		cursor, err := w.db.Cursor(ctx, database.CursorPulledDeletions)
+		if err != nil {
+			return err
+		}
+
+		deletions, nextAt, nextID, err := w.remote.PullDeletions(
+			ctx, cursor.DeletedAtOrZero(), cursor.ID, w.cfg.BatchSize)
+		if err != nil {
+			return err
+		}
+		if len(deletions) == 0 {
+			return nil
+		}
+
+		for _, d := range deletions {
+			// Forget, not Delete: a tombstone recorded here would be
+			// pushed straight back to the mirror that reported it.
+			if err := w.db.Forget(ctx, d.ID); err != nil {
+				return fmt.Errorf("pull: forgetting note %s: %w", d.ID, err)
+			}
+		}
+
+		at, err := time.Parse(time.RFC3339Nano, nextAt)
+		if err != nil {
+			return fmt.Errorf("pull: parsing the deletion cursor time: %w", err)
+		}
+		if err := w.db.SetCursor(ctx, database.CursorPulledDeletions,
+			database.Cursor{UpdatedAt: at, ID: nextID}); err != nil {
+			return err
+		}
+
+		if len(deletions) < w.cfg.BatchSize {
+			return nil
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
 }
 
 // Restore replaces all local notes with the remote copy.

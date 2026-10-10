@@ -35,10 +35,18 @@ func TestRemoteSchemaShape(t *testing.T) {
 			t.Errorf("not idempotent: %s", stmt)
 		}
 	}
-	// There is nobody for a remote tombstone to inform: the sync is
-	// one-directional and the local file is the authority.
-	if strings.Contains(remoteSchema, "deletions") {
-		t.Error("the mirror has a deletions table")
+	// The mirror keeps tombstones, and did not used to. Once a second
+	// machine reads from it (ADR-0015), a deletion on the first has
+	// somebody to inform; without a tombstone that machine keeps the note
+	// for ever and pushes it back up, undoing the deletion (ADR-0033).
+	if !strings.Contains(remoteSchema, "evomem_deletions") {
+		t.Error("the mirror has no tombstone table, so a deletion reaches nobody")
+	}
+
+	// And the mirror is the only place that knows, so it is the only
+	// place that can refuse a note somebody deleted.
+	if !strings.Contains(insertNoteUnlessDeleted, "evomem_deletions") {
+		t.Error("a push can resurrect a deleted note")
 	}
 }
 
@@ -77,6 +85,9 @@ func openRemote(t *testing.T) *Postgres {
 	t.Cleanup(func() { pg.Close() })
 
 	if err := pg.EnsureSchema(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pg.DB().ExecContext(ctx, `TRUNCATE evomem_deletions`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pg.DB().ExecContext(ctx, `TRUNCATE evomem_notes`); err != nil {
