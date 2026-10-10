@@ -106,3 +106,10 @@ from a real phone recording:
 - `GET /notes/{id}/audio` answers `Content-Type: audio/mp4`, mono 16 kHz AAC,
   10.05s, peak amplitude 4331 — the same audio.
 - `evomem audio` listed a pre-existing `.webm`, and `-convert` replaced it.
+
+And the thing this was all for, on an iOS 27 simulator: the phone pulled that
+note and **played it to the end** — playback started at 02:34:47.738 and
+reached `StopAtEnd` at 02:34:57.805, 10.07 seconds, the length of the clip.
+The same recording in its original WebM was refused by the same app an hour
+earlier with the sentence ADR-0031 added. That sentence is still there, for
+a store that was never converted.

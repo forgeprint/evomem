@@ -3535,3 +3535,12 @@ artık vendor edilmemiş bir çalışma-zamanı bağımlılığı var (ADR-0002'
 "imajdaki her bağımlılık bu depoda incelenebilir" cümlesi artık bir eksikle
 doğru); ffmpeg güvenilmeyen medya ayrıştırıyor; dönüştürme istek içinde
 oluyor ve beş dakikayla sınırlı.
+
+### Telefonda çalındı
+
+Halka kapandı: tarayıcı biçiminde (Opus/WebM) yüklenen kayıt sunucuda
+AAC/m4a'ya çevrildi, telefon onu pull'ladı ve **sonuna kadar çaldı** —
+02:34:47.738'de başladı, 02:34:57.805'te `StopAtEnd`, yani 10,07 saniye
+(klibin boyu 10,055 s). Aynı kayıt WebM hâliyle bir saat önce aynı uygulama
+tarafından reddediliyordu. ADR-0031'in eklediği o ret cümlesi duruyor —
+hiç dönüştürülmemiş bir depo için ağ olarak.
