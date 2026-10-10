@@ -51,6 +51,9 @@ notes      0 pending, cursor 2026-10-06T06:55:45Z 01M47ZYCCFKNCK78AT01GBK6ZN
 deletions  1 pending, cursor (nothing synced)
 ```
 
+It reports the push side. The pull's own watermarks are in the same table
+under `pulled` and `pulled_deletions`; nothing prints them yet.
+
 ## Deleting
 
 ```sh
@@ -128,17 +131,69 @@ CREATE TABLE evomem_notes (
 );
 ```
 
+```sql
+CREATE TABLE evomem_deletions (
+    id         TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    deleted_at TIMESTAMPTZ NOT NULL
+);
+```
+
 Not a copy of the local schema. There is no FTS table — PostgreSQL has its own
 full-text machinery and picking a configuration for it is a decision nobody
-has asked for — and no deletions table, because a tombstone on a mirror has
-nobody to inform. `synced_at` is the remote's own column: it answers "when did
+has asked for. `synced_at` is the remote's own column: it answers "when did
 this machine last reach us".
+
+There **is** a deletions table, and there did not use to be. The reason given
+was that a tombstone on a mirror has nobody to inform; `evomem pull` made that
+false. Without it a note deleted on one machine stayed on every other one for
+ever — and got pushed back up, undoing the deletion. A push is now guarded by
+`NOT EXISTS (SELECT 1 FROM evomem_deletions WHERE id = $1)`, because the
+machine pushing the note is exactly the machine that has not heard about the
+deletion: the mirror is the only place that knows, so it is the only place
+that can refuse. → ADR-0033
+
+Tombstones are never removed. A retention rule would have to know when every
+machine has heard, and with no account model (ADR-0030) nothing knows that.
 
 The `metadata` column carries everything the adapters wrote, including the
 `tainted` mark, so the far end can tell third-party text from the user's own.
 
+## Reading back
+
+```sh
+evomem pull      # what the mirror has that this machine does not
+evomem restore   # throw the local copy away and read the mirror whole
+```
+
+`pull` walks the mirror's notes and then its tombstones, from its own
+watermarks — `pulled` and `pulled_deletions` in `sync_state`, separate rows
+from the push's. They count in different orderings over different tables, and
+sharing one meant a pull set the push watermark to a position in the mirror's
+ordering: every local note behind it quietly stopped being pending, still here
+and never sent. → ADR-0032
+
+A pulled note is written as the mirror holds it, keeping the mirror's
+timestamps, and **an incoming note that is not newer than the copy here is
+skipped** — so a pull cannot land on top of an edit made here and not yet
+pushed. Local stays the authority for what this machine writes.
+
+A pulled tombstone removes the note and records nothing: a tombstone written
+here would be pushed straight back to the mirror that reported it, on every
+pass, for ever.
+
+`restore` empties the local notes and reads the mirror whole. It is the one
+caller that resets a watermark, which `SetCursor` otherwise refuses.
+
 ## What this does not do
 
-No pulling down, and no restore from the mirror. A second machine cannot read
-the notes through this. Both need their own decision; the mirror's schema is
-deliberately plain enough to make either possible.
+**No merge.** Where two machines disagree about one note, the later
+`updated_at` wins outright and the other version is gone, with nothing warning
+anybody (ADR-0019, ADR-0032). The clock is load-bearing: two machines whose
+clocks disagree order each other's edits by the wrong one.
+
+**No per-project or per-age pull.** `pull` takes everything the mirror has
+that this machine does not.
+
+**Notes are still written on a machine, not on the mirror.** That is what
+ADR-0012 means by one-directional now; traffic goes both ways.

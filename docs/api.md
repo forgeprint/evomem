@@ -25,16 +25,30 @@ all** — if a route is missing from that list, its secret is missing from the
 environment:
 
 ```text
-evomem serve: 127.0.0.1:8765, store /Users/you/.evomem/evomem.db
+store: /Users/you/.evomem/evomem.db
+serving on 127.0.0.1:8765
   POST /ingest
+  PUT /notes/{id}
+  DELETE /notes/{id}
+  GET /notes
+  GET /clusters
+  GET /clusters/{id}
+  GET /sync/notes
+  GET /sync/deletions
   POST /telegram/webhook
   POST /jira/webhook
   GET /healthz
 ```
 
+The list is longer when more is configured: the panel's `/connections`,
+`/tokens` and `/organize` are served when the store can answer them, and
+`/ingest/audio` and `/notes/{id}/audio` when there is somewhere to put a
+recording. The rule above still holds — read the list rather than this
+paragraph, because the list is what the process actually serves.
+
 | Variable | What it enables |
 | - | - |
-| `EVOMEM_API_TOKEN` | `POST /ingest` |
+| `EVOMEM_API_TOKEN` | `POST /ingest`, and everything else that reads or edits: `GET /notes`, `GET /clusters`, `GET /sync/*`, `PUT`/`DELETE /notes/{id}` |
 | `EVOMEM_PROJECT` | the project `/ingest` uses when a request does not say |
 | `EVOMEM_TELEGRAM_SECRET` + `EVOMEM_TELEGRAM_PROJECT` | `POST /telegram/webhook` |
 | `EVOMEM_JIRA_SECRET` | `POST /jira/webhook` |
@@ -304,6 +318,62 @@ Recordings are kept in `audio/` beside the database, one file per note, named
 by the note's identifier. **Deleting a note deletes its recording**, and so
 does archiving it or restoring over it. Nothing else removes one: the disk
 grows, which ADR-0018 accepts and names.
+
+## GET /sync/notes and GET /sync/deletions — keeping a copy in step
+
+Behind `EVOMEM_API_TOKEN`, like everything else that reads.
+
+These are for a client that keeps its own store — the phone does (ADR-0034).
+`GET /notes` is **not** this: it is a view, newest first with offset paging,
+and a client paging through a view while somebody writes to it silently misses
+rows. These walk the `(updated_at, id)` pair instead, oldest first, so a
+client can stop anywhere and carry on.
+
+```sh
+curl -H "Authorization: Bearer $EVOMEM_API_TOKEN" \
+  "http://127.0.0.1:8765/sync/notes?limit=200"
+```
+
+```json
+{
+  "notes": [ { "id": "01M4...", "project_id": "evomem", "content": "...",
+               "source_type": "manual", "created_at": "...",
+               "updated_at": "...", "metadata": {"awaiting_transcription": true} } ],
+  "cursor": { "since": "2026-10-10T11:22:49.729391378Z", "since_id": "01M4..." }
+}
+```
+
+`metadata` is **absent** on a note that has none, rather than `{}` — it is
+`omitempty`. Read a missing field as an empty map; most notes have no
+metadata, so most pages carry none of it.
+
+Send the pair straight back to continue:
+
+```sh
+curl -H "Authorization: Bearer $EVOMEM_API_TOKEN" \
+  "http://127.0.0.1:8765/sync/notes?since=2026-10-10T11:22:49.729391378Z&since_id=01M4...&limit=200"
+```
+
+`GET /sync/deletions` has the same shape, answering `deletions` with
+`id`, `project_id` and `deleted_at`. **Ask for it even when no note came
+back**: a pass with nothing but a deletion waiting is the common case, and a
+client that only pulls tombstones alongside notes will sit on a note somebody
+removed.
+
+Three things that are easy to get wrong:
+
+- **The cursor comes back even when nothing did.** Store it. A client that
+  stores an empty string starts from the beginning next time, which is exactly
+  how the mirror's own pull once broke permanently (ADR-0032).
+- **`since` and `since_id` go together.** Half a cursor is a 400, not a guess:
+  a time with no identifier can only say "this instant", which has to either
+  repeat a row or skip one. `since` is RFC 3339, at full precision — truncating
+  it to a whole second re-selects every note written in that second, for ever.
+- **A page is bounded at 500** whatever `limit` says.
+
+Deletions are not sent as notes with a flag, and a client must not record an
+incoming tombstone as a deletion of its own: it would be pushed straight back
+here on the next sync, every time (ADR-0033).
 
 ## Transcription
 

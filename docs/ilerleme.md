@@ -3393,3 +3393,27 @@ yol açardı.
 Yerine yazılan gerçek maliyet: **sunucuda silinmiş bir nota yapılan düzenleme
 sessizce kayboluyor.** Silme sonraki söz — politika bu — ama kimse yazdığı
 şeyin hiçbir yere gitmediğini öğrenmiyor.
+
+## 2026-10-10 — Dökümanı bugünün gerçeğine getirme
+
+`docs/sync.md` iki yerde **yanlış** söylüyordu:
+
+- "aynada deletions tablosu yok, çünkü bir mezar taşının bildireceği kimse
+  yok" — ADR-0033 ile artık var ve sebebi yazıldı (push `NOT EXISTS` ile
+  korunuyor; silmeyi duymamış makine tam da notu geri iten makine).
+- "aşağı yönde çekme yok, aynadan restore yok; ikinci bir makine notları
+  buradan okuyamaz" — `evomem pull` ve `evomem restore` ADR-0015'ten beri var
+  (ve bugüne kadar bozuktu). Yerine "Reading back" bölümü yazıldı: ayrı
+  imleçler, yereldekinden yeni değilse yazmama kuralı, mezar taşının yerelde
+  kaydedilmemesi, `restore`'un imleci sıfırlayan tek çağrı olması.
+
+`docs/api.md`'ye `GET /sync/notes` ve `GET /sync/deletions` eklendi — şekli,
+imleç kuralları ve kolay yanlış yapılan üç şey (imleç bir şey dönmese de
+saklanmalı; yarım imleç 400; sayfa 500'de sınırlı).
+
+**Dökümandaki her örnek çalışan sunucuya karşı denendi**, ve iki yanlışı
+böyle buldum: `metadata` alanı boşsa **hiç gönderilmiyor** (`omitempty`) —
+örnekte `{}` yazmıştım; ve `evomem serve`'ün bastığı rota listesi dört
+satırlık eski hâliyle duruyordu. Bir de hangi sırrın neyi açtığına dair
+yazdığım cümle yanlıştı (panel rotalarını `EVOMEM_SECRET_KEY` değil, deponun
+yetenekleri açıyor) — kontrol edip düzelttim.
