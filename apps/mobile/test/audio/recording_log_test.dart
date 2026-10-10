@@ -67,7 +67,9 @@ class SilentlyDeadRecorder implements VoiceRecorder {
   Future<bool> hasPermission() async => true;
 
   @override
-  Future<void> start(String path) async {}
+  Future<void> start(String path) async {
+    File(path).writeAsBytesSync(const [0, 1, 2, 3]);
+  }
 
   @override
   Future<bool> isRecording() async => false;
@@ -95,7 +97,11 @@ class HangingRecorder implements VoiceRecorder {
   Future<bool> hasPermission() async => true;
 
   @override
-  Future<void> start(String path) => Completer<void>().future;
+  Future<void> start(String path) {
+    // The file exists before the call hangs, like the real one.
+    File(path).writeAsBytesSync(const [0, 1, 2, 3]);
+    return Completer<void>().future;
+  }
 
   @override
   Future<bool> isRecording() async => false;
@@ -143,6 +149,12 @@ void main() {
   tearDown(() {
     if (recordings.existsSync()) recordings.deleteSync(recursive: true);
   });
+
+  /// What is still in the recordings directory.
+  List<String> recordingsLeft() => recordings
+      .listSync()
+      .map((e) => e.path.split('/').last)
+      .toList();
 
   ProviderContainer containerWith(VoiceRecorder recorder) {
     final container = ProviderContainer(
@@ -261,4 +273,58 @@ void main() {
     expect(entry.level, LogLevel.error);
     expect(entry.message, contains('nowhere to put'));
   });
+
+  // Found by running it on an Android emulator: a 0.188-second m4a left in
+  // the recordings directory by the attempt the permission dialog
+  // interrupted, with no note pointing at it. stop() has always cleaned up
+  // after itself; start() never did, so every failed attempt left a fragment
+  // on the disk for ever.
+  group('a start that does not take leaves nothing behind', () {
+    /// A store that hands out a target and remembers what was dropped.
+    ///
+    /// The file itself is made by the recorder, not by newTarget, so this
+    /// watches the call rather than the filesystem.
+    test('the recorder threw', () async {
+      final container = containerWith(ErroringStartRecorder());
+      await container.read(recordingControllerProvider.notifier).start();
+      expect(recordingsLeft(), isEmpty);
+    });
+
+    test('the recorder hung', () async {
+      final container = containerWith(HangingRecorder());
+      await container.read(recordingControllerProvider.notifier).start();
+      expect(recordingsLeft(), isEmpty);
+    }, timeout: const Timeout(Duration(seconds: 30)));
+
+    test('the recorder said it was not recording', () async {
+      final container = containerWith(SilentlyDeadRecorder());
+      await container.read(recordingControllerProvider.notifier).start();
+      expect(recordingsLeft(), isEmpty);
+    });
+  });
+}
+
+/// A recorder whose start throws, the way a platform channel failure does.
+class ErroringStartRecorder implements VoiceRecorder {
+  @override
+  Future<bool> hasPermission() async => true;
+
+  @override
+  Future<void> start(String path) async {
+    // What the real one does first: the file exists before it fails.
+    File(path).writeAsBytesSync(const [0, 1, 2, 3]);
+    throw StateError('the microphone is busy');
+  }
+
+  @override
+  Future<bool> isRecording() async => false;
+
+  @override
+  Future<String?> stop() async => null;
+
+  @override
+  Future<void> cancel() async {}
+
+  @override
+  Future<void> dispose() async {}
 }

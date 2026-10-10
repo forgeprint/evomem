@@ -206,16 +206,35 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
 
 Öncelik sırasına göre, her biri tek oturumluk iş:
 
-1. **Android hiç derlenmedi.** Gradle dosyaları yazıldı ve testle
-   sabitlendi, ama bu makinede JDK de Android SDK de yok — yani hiç
-   çalıştırılmadılar. Eklentilerin beyan ettiğine göre yazıldılar (minSdk
-   24), bu bir derleme değil. Android SDK'sı olan ilk kişi görecek.
-   (ADR-0031)
+1. **Android derleniyor ve çalışıyor.** (tamam) Bu makineye JDK 17 (Temurin,
+   arm64) ve Android SDK kuruldu — ikisi de ev dizininde, yönetici parolası
+   istemeden. `flutter build apk --debug` geçiyor, uygulama `android-36`
+   arm64 emülatöründe açılıyor, aktivite `com.evomem.mobile.MainActivity`
+   olarak çözülüyor. Yani bugün yazılan Gradle dosyaları (minSdk 24,
+   namespace, manifest'te `package` yok) doğruymuş. (ADR-0031)
 
-2. **Telefonda kayıt hâlâ kanıtlanmadı.** Simülatörün ses girişini CoreAudio
-   reddediyor; gösterilen şey kaydın çalıştığı değil, **başarısızlığın artık
-   söylendiği**. Gerçek bir cihaz ya da girişi çalışan bir simülatör gerek.
-   (ADR-0031)
+   Kurulum yerleri: `~/Library/Java/JavaVirtualMachines/jdk-17.0.20.1+1`,
+   `~/Library/Android/sdk`. Flutter'a `flutter config --android-sdk
+   --jdk-dir` ile gösterildi. Emülatör: `evomem` adlı AVD.
+
+2. **Telefonda kayıt çalışıyor; mikrofonun ne duyduğu hâlâ kanıtlanmadı.**
+   (yarım)
+
+   Android emülatöründe uçtan uca denendi: `RECORD_AUDIO` izni soruluyor,
+   kayıt başlıyor (**Android'in yeşil mikrofon göstergesi yanıyor** — yani
+   işletim sistemi mikrofonun kullanıldığını onaylıyor), 19,9 saniye
+   kaydedip duruyor, dosya **1 kanal / 16 kHz / AAC** çıkıyor —
+   `speechRecordConfig`'in istediğinin tam olarak aynısı — ve not
+   "Voice note, 0:20" olarak yazılıyor.
+
+   **Ama dosyanın içi sessiz** (tepe genlik 32767'de 10). Mac'in
+   hoparlöründen 1 kHz ton çalarken tekrar kaydettim, yine 10. Emülatör
+   `-allow-host-audio` ile açıldı ve *"Allowing host microphone input"*
+   diyor; eksik olan **macOS'un emülatöre mikrofon izni vermesi**.
+
+   **Senin yapman gereken:** Sistem Ayarları → Gizlilik ve Güvenlik →
+   Mikrofon'da emülatöre (ya da onu başlatan terminale) izin ver. Kod
+   tarafında yapacak bir şey kalmadı.
 
 3. **Tarayıcıda kaydedilen not telefonda çalınamıyor.** Telefonda ses çalma
    **yazıldı ve iOS'ta doğrulandı** (audioplayers 6.8.1). Ama tarayıcı Opus'u

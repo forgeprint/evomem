@@ -149,6 +149,7 @@ class RecordingController extends Notifier<RecordingState> {
     try {
       await _recorder.start(path).timeout(recorderPatience);
     } on TimeoutException catch (e, stack) {
+      await _abandon(path);
       // Measured on an iOS 27 simulator with no usable audio input
       // (2026-10-10): CoreAudio refuses the input device, record's start
       // never completes and never throws. Without this the button simply
@@ -165,6 +166,7 @@ class RecordingController extends Notifier<RecordingState> {
       state = const RecordingState.failed(RecordingProblem.recorderFailed);
       return RecordingProblem.recorderFailed;
     } on Object catch (e, stack) {
+      await _abandon(path);
       _log.error('recording', 'the recorder would not start', e, stack);
       state = const RecordingState.failed(RecordingProblem.recorderFailed);
       return RecordingProblem.recorderFailed;
@@ -182,6 +184,7 @@ class RecordingController extends Notifier<RecordingState> {
       running = true;
     }
     if (!running) {
+      await _abandon(path);
       _log.error(
         'recording',
         'the recorder reported no error but is not recording',
@@ -195,6 +198,26 @@ class RecordingController extends Notifier<RecordingState> {
     _path = path;
     state = RecordingState.recording(DateTime.now());
     return null;
+  }
+
+  /// Throws away the file a failed start left behind.
+  ///
+  /// The recorder creates it before it fails, so a start that does not take
+  /// leaves a fragment with no note pointing at it. Found on an Android
+  /// emulator: a 0.188-second m4a sitting in the recordings directory after
+  /// the attempt that was interrupted by the permission dialog. stop() has
+  /// always cleaned up after itself; this side never did, so every failed
+  /// attempt left something on the disk for ever.
+  ///
+  /// Best effort. A file that will not delete is not worth turning one
+  /// failure into two, and the reason the start failed is the one worth
+  /// reporting.
+  Future<void> _abandon(String path) async {
+    try {
+      await _store.remove(path);
+    } on Object catch (e) {
+      _log.warn('recording', 'could not remove the abandoned recording', e);
+    }
   }
 
   /// Stops recording and writes the note.

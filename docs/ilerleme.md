@@ -3417,3 +3417,32 @@ böyle buldum: `metadata` alanı boşsa **hiç gönderilmiyor** (`omitempty`) �
 satırlık eski hâliyle duruyordu. Bir de hangi sırrın neyi açtığına dair
 yazdığım cümle yanlıştı (panel rotalarını `EVOMEM_SECRET_KEY` değil, deponun
 yetenekleri açıyor) — kontrol edip düzelttim.
+
+## 2026-10-10 — Android: derleniyor, çalışıyor, kaydediyor
+
+**Kuruldu** (hepsi ev dizinine, yönetici parolası istemeden, SHA-256 ile
+doğrulanarak): JDK 17.0.20.1 (Temurin arm64) ve Android SDK 36 + emülatör +
+`android-36` arm64 sistem imajı. Gradle ilk derlemede NDK 28.2, SDK Platform
+35 ve CMake 3.22.1'i de kendisi indirdi; ilk derleme 876 saniye sürdü,
+sonrakiler 14 saniye.
+
+**Kanıt:** `flutter build apk --debug` geçiyor (170 MB debug APK). Uygulama
+emülatörde açılıyor, aktivite `com.evomem.mobile.MainActivity` olarak
+çözülüyor — yani bugün yazılan namespace/minSdk/manifest doğruymuş. ADR-0031'in
+"Android yazıldı ama hiç çalıştırılmadı" maliyeti kapandı.
+
+**Kayıt ilk kez gerçekten denendi.** İzin soruluyor, kayıt başlıyor,
+Android'in yeşil mikrofon göstergesi yanıyor, 19,9 saniye kaydedip duruyor,
+dosya 1 kanal / 16 kHz / AAC çıkıyor ve not yazılıyor. **Ama içi sessiz**
+(tepe 10/32767); Mac hoparlöründen ton çalarken de sessiz. Emülatör
+`-allow-host-audio` ile açıldı ve "Allowing host microphone input" diyor —
+eksik olan macOS'un emülatöre mikrofon izni. Kod tarafında yapacak bir şey
+yok; kullanıcının Sistem Ayarları'ndan vermesi gerek.
+
+**Çalıştırınca çıkan hata:** kayıtlar dizininde nota bağlı olmayan
+**0.188 saniyelik bir m4a** duruyordu — izin diyaloğunun böldüğü denemeden
+kalma. `stop()` kendi arkasını hep topluyordu, `start()` hiç toplamıyordu:
+kaydedici dosyayı başarısız olmadan önce yaratıyor, ve başarısız her deneme
+diskte kalıcı bir parça bırakıyordu. `_abandon()` eklendi; üç başarısızlık
+yolu da (hata, asılma, "kaydetmiyorum" demesi) teste bağlandı ve düzeltme
+geri alınınca üçü de düşüyor.
