@@ -3,7 +3,7 @@
 Bu dosya **her oturum sonunda üzerine yazılır**: işler şu an nerede, sırada ne
 var. Kronolojik kayıt `ilerleme.md`'de; burası anlık görüntü.
 
-Son güncelleme: 2026-10-10 (yirmi üçüncü oturum) · Sürüm: **v0.1.1 yayında**
+Son güncelleme: 2026-10-10 (yirmi beşinci oturum) · Sürüm: **v0.1.1 yayında**
 CI: **tamamı yeşil** (go, crosscheck, flutter)
 
 ---
@@ -60,6 +60,13 @@ docker compose run --rm sync
 
 Web <http://localhost:8080>, sunucu <http://localhost:8787>, PostgreSQL
 `127.0.0.1:5432`. Ayrıntı `docs/docker.md`'de.
+
+**MCP'yi aynı hafızaya bağlamayı unutma.** `evomem mcp` de her komut gibi
+depo seçiyor: DSN varsa PostgreSQL, yoksa `~/.evomem/evomem.db`. Ortamı boş
+bir MCP yapılandırması dizüstünün dosyasını okur ve ajan **boş** bir hafıza
+görür — hiçbir şey yazmamış bir insandan ayırt edilemez. `~/.claude.json`'da
+`env.EVOMEM_STORE_DSN` verilmeli; ayrıntı `docs/docker.md`'de. `evomem mcp`
+ve `evomem serve` artık hangi depoyu açtıklarını yazıyor (parolasız).
 
 Sunucu notlarını **PostgreSQL'de** tutuyor (ADR-0028, göç tamam). Volume'da
 yalnızca ses kayıtları var. `EVOMEM_STORE_DSN` notların yeri;

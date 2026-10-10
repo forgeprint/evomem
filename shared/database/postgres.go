@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"runtime"
+	"strings"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" driver
 )
@@ -44,10 +46,10 @@ func OpenPostgres(ctx context.Context, dsn string) (*DB, error) {
 	db := &DB{
 		write: pool{DB: write, dialect: dialectPostgres},
 		read:  pool{DB: read, dialect: dialectPostgres},
-		// Not a file. Reported where the SQLite path would be, because
-		// every message that says where the store is has to say
-		// something, and a password does not belong in one.
-		path: "postgres",
+		// Not a file, and never the DSN: that carries a password. The
+		// host and database are what somebody needs to tell one store
+		// from another, and they are not secret.
+		path: describePostgres(dsn),
 	}
 	if err := db.migrate(ctx); err != nil {
 		db.Close()
@@ -67,4 +69,21 @@ func openPostgresPool(ctx context.Context, dsn string) (*sql.DB, error) {
 		return nil, fmt.Errorf("database: opening PostgreSQL: %w", err)
 	}
 	return db, nil
+}
+
+// describePostgres says which server and database a DSN points at, without
+// the credentials.
+//
+// Printed where a file path would be. The point is that a process can say
+// which memory it opened: pointing `evomem mcp` at a laptop's file while the
+// server writes to PostgreSQL is a silent split, and an agent reading an
+// empty store looks exactly like a person who has written nothing.
+func describePostgres(dsn string) string {
+	parsed, err := url.Parse(dsn)
+	if err != nil || parsed.Host == "" {
+		// A keyword/value DSN, or something unparseable. Saying which
+		// kind of store it is beats guessing at its shape.
+		return "postgres"
+	}
+	return "postgres://" + parsed.Host + strings.TrimSuffix(parsed.Path, "/")
 }

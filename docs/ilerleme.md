@@ -3046,3 +3046,47 @@ düştü ve **not duruyor**; grup silindi → 204, grup sayısı 0, **iki not da
 duruyor**; token'siz **401**.
 
 145 Flutter testi, Go geçidi yeşil.
+
+
+## Yirmi beşinci oturum — Claude başka bir hafızayı okuyormuş
+
+"Neler kaldı" sorusuna liste vermeden önce bir şeyi doğruladım, çünkü
+doğruysa hepsinden önemliydi: **MCP'nin okuduğu depo, web uygulamasının
+yazdığı depo mu?**
+
+Değilmiş.
+
+```
+Docker PostgreSQL : 10 not
+~/.evomem/evomem.db : 6 Ekim'den kalma, başka notlar
+```
+
+`~/.claude.json`'daki MCP yapılandırmasında `env` boştu, yani `evomem mcp`
+diüzüstün SQLite dosyasını açıyordu. Ürünün bütün amacı "notlarımın
+Claude'a hafızam olarak paylaşılması" ve tam orada kopukluk vardı.
+
+### Sessiz olması asıl sorun
+
+Boş bir depo okuyan bir ajan, hiçbir şey yazmamış bir insandan ayırt
+edilemez. Hata mesajı yok, uyarı yok — yalnızca cevapsızlık.
+
+O yüzden önce **görünür** yapıldı: `evomem mcp` ve `evomem serve` artık
+hangi depoyu açtıklarını yazıyor.
+
+```
+store: postgres://127.0.0.1:5432/evomem
+```
+
+**Parola asla yok.** DSN'den yalnızca host ve veritabanı alınıyor; iki ayrı
+testi var, biri açıkça "hangi biçimde olursa olsun sır sızmasın" diyor.
+Ayrıştırılamayan bir DSN için yalnızca `postgres` diyor — şeklini tahmin
+etmektense türünü söylemek.
+
+### Sonra bağlandı
+
+`~/.claude.json`'daki `evomem` MCP sunucusuna `EVOMEM_STORE_DSN` verildi
+(önce yedek alındı). Doğrulandı: `search_notes` ile "küme" arandı ve web
+uygulamasının yazdığı **2 not** geldi.
+
+**Söylenmesi gereken**: artık `~/.claude.json` veritabanı parolasını
+içeriyor. O dosya depoda değil, ama bilinmeli.

@@ -68,6 +68,38 @@ second.
 but every API token and model key entered in the panel becomes unreadable and
 has to be entered again.
 
+## Pointing Claude at the same memory
+
+This is the one that bites silently. `evomem mcp` opens a store the same way
+every other command does: a PostgreSQL DSN if one is set, otherwise the
+SQLite file at `~/.evomem/evomem.db`. So an MCP server configured with no
+environment reads the laptop's file while the server writes to PostgreSQL —
+two memories, and the agent sees the empty one, which looks exactly like
+somebody who has not written anything.
+
+Give the MCP server the same DSN:
+
+```json
+"evomem": {
+  "type": "stdio",
+  "command": "/path/to/evomem",
+  "args": ["mcp"],
+  "env": {
+    "EVOMEM_STORE_DSN": "postgres://evomem:PASSWORD@127.0.0.1:5432/evomem?sslmode=disable"
+  }
+}
+```
+
+The password is the one in `.env`, and 5432 is where compose publishes the
+database on loopback.
+
+`evomem mcp` and `evomem serve` both print which store they opened — without
+the password — so this is visible rather than guessed at:
+
+```
+store: postgres://127.0.0.1:5432/evomem
+```
+
 ## Things to know
 
 ```bash

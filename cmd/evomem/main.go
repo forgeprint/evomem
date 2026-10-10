@@ -448,6 +448,12 @@ func cmdMCP(args []string, out io.Writer, in io.Reader) error {
 
 	if !*quiet {
 		fmt.Fprintf(os.Stderr, "evomem %s: MCP server on stdio\n", version)
+		// Which memory this opened, every time. An agent pointed at a
+		// laptop's file while the server writes to PostgreSQL reads an
+		// empty store, and an empty store looks exactly like somebody
+		// who has written nothing — the failure is silent unless this
+		// line exists.
+		fmt.Fprintf(os.Stderr, "store: %s\n", db.Path())
 		if msg := reviewReminder(context.Background(), db); msg != "" {
 			fmt.Fprintln(os.Stderr, msg)
 		}

@@ -73,6 +73,10 @@ func cmdServe(args []string, out io.Writer) error {
 		return err
 	}
 
+	// Which memory this is serving, for the same reason the MCP server
+	// says it: two processes on one machine can quietly open two
+	// different stores.
+	fmt.Fprintf(out, "store: %s\n", db.Path())
 	fmt.Fprintf(out, "serving on %s\n", server.Addr())
 	for _, r := range server.Routes() {
 		fmt.Fprintf(out, "  %s\n", r)
