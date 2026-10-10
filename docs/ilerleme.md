@@ -3296,3 +3296,12 @@ varsayılmadı, ölçüldü.
 bilen bir şey yok — ADR-0030, hesap yok); ret sessiz; saat kayması sırayı
 belirliyor. ADR-0012'ye "tek yönlü" artık **yazarlık** demek, trafik değil
 diye ek düşüldü. → ADR-0033
+
+### Düzeltme (aynı gün)
+
+ADR-0033'ün kapsamı **`core/sync`**: yerel Go deposu ↔ PostgreSQL aynası.
+**Flutter uygulaması bu yolda değil** — `core/api`'ye HTTP ile yalnızca push
+ediyor, `sync_service.dart`'ta hiçbir pull yok. Yani "sunucuda silinen not
+telefonda kalıyor" maddesi **telefon için hâlâ açık**; commit mesajındaki
+"her makine" o yoldaki makineleri kastediyor, telefonu değil. durum.md ve
+ADR-0033 buna göre düzeltildi.

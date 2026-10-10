@@ -223,14 +223,27 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    söylüyor ("tarayıcıda hâlâ çalınıyor") ama çözmüyor. Çözüm transcode;
    kararı verilmedi. (ADR-0031 eki)
 
-4. **Toplu onay yok.** `evomem endorse` tek notu alıyor; proje ya da kaynak
-   bazında onay ADR-0021'de bilinçli olarak dışarıda bırakıldı (sürtünme
-   koruma sayıldı). Bunun tiyatro mu koruma mı olduğu kullanımla anlaşılacak.
-5. **Silmeler artık aşağı yönde de geliyor.** (tamam) Aynada
-   `evomem_deletions` var, pull uyguluyor, ve ayna mezar taşı tuttuğu notu
-   geri almıyor — yani silme yayılmakla kalmıyor, **tutuyor**. Gerçek
-   PostgreSQL'e karşı doğrulandı. Açık kalan: mezar taşları hiç silinmiyor
-   (saklama kuralı için "herkes duydu" diyebilen bir şey yok). → ADR-0033
+4. **Toplu onay yok — ve şimdilik yapılmamalı.** ADR-0021 bunu açık bir
+   koşula bağlamış: "sürtünme koruma mı tiyatro mu, kullanımla anlaşılacak."
+   **Ölçüldü (2026-10-10): depoda 10 not var, `tainted` olan 0.** Yani
+   sürtünme henüz hiç hissedilmedi; tiyatro olduğuna dair kanıt yok. Toplu
+   onay, ADR-0009'un koruduğu sınırı (üçüncü taraf metni talimat taşıyabilir)
+   kanıtsız zayıflatmak olur. Gerçek Jira/Telegram notları birikip tek tek
+   onay yük olduğunda yeniden bakılmalı.
+5. **Silmeler `evomem` depoları arasında aşağı yönde geliyor** — ama
+   **telefona değil.** (yarım)
+
+   Yapılan yol: yerel Go deposu ↔ PostgreSQL aynası (`core/sync`). Aynada
+   `evomem_deletions` var, `evomem pull` uyguluyor, ayna mezar taşı tuttuğu
+   notu geri almıyor. Gerçek PostgreSQL'e karşı doğrulandı. → ADR-0033
+
+   **Telefon bu yolu kullanmıyor.** Flutter uygulaması sunucuya HTTP ile
+   yalnızca **push** ediyor; `sync_service.dart`'ta hiçbir pull metodu yok.
+   Sunucuda silinen not telefonda duruyor, duruyordu, duruyor. Düzeltmesi
+   telefona pull vermeyi gerektiriyor — ve `GET /notes`'un üstünde
+   "bu bir görünüm, sync mekanizması değil; buna pull demek ADR-0012'nin
+   kapattığı soruyu yeniden açar" yazıyor (`core/api/read.go`). Yani bu da
+   kayıtlı bir karar; **cevap bekliyor.**
 
 **Günlük var**: `Logbook` bellekte son 300 girdiyi tutuyor, `/log` ekranı
 gösteriyor, "Copy all" panoya alıyor. Diske yazılmıyor. Sebebi: bu

@@ -108,3 +108,24 @@ a deletion made on one machine reaches another; the pull settles instead of
 repeating; and a push of the deleted note is refused — removing the guard
 makes that last assertion fail, which is how it was checked rather than
 assumed.
+
+## Scope, stated plainly
+
+This record is about **`core/sync`**: a local Go store and the PostgreSQL
+mirror. "Every machine" means every machine on that path.
+
+**The Flutter app is not on it.** It talks HTTP to `core/api` and only ever
+pushes — `sync_service.dart` has no pull of any kind. So a note deleted on the
+server is still on the phone, exactly as before, and nothing here changed
+that.
+
+Giving the phone a pull is a separate decision, and a recorded one stands in
+front of it:
+
+> A view, not a sync mechanism (ADR-0024): a client asking what is here is
+> not the same as a client pulling it into a store of its own, and calling it
+> a pull would reopen the question ADR-0012 closed.
+> — `core/api/read.go`, above `handleListNotes`
+
+It also needs something `GET /notes` does not have: a cursor, and a way to
+learn about tombstones. Neither is written.
