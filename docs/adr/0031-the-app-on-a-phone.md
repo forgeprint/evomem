@@ -98,3 +98,68 @@ names where back is, since there is no stack to pop.
   the app talk to a plain-HTTP server on a LAN, which is how it is used. It
   is broader than the `localhost` exception beside it, and it is not revisited
   here.
+
+## Amendment, 2026-10-10: playback on a phone
+
+Cost 3 above said the player package was not chosen. It is now:
+**audioplayers 6.8.1**, pinned exactly like everything else.
+
+### Why this one
+
+The port takes bytes, not a path, because the bytes can have come from the
+server rather than this device (ADR-0029). audioplayers covers Android, iOS
+and the rest with a small surface — `AudioPlayer`, `play(Source)`, `stop()` —
+and neither of its platform floors moves anything: audioplayers_android 5.3.0
+asks for minSdk 19 against this app's 24, and audioplayers_darwin 6.5.0 for
+iOS 13.0 against the project's 15.0. Read from the pub cache, 2026-10-10.
+
+The browser keeps its own player. `BlobRecordingPlayer` already works, is
+documented, and revokes its object URLs; replacing something that works with
+something new buys nothing. The cost is that audioplayers_web rides along in
+the web build without being used.
+
+### A file this app names, not bytes handed over
+
+`BytesSource` looked like the obvious fit and does not work here. Measured on
+an iOS 27 simulator: a valid AAC-LC m4a, fetched back from the server with
+`Content-Type: audio/mp4`, failed with CoreMedia `err=-12864`. The package's
+iOS path writes the bytes to a temporary file named by a **hash of them**,
+with no extension, and tells AVFoundation the type through
+`AVURLAssetOverrideMIMETypeKey`, which did not rescue it.
+
+So this writes the file itself, with an extension `playbackExtension` chooses
+from the media type, and plays a `DeviceFileSource`. The copy is deleted when
+playing stops: it is a second copy of somebody's own audio and has no reason
+to outlive the listening.
+
+### What a phone cannot play, and says so
+
+A phone records AAC-LC in m4a; a browser records Opus in WebM. AVFoundation
+has no WebM demuxer — Safari plays WebM through WebKit's own, which native
+code cannot reach (Apple Developer Forums, read 2026-10-10). So a note
+recorded in a browser, synced, and opened on an iPhone is unplayable there,
+and the platform's error for it says nothing a person can use.
+
+`playbackRefusal` is asked first and the sentence names where it does work:
+*"It still plays in a browser."* This is not a bug being papered over; it is
+the cost ADR-0029 took on when it chose Opus for the browser, becoming
+visible now that a second device can ask for the same recording.
+
+### Verified, end to end
+
+On an iOS 27 simulator against the Docker server, 2026-10-10:
+
+- An m4a recording fetched from `GET /notes/{id}/audio`: the player reached
+  `rate 1.000` and ran to `StopAtEnd` — 3.4 seconds, the length of the clip.
+- The same app, on a note whose recording was made in a browser: the refusal,
+  in words, on screen.
+
+### What this still does not settle
+
+- **Android playback is unrun**, like the rest of the Android build.
+- **A browser recording stays unplayable on a phone.** Transcoding — on
+  upload, or on demand — would fix it and is not decided here. Recording AAC
+  in the browser is the other direction, and ADR-0029 already measured why
+  that does not work.
+- **Nothing shows playback position**, and there is no scrubbing. One button,
+  play and stop.

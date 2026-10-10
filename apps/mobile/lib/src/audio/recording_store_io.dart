@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:evomem_mobile/src/audio/recording_store.dart';
 import 'package:evomem_mobile/src/audio/voice_recorder.dart';
 import 'package:path/path.dart' as p;
@@ -13,28 +14,87 @@ RecordingStore newRecordingStore() => FileRecordingStore();
 /// says afterwards is between the person and the operating system.
 Future<String> describeMicrophone() async => '';
 
-/// There is no player on this side yet.
-RecordingPlayer newRecordingPlayer() => const NoRecordingPlayer();
+/// The player a phone uses.
+RecordingPlayer newRecordingPlayer() => PackageRecordingPlayer();
 
-/// A player that says it cannot play, so nothing offers the button.
+/// [RecordingPlayer] over the `audioplayers` package.
 ///
-/// Playing a file on a phone needs a package this app does not have. The
-/// build files exist now and the app runs on a phone (ADR-0031), so the
-/// blocker is gone and only the choice is left: which player package, with
-/// what it costs. That choice has not been made, so this still says no
-/// rather than pretending (ADR-0029).
-class NoRecordingPlayer implements RecordingPlayer {
-  /// Creates the player.
-  const new();
+/// Verified against audioplayers 6.8.1 and audioplayers_darwin 6.5.0 /
+/// audioplayers_android 5.3.0, read from the pub cache on 2026-10-10:
+/// `AudioPlayer()`, `play(Source)`, `stop()`, and `BytesSource(bytes,
+/// mimeType:)`.
+///
+///   https://pub.dev/packages/audioplayers
+///
+/// Bytes, not a path, because that is what the port takes and the bytes can
+/// have come from the server rather than this device (ADR-0029). On Android
+/// the bytes go across natively; on iOS the package writes them to a
+/// temporary file and plays that, which is the workaround this would
+/// otherwise have had to write by hand — so it is better left to the one
+/// place that already does it.
+///
+/// Neither platform's floor moves: audioplayers_android asks for minSdk 19
+/// against this app's 24, and audioplayers_darwin for iOS 13.0 against the
+/// project's 15.0 (ADR-0031).
+class PackageRecordingPlayer implements RecordingPlayer {
+  final AudioPlayer _player = AudioPlayer();
+
+  File? _scratch;
 
   @override
-  bool get canPlay => false;
+  bool get canPlay => true;
 
   @override
-  Future<void> play(RecordingBytes recording) async {}
+  Future<void> play(RecordingBytes recording) async {
+    // Asked before anything is handed to the platform. Giving WebM to
+    // AVFoundation produces an error that names a status code and nothing
+    // a person can act on; this names what happened and where it does
+    // work.
+    final refusal = playbackRefusal(
+      recording.mediaType,
+      onApplePlatform: Platform.isIOS || Platform.isMacOS,
+    );
+    if (refusal != null) throw PlaybackFailure(refusal);
+
+    await stop();
+
+    // A file this writes, with an extension this chooses, rather than
+    // `BytesSource`.
+    //
+    // Measured on an iOS 27 simulator on 2026-10-10: a valid AAC-LC m4a
+    // fetched back from the server, handed over as bytes, failed with
+    // CoreMedia err=-12864. audioplayers' own iOS path writes the bytes to
+    // a temporary file named by a hash of them — no extension — and tells
+    // AVFoundation the type through `AVURLAssetOverrideMIMETypeKey`, which
+    // did not save it. An extension AVFoundation recognises does.
+    final file = File(
+      p.join(
+        (await getTemporaryDirectory()).path,
+        'evomem-playback${playbackExtension(recording.mediaType)}',
+      ),
+    );
+    await file.writeAsBytes(recording.bytes, flush: true);
+    _scratch = file;
+
+    await _player.play(DeviceFileSource(file.path));
+  }
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async {
+    await _player.stop();
+    // The copy goes when playing stops. It is a second copy of somebody's
+    // own audio and there is no reason for it to outlive the listening.
+    final scratch = _scratch;
+    _scratch = null;
+    if (scratch != null && scratch.existsSync()) {
+      try {
+        await scratch.delete();
+      } on Object {
+        // A file that will not delete is not worth failing playback over;
+        // the next play overwrites it under the same name anyway.
+      }
+    }
+  }
 }
 
 /// [RecordingStore] over the filesystem.

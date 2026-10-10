@@ -68,6 +68,65 @@ abstract interface class RecordingPlayer {
   Future<void> stop();
 }
 
+/// A recording this device will not play, with the reason in words.
+///
+/// `toString` is the message, not the class name: a release build has no
+/// class names, and the one thing that reached a person the last time this
+/// was got wrong was `Instance of 'minified:fn'`.
+class PlaybackFailure implements Exception {
+  /// Creates a failure that says [message].
+  const new(this.message);
+
+  /// What to tell somebody, in a sentence.
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// Why [mediaType] cannot be played here, or null when it can be.
+///
+/// A phone records AAC-LC in an `.m4a` and a browser records Opus in a WebM
+/// container (ADR-0029), and the two do not meet: AVFoundation has no WebM
+/// demuxer — Safari plays WebM through WebKit's own, which native code
+/// cannot reach (Apple Developer Forums, read 2026-10-10). So a note
+/// recorded in a browser and fetched back from the server is unplayable on
+/// an iPhone, and the platform's own error for it says nothing useful.
+///
+/// Pure, and taking the platform as an argument, so the rule can be tested
+/// without being on that platform.
+String? playbackRefusal(String mediaType, {required bool onApplePlatform}) {
+  if (onApplePlatform && mediaType.split(';').first.trim() == 'audio/webm') {
+    return 'This recording was made in a browser, which writes Opus in a '
+        'WebM container. Apple platforms cannot read WebM, so it will not '
+        'play here. It still plays in a browser.';
+  }
+  return null;
+}
+
+/// The filename extension to give [mediaType] when writing it out to play.
+///
+/// AVFoundation decides what a local file is from its extension, and gets it
+/// wrong — or refuses — without one: a valid AAC-LC m4a handed over with no
+/// extension failed with CoreMedia err=-12864 on an iOS 27 simulator
+/// (2026-10-10). So the extension is chosen here rather than left to chance.
+///
+/// The types are the ones this system actually produces and stores: `shared/audio`
+/// maps what an upload may declare, a phone records m4a and a browser webm
+/// (ADR-0029, ADR-0016). Anything else falls back to the phone's own format,
+/// because a wrong extension is no worse than none and the common case is a
+/// recording this app made.
+String playbackExtension(String mediaType) =>
+    switch (mediaType.split(';').first.trim().toLowerCase()) {
+      'audio/mp4' || 'audio/m4a' || 'audio/x-m4a' => '.m4a',
+      'audio/aac' => '.aac',
+      'audio/mpeg' || 'audio/mp3' => '.mp3',
+      'audio/wav' || 'audio/x-wav' || 'audio/wave' => '.wav',
+      'audio/ogg' || 'audio/opus' => '.ogg',
+      'audio/webm' => '.webm',
+      _ => '.m4a',
+    };
+
 /// How this build plays a recording back. A test overrides it.
 final recordingPlayerProvider = Provider<RecordingPlayer>(
   (ref) => platform.newRecordingPlayer(),

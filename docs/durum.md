@@ -217,9 +217,11 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    söylendiği**. Gerçek bir cihaz ya da girişi çalışan bir simülatör gerek.
    (ADR-0031)
 
-3. **Telefonda ses çalma yok.** Engel kalktı — uygulama artık telefonda
-   çalışıyor — ama paket seçimi yapılmadı. `NoRecordingPlayer` hâlâ
-   "çalamıyorum" diyor ve neden olduğunu söylüyor (ADR-0029, ADR-0031).
+3. **Tarayıcıda kaydedilen not telefonda çalınamıyor.** Telefonda ses çalma
+   **yazıldı ve iOS'ta doğrulandı** (audioplayers 6.8.1). Ama tarayıcı Opus'u
+   WebM kabında yazıyor ve AVFoundation WebM okumuyor — uygulama bunu önden
+   söylüyor ("tarayıcıda hâlâ çalınıyor") ama çözmüyor. Çözüm transcode;
+   kararı verilmedi. (ADR-0031 eki)
 
 4. **Toplu onay yok.** `evomem endorse` tek notu alıyor; proje ya da kaynak
    bazında onay ADR-0021'de bilinçli olarak dışarıda bırakıldı (sürtünme

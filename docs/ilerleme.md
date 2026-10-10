@@ -3190,3 +3190,36 @@ TimeoutException after 0:00:10` olarak görünüyor; geri düğmesi çalışıyo
 yok). Telefonda kayıt **çalıştığı** gösterilmedi — gösterilen, başarısızlığın
 artık söylendiği. Telefonda ses çalma hâlâ yazılmadı; engel kalktı, paket
 seçimi yapılmadı. → ADR-0031, ADR-0029 (ek)
+
+## 2026-10-10 — Telefonda ses çalma (aynı oturum, devamı)
+
+**Yapılan:** `audioplayers 6.8.1` eklendi (tam sürüm sabitli), telefon tarafı
+`RecordingPlayer` yazıldı, iOS 27 simülatöründe **uçtan uca doğrulandı**.
+Taban değişmedi: audioplayers_android 5.3.0 minSdk 19, audioplayers_darwin
+6.5.0 iOS 13.0 — ikisi de bizimkinin altında (pub cache, 2026-10-10).
+
+**İki şey yine yalnızca çalıştırınca çıktı:**
+
+1. **`BytesSource` iOS'ta çalışmıyor.** Sunucudan `Content-Type: audio/mp4`
+   ile çekilen geçerli bir AAC-LC m4a, CoreMedia `err=-12864` ile düştü.
+   Paketin iOS yolu baytları **hash'iyle adlandırılmış, uzantısız** bir geçici
+   dosyaya yazıyor ve türü `AVURLAssetOverrideMIMETypeKey` ile söylüyor — bu
+   kurtarmadı. Artık dosyayı kendimiz yazıyoruz, uzantıyı
+   `playbackExtension` seçiyor, `DeviceFileSource` ile çalınıyor. Kopya,
+   çalma bitince siliniyor.
+
+2. **Tarayıcıda kaydedilen WebM telefonda çalınamıyor.** AVFoundation'ın WebM
+   demuxer'ı yok; Safari bunu WebKit'in kendi demuxer'ıyla çalıyor ve native
+   kod oraya erişemiyor (Apple Developer Forums, 2026-10-10 okundu). Uygulama
+   baytları platforma vermeden önce reddediyor ve **nerede çalıştığını**
+   söylüyor. Bu ADR-0029'un tarayıcı için Opus seçerken aldığı maliyetin,
+   ikinci bir cihaz aynı kaydı isteyebildiği anda görünür olması.
+
+**Kanıt (iOS 27 simülatörü, Docker sunucusuna karşı):** m4a kaydı `rate
+1.000`'e ulaştı ve klibin tam boyu olan 3,4 saniye sonra `StopAtEnd` ile
+bitti; tarayıcı kaydında ekranda cümleyle ret göründü. Doğrulama için
+oluşturulan not sunucudan, seed'lenen satırlar simülatörden silindi.
+
+**Açık:** Android'de çalma denenmedi. Tarayıcı kaydını telefonda çalınır
+kılmak transcode ister; kararı verilmedi. Çalma konumu/scrub yok.
+→ ADR-0031 (ek)
