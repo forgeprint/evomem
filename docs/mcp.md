@@ -28,8 +28,41 @@ characters is flagged `truncated` with a pointer to `get_note`.
 
 ## Configuring a client
 
-The server needs the binary and, optionally, `EVOMEM_DB`. Without it the store
-is `~/.evomem/evomem.db`.
+### Build the binary first
+
+```sh
+go build -o dist/evomem ./cmd/evomem
+```
+
+**`dist/` is gitignored**, so a fresh checkout has no binary and a client
+configured to run one fails before it says anything useful:
+
+```text
+evomem (ENOENT): no such file or directory, posix_spawn '…/dist/evomem'
+```
+
+That is not the server refusing; it is the file not being there. Build it
+again after a clean checkout, and after pulling changes you want the client to
+see — the client runs the binary on disk, not the source.
+
+### Pointing it at the right store
+
+The server needs the binary and, optionally, a store. Without one it opens
+`~/.evomem/evomem.db`.
+
+- `EVOMEM_DB` for a local SQLite file.
+- **`EVOMEM_STORE_DSN`** for the PostgreSQL the server uses (ADR-0028). If
+  your notes live in the Docker setup, this is the one you want: with only
+  `EVOMEM_DB` the client reads an empty or stale local file and reports, with
+  complete confidence, that you have no notes.
+
+Either way `evomem mcp` prints the store it opened on stderr, so the answer to
+"which memory is this" is in the client's own logs:
+
+```text
+evomem dev: MCP server on stdio
+store: postgres://127.0.0.1:5432/evomem
+```
 
 ### Claude Code
 
@@ -45,13 +78,17 @@ claude mcp add evomem -- /absolute/path/to/evomem mcp
     "evomem": {
       "command": "/absolute/path/to/evomem",
       "args": ["mcp"],
-      "env": { "EVOMEM_DB": "/absolute/path/to/evomem.db" }
+      "env": { "EVOMEM_STORE_DSN": "postgres://user:pass@127.0.0.1:5432/evomem?sslmode=disable" }
     }
   }
 }
 ```
 
 An absolute path, because the client's working directory is its own.
+
+The DSN carries a password. A client's configuration file is on disk in the
+clear, so this is a credential in a second place — worth knowing, and worth
+using a PostgreSQL role that can reach nothing else.
 
 ## Testing it from a terminal
 

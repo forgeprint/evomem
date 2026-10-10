@@ -3544,3 +3544,24 @@ AAC/m4a'ya çevrildi, telefon onu pull'ladı ve **sonuna kadar çaldı** —
 (klibin boyu 10,055 s). Aynı kayıt WebM hâliyle bir saat önce aynı uygulama
 tarafından reddediliyordu. ADR-0031'in eklediği o ret cümlesi duruyor —
 hiç dönüştürülmemiş bir depo için ağ olarak.
+
+## 2026-10-11 — MCP sağlam mı diye bakıldı; dökümandaki bir boşluk kapatıldı
+
+Bugün çok şey değişti (erişim logu, UTF-8, ses dönüştürme, pull uçları), o
+yüzden **ürünün asıl noktası olan MCP yolu** gerçek protokolle denendi:
+`initialize` → `tools/list` → `tools/call`. On araç da yerinde, 10 not
+görünüyor, Türkçe doğru (`veritabani` → `veritabanı`, unaccent katlaması
+çalışıyor), proje kapsamı doğru, ve transkript uyarısı modele düzgün geçiyor.
+Hiçbir şey bozulmamış.
+
+Bu arada **kendi hatamı bulup düzelttim:** `list_clusters`'a `project` diye
+argüman gönderip "anywhere" cevabını hata sandım. Şema da kod da `project_id`
+diyor; yanlış olan benim çağrımdı. Kodda değişiklik yok.
+
+**Gerçek boşluk `docs/mcp.md`'deydi:** istemciyi yapılandırmayı anlatıyor ama
+**ikilinin derlenmesi gerektiğini hiç söylemiyor** — ve `dist/` gitignore'da.
+Bu oturum tam da bununla başladı: `evomem (ENOENT) ... dist/evomem`. Artık
+dökümanda derleme adımı, bu hatanın ne anlama geldiği, ve hangi depoya
+bağlanılacağı yazıyor — `EVOMEM_DB` ile Docker kurulumundaki notlar
+görünmüyor, `EVOMEM_STORE_DSN` gerekiyor. Örnek yapılandırma da buna göre
+güncellendi, DSN'in parola taşıdığı uyarısıyla.
