@@ -84,7 +84,9 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
     });
 
     try {
-      final result = await syncService.push();
+      // Both directions. Pressing sync means "make the two agree", and
+      // until the pull existed this could only ever send (ADR-0034).
+      final result = await syncService.sync();
 
       if (mounted) {
         setState(() {
@@ -97,8 +99,20 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
             _pendingNotes = 0;
             _pendingDeletions = 0;
             _lastError = null;
+            // What came back, not only what went. A note that vanished
+            // because somebody deleted it elsewhere should not look like
+            // the app losing it.
+            final came = result.notesPulled + result.deletionsApplied;
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(AppLocalizations.of(context).noteSaved)),
+              SnackBar(
+                content: Text(
+                  came == 0
+                      ? AppLocalizations.of(context).noteSaved
+                      : 'Synced — ${result.notesPulled} note(s) and '
+                            '${result.deletionsApplied} deletion(s) '
+                            'came from the server',
+                ),
+              ),
             );
           } else {
             _lastError = result.error;
@@ -234,10 +248,12 @@ class _SyncStatusScreenState extends ConsumerState<SyncStatusScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'The sync is one-directional: local SQLite to remote '
-                      'PostgreSQL. Local data is the authority; the cloud is '
-                      'a mirror. Archived notes (older than 6 months) are '
-                      'thinned locally but kept in the cloud.',
+                      'Sync goes both ways. What this device wrote is sent '
+                      'up; what the server has that this device does not — '
+                      'including notes somebody deleted elsewhere — comes '
+                      'back down. A note is still written on a device, not '
+                      'on the server. Archived notes (older than 6 months) '
+                      'are thinned locally but kept in the cloud.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],

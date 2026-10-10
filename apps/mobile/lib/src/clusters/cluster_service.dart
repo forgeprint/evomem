@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:evomem_mobile/src/clusters/cluster.dart';
+import 'package:evomem_mobile/src/http/utf8_body.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:http/http.dart' as http;
 
@@ -203,15 +204,15 @@ class ClusterService {
       // like which field was empty.
       throw ClusterFailure(
         ClusterProblem.unreachable,
-        response.body.trim().isEmpty
+        utf8Body(response).trim().isEmpty
             ? 'the server answered ${response.statusCode}'
-            : response.body.trim(),
+            : utf8Body(response).trim(),
       );
     }
 
-    if (response.body.trim().isEmpty) return const {};
+    if (utf8Body(response).trim().isEmpty) return const {};
     try {
-      final decoded = json.decode(response.body);
+      final decoded = json.decode(utf8Body(response));
       if (decoded is! Map<String, dynamic>) {
         throw const ClusterFailure(ClusterProblem.unreadable, 'not an object');
       }
@@ -246,7 +247,7 @@ class ClusterService {
     }
 
     try {
-      final decoded = json.decode(response.body);
+      final decoded = json.decode(utf8Body(response));
       if (decoded is! Map<String, dynamic>) {
         throw const ClusterFailure(ClusterProblem.unreadable, 'not an object');
       }

@@ -163,3 +163,16 @@ Two details worth naming:
 
 Creating a grouping is still not something a client does by hand: an agent
 makes one over MCP (ADR-0023), or the panel asks a model to (ADR-0027).
+
+## Amendment, 2026-10-10: the phone keeps a copy as well as looking
+
+This record drew a line: a client asks the server what is there, and does not
+pull it into a store of its own. ADR-0034 crosses it, with the user's answer.
+
+`GET /notes` is unchanged and is still a view. The pull is two endpoints of
+its own, `GET /sync/notes` and `GET /sync/deletions`, because a view and a
+sync want opposite orderings — newest-first with offset paging for a person
+reading, oldest-first behind a watermark for a device keeping up.
+
+What has not changed: a note is written on a device, and a cluster still lives
+on the server and nowhere else.

@@ -3305,3 +3305,39 @@ ediyor, `sync_service.dart`'ta hiçbir pull yok. Yani "sunucuda silinen not
 telefonda kalıyor" maddesi **telefon için hâlâ açık**; commit mesajındaki
 "her makine" o yoldaki makineleri kastediyor, telefonu değil. durum.md ve
 ADR-0033 buna göre düzeltildi.
+
+## 2026-10-10 — Telefon artık sunucudan okuyor (ADR-0034)
+
+**Kullanıcı kararı:** telefona pull verilsin.
+
+**Sunucu tarafı:** `GET /sync/notes` ve `GET /sync/deletions`. `GET /notes`
+olduğu gibi kaldı — o bir görünüm: en yeniden eskiye, offset sayfalama. Biri
+yazarken bir görünümü sayfalayan istemci satır kaçırır; sync'in olmaması
+gereken tam da bu. Pull uçları `(updated_at, id)` sırasında, indeksin var
+olma sebebiyle. **İmleç bir şey dönmese de geri geliyor** — boş string
+saklayan istemci baştan başlar, ki aynanın kendi pull'u tam olarak böyle
+kalıcı kırılmıştı (ADR-0032). Yarım imleç tahmin edilmiyor, reddediliyor.
+
+**Telefon tarafı:** kendi iki imleci (`sync_cursor_pulled`,
+`sync_cursor_pulled_deletions`); `absorb` (sunucunun zaman damgalarıyla yazar,
+**yereldeki daha yeniyse yazmaz**); `forgetByRemoteId` (yerelde mezar taşı
+**yazmaz** — yazsa onu bildiren sunucuya geri iterdi). Sync düğmesi artık iki
+yönü de yapıyor: önce push, sonra pull.
+
+**Yan ürün: her Türkçe karakter bozuktu.** `küme testi` ekranda `kÃ¼me testi`
+görünüyordu. `http.Response.body`, `Content-Type`'ta charset yoksa gövdeyi
+**latin-1** olarak çözüyor (http 1.3.0 kaynağı, 2026-10-10 okundu); sunucu
+`application/json` gönderiyordu. Yani bu, uygulamanın gösterdiği **her not,
+her küme, her kaynak** için doğruydu ve bugüne kadar kimse yakından
+bakmamıştı. İki uçtan da düzeltildi: sunucu artık `charset=utf-8` diyor,
+uygulama da başlığa bakmadan UTF-8 çözüyor. Yukarı yön zaten doğruymuş —
+paket istek gövdesini utf8 varsayıp charset'i kendisi ekliyor.
+
+**Kanıt (iOS 27 simülatörü, Docker sunucusu, boş telefondan):** ilk sync'te 10
+not + 3 mezar taşı indi; `küme testi` ekranda doğru; `evomem delete` ile
+sunucuda silinen not bir sonraki sync'te telefondan düştü; telefonun
+`deletions` tablosu boş kaldı; sunucuda tur sonrası tek kopya oluşmadı.
+
+**Bir şey çalıştırınca çıktı:** pull sqflite'a yazıyor ama liste onu
+izlemiyordu — 10 not geldi, ekran "No notes yet" diyordu. Pull sonrası liste
+yeniden yükleniyor.

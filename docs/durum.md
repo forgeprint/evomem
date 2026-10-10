@@ -230,20 +230,20 @@ dosyaları, gerçek mikrofon) tarayıcı yolunu gerçek kılan işin altında.
    onay, ADR-0009'un koruduğu sınırı (üçüncü taraf metni talimat taşıyabilir)
    kanıtsız zayıflatmak olur. Gerçek Jira/Telegram notları birikip tek tek
    onay yük olduğunda yeniden bakılmalı.
-5. **Silmeler `evomem` depoları arasında aşağı yönde geliyor** — ama
-   **telefona değil.** (yarım)
+5. **Silmeler her iki yolda da aşağı yönde geliyor.** (tamam)
 
    Yapılan yol: yerel Go deposu ↔ PostgreSQL aynası (`core/sync`). Aynada
    `evomem_deletions` var, `evomem pull` uyguluyor, ayna mezar taşı tuttuğu
    notu geri almıyor. Gerçek PostgreSQL'e karşı doğrulandı. → ADR-0033
 
-   **Telefon bu yolu kullanmıyor.** Flutter uygulaması sunucuya HTTP ile
-   yalnızca **push** ediyor; `sync_service.dart`'ta hiçbir pull metodu yok.
-   Sunucuda silinen not telefonda duruyor, duruyordu, duruyor. Düzeltmesi
-   telefona pull vermeyi gerektiriyor — ve `GET /notes`'un üstünde
-   "bu bir görünüm, sync mekanizması değil; buna pull demek ADR-0012'nin
-   kapattığı soruyu yeniden açar" yazıyor (`core/api/read.go`). Yani bu da
-   kayıtlı bir karar; **cevap bekliyor.**
+   Telefon yolu: `GET /sync/notes` + `GET /sync/deletions`, telefonda kendi
+   iki imleci, `absorb` ve `forgetByRemoteId`. Sync düğmesi iki yönü de
+   yapıyor. iOS simülatöründe uçtan uca doğrulandı. → ADR-0034
+
+   Açık kalanlar: telefon artık sunucunun **tamamını** çekiyor (proje ya da
+   tarih sınırı yok); `POST /ingest`'te mezar taşı koruması yok, yani
+   pull'dan önce push eden bir cihaz silinmiş notu **yeni bir kimlikle**
+   yeniden yaratabilir (kopya, diriliş değil — ama aynı şeklin sorunu).
 
 **Günlük var**: `Logbook` bellekte son 300 girdiyi tutuyor, `/log` ekranı
 gösteriyor, "Copy all" panoya alıyor. Diske yazılmıyor. Sebebi: bu

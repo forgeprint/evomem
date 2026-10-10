@@ -1,6 +1,7 @@
 import 'package:evomem_mobile/src/audio/recording_controller.dart';
 import 'package:evomem_mobile/src/audio/recording_store.dart';
 import 'package:evomem_mobile/src/clusters/cluster_providers.dart';
+import 'package:evomem_mobile/src/http/utf8_body.dart';
 import 'package:evomem_mobile/src/log/log.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:flutter/material.dart';
@@ -123,7 +124,7 @@ class _PlayRecordingButtonState extends ConsumerState<PlayRecordingButton> {
         log.warn(
           'playback',
           'the server would not give the recording',
-          'status=${response.statusCode} ${response.body.trim()}',
+          'status=${response.statusCode} ${utf8Body(response).trim()}',
         );
         return null;
       }

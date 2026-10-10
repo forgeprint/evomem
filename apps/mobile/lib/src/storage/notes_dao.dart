@@ -154,6 +154,55 @@ class NotesDao implements NotesStore {
     });
   }
 
+  /// Writes a note as the server holds it, skipping an older one.
+  @override
+  Future<bool> absorb(Note note) async {
+    final db = await _db;
+
+    // The server's identifier is this device's identifier for the same
+    // note. They are both ULIDs and the note is the same note; giving it a
+    // second local name would mean the next pull could not tell they were
+    // one thing.
+    final rows = await db.query(
+      'notes',
+      columns: ['updated_at'],
+      where: 'id = ?',
+      whereArgs: [note.id],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      final here = DateTime.tryParse(rows.first['updated_at'] as String? ?? '');
+      if (here != null && !note.updatedAt.isAfter(here)) return false;
+    }
+
+    await db.insert('notes', {
+      'id': note.id,
+      'project_id': note.projectId,
+      'content': note.content,
+      'source_type': note.sourceType,
+      'created_at': note.createdAt.toIso8601String(),
+      'updated_at': note.updatedAt.toIso8601String(),
+      'metadata': _encodeMetadata(note.metadata),
+      'remote_id': note.id,
+      'remote_updated_at': note.updatedAt.toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    return true;
+  }
+
+  /// Removes what the server says is gone, writing no deletion.
+  @override
+  Future<void> forgetByRemoteId(String remoteId) async {
+    final db = await _db;
+    // By either name. A note this device wrote carries the server's
+    // identifier in remote_id; one that arrived by a pull carries it as its
+    // own id as well.
+    await db.delete(
+      'notes',
+      where: 'remote_id = ? OR id = ?',
+      whereArgs: [remoteId, remoteId],
+    );
+  }
+
   /// The deletions waiting to be told to the mirror, oldest first.
   @override
   Future<List<Deletion>> pendingDeletions(int limit) async {

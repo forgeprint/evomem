@@ -114,7 +114,15 @@ func intParam(raw string) int {
 	return n
 }
 
+// writeReadJSON writes a reply, saying what it is encoded in.
+//
+// `charset=utf-8`, which is not decoration. JSON is UTF-8 by definition, but
+// an HTTP client reads the parameter rather than the specification: Dart's
+// http 1.3.0 decodes a body as **latin-1** when the Content-Type carries no
+// charset, which it documents as RFC 2616 behaviour (package source, read
+// 2026-10-10). So every Turkish character this server sent the app arrived
+// mangled — `küme` as `kÃ¼me` — and had done since the app could read.
 func writeReadJSON(w http.ResponseWriter, payload any) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(payload)
 }

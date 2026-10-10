@@ -131,6 +131,7 @@ type Server struct {
 	http        *http.Server
 	store       Store
 	reader      Reader
+	syncer      Syncer
 	connections Connections
 	recordings  Recordings
 	puller      PullFunc
@@ -164,6 +165,9 @@ func New(store Store, cfg Config) (*Server, error) {
 	if reader, ok := store.(Reader); ok {
 		s.reader = reader
 	}
+	if syncer, ok := store.(Syncer); ok {
+		s.syncer = syncer
+	}
 	if connections, ok := store.(Connections); ok {
 		s.connections = connections
 	}
@@ -180,7 +184,7 @@ func New(store Store, cfg Config) (*Server, error) {
 	// Unauthenticated on purpose, and says nothing but that the process is
 	// up. It is what a tunnel and a launch agent check.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		fmt.Fprintln(w, `{"status":"ok"}`)
 	})
 
@@ -250,6 +254,15 @@ func New(store Store, cfg Config) (*Server, error) {
 			}
 			s.routes = append(s.routes,
 				"GET /notes", "GET /clusters", "GET /clusters/{id}")
+		}
+
+		// The pull side, for a device keeping a copy rather than
+		// looking at a view (ADR-0034). Behind the same token as
+		// everything else that reads.
+		if s.syncer != nil {
+			mux.Handle("GET /sync/notes", s.authenticated(http.HandlerFunc(s.handlePullNotes)))
+			mux.Handle("GET /sync/deletions", s.authenticated(http.HandlerFunc(s.handlePullDeletions)))
+			s.routes = append(s.routes, "GET /sync/notes", "GET /sync/deletions")
 		}
 
 		// Only with somewhere to put a recording. Served under the

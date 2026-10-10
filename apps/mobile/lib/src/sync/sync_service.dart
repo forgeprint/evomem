@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:evomem_mobile/src/audio/recording_controller.dart';
 import 'package:evomem_mobile/src/audio/recording_store.dart';
 import 'package:evomem_mobile/src/clusters/cluster_providers.dart';
+import 'package:evomem_mobile/src/http/utf8_body.dart';
 import 'package:evomem_mobile/src/rules/note.dart';
 import 'package:evomem_mobile/src/state/notes_notifier.dart';
 import 'package:evomem_mobile/src/storage/database.dart';
@@ -20,6 +21,8 @@ class SyncResult {
     required this.success,
     required this.notesPushed,
     required this.deletionsPushed,
+    this.notesPulled = 0,
+    this.deletionsApplied = 0,
     this.error,
     this.cursorUpdatedAt,
     this.cursorId,
@@ -30,6 +33,8 @@ class SyncResult {
   factory success({
     required int notesPushed,
     required int deletionsPushed,
+    int notesPulled = 0,
+    int deletionsApplied = 0,
     String? cursorUpdatedAt,
     String? cursorId,
   }) {
@@ -37,6 +42,8 @@ class SyncResult {
       success: true,
       notesPushed: notesPushed,
       deletionsPushed: deletionsPushed,
+      notesPulled: notesPulled,
+      deletionsApplied: deletionsApplied,
       cursorUpdatedAt: cursorUpdatedAt,
       cursorId: cursorId,
     );
@@ -48,12 +55,16 @@ class SyncResult {
     required String error,
     int notesPushed = 0,
     int deletionsPushed = 0,
+    int notesPulled = 0,
+    int deletionsApplied = 0,
   }) {
     return SyncResult(
       success: false,
       error: error,
       notesPushed: notesPushed,
       deletionsPushed: deletionsPushed,
+      notesPulled: notesPulled,
+      deletionsApplied: deletionsApplied,
     );
   }
 
@@ -65,6 +76,17 @@ class SyncResult {
 
   /// How many deletions reached the server.
   final int deletionsPushed;
+
+  /// How many of the server's notes this device did not have.
+  ///
+  /// Its own field rather than reusing [notesPushed]. The two directions are
+  /// different facts and a screen that shows one as the other is lying
+  /// quietly — which is what the `// reuse field` in _pushDeletions already
+  /// did.
+  final int notesPulled;
+
+  /// How many of the server's deletions were applied here.
+  final int deletionsApplied;
 
   /// Why it stopped, or null when it did not.
   final String? error;
@@ -131,6 +153,20 @@ class SyncService {
   final RecordingStore _recordings;
 
   static const String _cursorKey = 'sync_cursor_notes';
+
+  /// Where the pull has got to in the server's notes.
+  ///
+  /// Its own row, not [_cursorKey]. Both are positions in an
+  /// `(updated_at, id)` ordering, but over two different stores: one counts
+  /// local notes that have reached the server, the other the server's notes
+  /// that have reached here. Sharing a row meant — on the other sync path,
+  /// where it actually happened — a pull setting the push watermark to a
+  /// position in somebody else's ordering, and every local note behind it
+  /// silently never being sent again (ADR-0032).
+  static const String _pullCursorKey = 'sync_cursor_pulled';
+
+  /// Where the pull has got to in the server's tombstones.
+  static const String _pullDeletionsCursorKey = 'sync_cursor_pulled_deletions';
 
   /// Pushes local changes to the remote server.
   Future<SyncResult> push() async {
@@ -297,7 +333,7 @@ class SyncService {
           return null;
         }
 
-        final remoteId = _remoteIdOf(response.body);
+        final remoteId = _remoteIdOf(utf8Body(response));
         if (remoteId == null) {
           // Accepted, but this cannot tell which note it became. Treated as
           // a failure: carrying on would advance the cursor past a note
@@ -491,6 +527,173 @@ class SyncService {
     return SyncResult.success(notesPushed: done, deletionsPushed: done);
   }
 
+  /// Reads from the server what this device does not have.
+  ///
+  /// Two things, in this order: notes changed since the last pull, then the
+  /// deletions. Deletions second, because a note written and then deleted on
+  /// the server arrives in both pages and the deletion has to be the later
+  /// word (ADR-0034).
+  ///
+  /// Until this existed the app only ever pushed, so a note deleted on the
+  /// server stayed on the phone for good — there was nothing it could read
+  /// that said otherwise.
+  Future<SyncResult> pull() async {
+    if (config.serverUrl.isEmpty || config.apiToken.isEmpty) {
+      return SyncResult.failure(
+        error: 'Server URL or API token not configured',
+      );
+    }
+
+    final client = http.Client();
+    var notes = 0;
+    var deletions = 0;
+    try {
+      notes = await _pullNotes(client);
+      deletions = await _pullDeletions(client);
+    } on Object catch (e) {
+      // Object, not Exception: a failure coming up through browser interop
+      // arrives as an Error, which `on Exception` does not catch (ADR-0029).
+      return SyncResult.failure(
+        error: 'Pull failed: $e',
+        notesPulled: notes,
+        deletionsApplied: deletions,
+      );
+    } finally {
+      client.close();
+    }
+
+    return SyncResult.success(
+      notesPushed: 0,
+      deletionsPushed: 0,
+      notesPulled: notes,
+      deletionsApplied: deletions,
+    );
+  }
+
+  /// Walks `GET /sync/notes` until the server has nothing newer.
+  Future<int> _pullNotes(http.Client client) async {
+    var absorbed = 0;
+    for (;;) {
+      final body = await _getPage(client, '/sync/notes', _pullCursorKey);
+      final rows = body['notes'];
+      if (rows is! List || rows.isEmpty) return absorbed;
+
+      for (final row in rows) {
+        final note = _noteFromServer(row);
+        // One unreadable row drops out rather than losing the page — and
+        // the cursor still moves past it, so it does not wedge the pull.
+        if (note == null) continue;
+        if (await _notesDao.absorb(note)) absorbed++;
+      }
+
+      if (!await _advance(body, _pullCursorKey)) return absorbed;
+      if (rows.length < config.batchSize) return absorbed;
+    }
+  }
+
+  /// Walks `GET /sync/deletions` and applies each tombstone here.
+  Future<int> _pullDeletions(http.Client client) async {
+    var applied = 0;
+    for (;;) {
+      final body = await _getPage(
+        client,
+        '/sync/deletions',
+        _pullDeletionsCursorKey,
+      );
+      final rows = body['deletions'];
+      if (rows is! List || rows.isEmpty) return applied;
+
+      for (final row in rows) {
+        if (row is! Map<String, dynamic>) continue;
+        final id = row['id'];
+        if (id is! String || id.isEmpty) continue;
+        // forgetByRemoteId, not delete: a tombstone recorded here would be
+        // pushed straight back to the server that reported it.
+        await _notesDao.forgetByRemoteId(id);
+        applied++;
+      }
+
+      if (!await _advance(body, _pullDeletionsCursorKey)) return applied;
+      if (rows.length < config.batchSize) return applied;
+    }
+  }
+
+  /// One page from a pull endpoint, from wherever [cursorKey] left off.
+  Future<Map<String, dynamic>> _getPage(
+    http.Client client,
+    String path,
+    String cursorKey,
+  ) async {
+    final query = <String, String>{'limit': '${config.batchSize}'};
+    final cursor = await _getCursor(cursorKey);
+    if (cursor != null) {
+      final parts = cursor.split('|');
+      if (parts.length == 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
+        query['since'] = parts[0];
+        query['since_id'] = parts[1];
+      }
+    }
+
+    final uri = Uri.parse('${config.serverUrl}$path')
+        .replace(queryParameters: query);
+    final response = await client
+        .get(uri, headers: {'Authorization': 'Bearer ${config.apiToken}'})
+        .timeout(config.timeout);
+    if (response.statusCode != 200) {
+      throw http.ClientException(
+        'the server answered ${response.statusCode}',
+        uri,
+      );
+    }
+
+    final decoded = json.decode(utf8Body(response));
+    if (decoded is! Map<String, dynamic>) {
+      throw http.ClientException(
+        'the server answered something unreadable',
+        uri,
+      );
+    }
+    return decoded;
+  }
+
+  /// Stores the cursor the server handed back. False when it did not move,
+  /// which is how a walk knows it has caught up rather than looping.
+  Future<bool> _advance(Map<String, dynamic> body, String cursorKey) async {
+    final cursor = body['cursor'];
+    if (cursor is! Map<String, dynamic>) return false;
+    final since = cursor['since'];
+    final sinceId = cursor['since_id'];
+    if (since is! String || sinceId is! String) return false;
+    if (since.isEmpty || sinceId.isEmpty) return false;
+
+    final next = '$since|$sinceId';
+    if (await _getCursor(cursorKey) == next) return false;
+    await _saveCursor(cursorKey, next);
+    return true;
+  }
+
+  /// A note in the server's shape: `source_type`, `created_at`, `metadata`.
+  static Note? _noteFromServer(Object? raw) {
+    if (raw is! Map<String, dynamic>) return null;
+    final id = raw['id'];
+    final content = raw['content'];
+    if (id is! String || id.isEmpty || content is! String) return null;
+    final created = DateTime.tryParse(raw['created_at'] as String? ?? '');
+    final updated = DateTime.tryParse(raw['updated_at'] as String? ?? '');
+    if (created == null || updated == null) return null;
+    return Note(
+      id: id,
+      projectId: raw['project_id'] as String? ?? '',
+      content: content,
+      sourceType: raw['source_type'] as String? ?? 'manual',
+      createdAt: created,
+      updatedAt: updated,
+      metadata: raw['metadata'] is Map<String, dynamic>
+          ? raw['metadata'] as Map<String, dynamic>
+          : const {},
+    );
+  }
+
   /// Gets cursor from sync_state table.
   Future<String?> _getCursor(String key) async {
     final db = await _dbHelper.database;
@@ -607,6 +810,53 @@ class SyncServiceNotifier extends Notifier<SyncServiceState> {
       );
     }
     return await _service!.push();
+  }
+
+  /// Read from the server what this device does not have (ADR-0034).
+  Future<SyncResult> pull() async {
+    if (_service == null) {
+      return SyncResult.failure(
+        error: 'Sync service not initialized. Configure in Settings.',
+      );
+    }
+    return await _service!.pull();
+  }
+
+  /// Push, then read back: one round of sync, which is what a person who
+  /// presses the button means.
+  ///
+  /// Push first, so an edit made here reaches the server before the server's
+  /// copy is read back — otherwise the pull would see the older version and
+  /// skip it, which is correct but wastes a round.
+  Future<SyncResult> sync() async {
+    final pushed = await push();
+    if (!pushed.success) return pushed;
+    final pulled = await pull();
+    if (!pulled.success) {
+      return SyncResult.failure(
+        // The push half did happen, so what it moved is reported even
+        // though the round as a whole did not finish.
+        error: pulled.error ?? 'the pull did not finish',
+        notesPushed: pushed.notesPushed,
+        deletionsPushed: pushed.deletionsPushed,
+      );
+    }
+    // A pull writes straight to sqflite, which the list does not watch —
+    // so without this the notes are there and nobody can see them. Found by
+    // running it: the pull reported ten notes and the screen said "No notes
+    // yet".
+    if (pulled.notesPulled > 0 || pulled.deletionsApplied > 0) {
+      await ref.read(notesProvider.notifier).loadNotes();
+    }
+
+    return SyncResult.success(
+      notesPushed: pushed.notesPushed,
+      deletionsPushed: pushed.deletionsPushed,
+      notesPulled: pulled.notesPulled,
+      deletionsApplied: pulled.deletionsApplied,
+      cursorUpdatedAt: pushed.cursorUpdatedAt,
+      cursorId: pushed.cursorId,
+    );
   }
 
   /// Get the current sync service instance.

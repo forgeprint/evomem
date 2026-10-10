@@ -75,6 +75,31 @@ abstract interface class NotesStore {
 
   /// Forgets a deletion the mirror has taken.
   Future<void> forgetDeletion(String localId);
+
+  /// Writes a note as the server holds it, for a pull (ADR-0034).
+  ///
+  /// Not [insert], which fails on an identifier that is already here — and a
+  /// note this device wrote itself comes back with one. Not [update] either:
+  /// that is for an edit made here and moves `updatedAt` to now, while a
+  /// pulled note keeps the server's timestamps, because they are what the
+  /// cursor on both sides is counted in.
+  ///
+  /// It **skips an incoming note that is not newer than the copy here**, so a
+  /// pull cannot land an older server copy on top of an edit made on this
+  /// device and not yet pushed. Reports whether it wrote anything.
+  Future<bool> absorb(Note note);
+
+  /// Removes the local copy of a note the server says is gone, leaving no
+  /// deletion to push back.
+  ///
+  /// [delete] records one, because a deletion made here has to travel. This
+  /// one came the other way: recording it again would push it straight back
+  /// to the server that reported it, on every sync, for ever (ADR-0033 found
+  /// that same echo on the other sync path).
+  ///
+  /// An identifier that is not here is not an error — the server tells every
+  /// device, including the ones that never had the note.
+  Future<void> forgetByRemoteId(String remoteId);
 }
 
 /// A project and how many notes are filed under it.
