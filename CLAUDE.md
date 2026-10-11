@@ -34,6 +34,13 @@ This file defines the strict architectural constraints, coding standards, and bu
 * Build local binary: `go build -o dist/evomem ./cmd/evomem`
 * Run format check: `go fmt ./...`
 
+### One-time setup per clone
+* **Enable the hooks: `git config core.hooksPath .githooks`** — this adds the
+  DCO `Signed-off-by` trailer to every commit. `git commit` has no setting
+  that does it: `format.signOff` only affects `format-patch`, and believing
+  otherwise is how seventeen commits went out unsigned. The `dco` workflow
+  refuses a pull request whose commits are missing it.
+
 ### Flutter Mobile App (apps/mobile)
 * Fetch dependencies: `flutter pub get`
 * Run development build: `flutter run`

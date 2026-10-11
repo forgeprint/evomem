@@ -1,0 +1,31 @@
+#!/bin/sh
+# Add the Developer Certificate of Origin sign-off to every commit message.
+#
+# `git commit` has no configuration that does this. `format.signOff` looks
+# like it would and does not: git's own documentation says it "lets you
+# enable the -s/--signoff option of format-patch by default", and a commit
+# made with it set carries no trailer. That misreading is why seventeen
+# commits went out unsigned while the notebook said they were signed.
+#
+# Turn it on once per clone:
+#
+#     git config core.hooksPath .githooks
+#
+# `git interpret-trailers` is used rather than an echo so the trailer lands
+# in the trailer block rather than after it, and `--if-exists doNothing`
+# leaves a message alone that was already committed with -s.
+set -eu
+
+MSG_FILE=$1
+
+NAME=$(git config user.name || true)
+EMAIL=$(git config user.email || true)
+if [ -z "$NAME" ] || [ -z "$EMAIL" ]; then
+	echo "prepare-commit-msg: user.name or user.email is not set, no sign-off added" >&2
+	exit 0
+fi
+
+git interpret-trailers --in-place \
+	--if-exists doNothing \
+	--trailer "Signed-off-by: $NAME <$EMAIL>" \
+	"$MSG_FILE"
