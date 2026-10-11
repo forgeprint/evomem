@@ -3624,3 +3624,45 @@ her turda `gofmt -l` çalıştırıyordum, Dart karşılığını hiç çalışt
 Kapıya eklenmesi gereken komut:
 
     cd apps/mobile && dart format --output=none --set-exit-if-changed .
+
+### graphify: depo bir bilgi grafiğine çevrildi
+
+254 dosya (196 kod, 58 doküman), **2691 düğüm · 8134 kenar · 130 topluluk**.
+Kod tarafı AST ile bedava çıkarıldı; 58 doküman üç alt ajana dağıtıldı ve
+**423.480 girdi token** harcadı. Kenarların %92'si EXTRACTED, %8 INFERRED
+(ortalama güven 0,85), AMBIGUOUS yok.
+
+Gürültü çıkarmak işin yarısıydı. `vendor/` tek başına 2551 dosyanın 2201'i.
+Sonra sağlık kontrolü 1276 "çöken kenar" gösterdi ve sebebi tek dosyaydı:
+`sqflite_sw.js`, küçültülmüş bir satıcı worker'ı, **641 düğüm** üretiyordu.
+Üretilen yerelleştirmelerle birlikte dışarıda bırakılınca çöken kenar sayısı
+**257**'ye düştü. Kalan 618 "dangling" kenarın hepsi Go standart kütüphanesi —
+grafikte düğümü olmayan paketler, beklenen durum.
+
+Çıktılar `graphify-out/` içinde (gitignore'da; türetilmiş dosya):
+`GRAPH_REPORT.md`, `graph.json`, `graph.html`.
+
+**Grafiğin bulduğu gerçek kusur — `apps/mobile/.github/` hiç çalışmıyor.**
+Rapor "CI Flutter job ↔ Mobile CI check job" ve "Release actions pinned by
+commit SHA ↔ Mobile CI actions pinned by commit" diye iki benzerlik gösterdi;
+takip edince ortaya çıkan şu: GitHub `.github/` dizinini **yalnızca depo
+kökünde** okur, dolayısıyla `apps/mobile/.github/workflows/ci.yml` ve
+`apps/mobile/.github/dependabot.yml` ab8937f'ten beri ölü dosya. İkisi de
+`git ls-files`'ta duruyor.
+
+Mesele yalnızca yineleme değil, **hangi kopyanın çalıştığı**:
+
+- Ölü olan, eylemleri commit SHA'sıyla sabitliyor ve nedenini de yazıyor:
+  "a tag is a name its owner can move".
+- **Çalışan** kök `ci.yml` ise `actions/checkout@v7`, `actions/setup-go@v7`,
+  `subosito/flutter-action@v2` — hepsi oynatılabilir etiket. Yani disiplini
+  taşıyan dosya koşmuyor, koşan dosya disiplini taşımıyor.
+- `release.yml` sabitlemeyi doğru yapıyor (üç eylem de SHA + sürüm yorumu),
+  yani depoda iki farklı standart yan yana duruyor.
+- Kökte **dependabot yapılandırması yok**. Sabitlemenin öteki yarısı — her
+  güncellemeyi CI'dan geçmek zorunda bir PR olarak önermek — hiç kurulmamış;
+  bunu anlatan dosya ölü olanın yanında duruyor.
+
+Düzeltilmedi, karar beklendi: kök `ci.yml`'i SHA'ya çevirmek + kök
+`.github/dependabot.yml` yazmak (pub için `/apps/mobile`, go modülü ve
+github-actions için `/`) + ölü iki dosyayı silmek.

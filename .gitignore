@@ -7,3 +7,6 @@ dist/
 
 # Secrets for the Docker setup; never committed.
 .env
+
+# Built by the graphify skill; a derived artefact, not source.
+graphify-out/

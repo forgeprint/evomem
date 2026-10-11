@@ -1,0 +1,73 @@
+# Every commit in a pull request carries a Developer Certificate of Origin
+# sign-off.
+#
+# This is the Actions equivalent of the DCO GitHub App. It is a workflow and
+# not an app because an app cannot be installed through the API: it would have
+# to be clicked through a browser, and the rule would then live somewhere the
+# repository does not record.
+#
+# No third-party action is used. The runner ships `gh` and the workflow's own
+# GITHUB_TOKEN, so there is no action version to pin and no code from outside
+# this repository runs here.
+#
+# The commits are read from the API rather than from a checkout, which keeps
+# this job without a working tree. Response shape verified against GitHub's
+# "List commits on a pull request" reference and against the live API
+# (fields `commit.message`, `commit.author.name`, `commit.author.email` and
+# `parents`), 2026-10-11:
+# https://docs.github.com/en/rest/pulls/pulls#list-commits-on-a-pull-request
+name: dco
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: dco-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dco:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every commit is signed off by its author
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          # A merge commit has more than one parent and is not written by a
+          # person, so it is not asked for a sign-off. The whole check is done
+          # in jq, which compares the trailer as a literal string: a name can
+          # contain characters a regular expression would read as syntax.
+          gh api --paginate "repos/$REPO/pulls/$PR/commits?per_page=100" --jq '
+            .[]
+            | select((.parents | length) < 2)
+            | . as $c
+            | ($c.commit.author.name // "")  as $n
+            | ($c.commit.author.email // "") as $e
+            | ("signed-off-by: " + $n + " <" + $e + ">" | ascii_downcase) as $want
+            | ($c.commit.message
+               | split("\n")
+               | map(gsub("^\\s+|\\s+$"; "") | ascii_downcase)) as $lines
+            | select(($lines | index($want)) == null)
+            | "  \($c.sha[0:8])  \($n) <\($e)>  \($c.commit.message | split("\n") | .[0])"
+          ' > unsigned.txt
+
+          if [ -s unsigned.txt ]; then
+            echo "These commits carry no Signed-off-by for their own author:"
+            echo
+            cat unsigned.txt
+            echo
+            echo "Add it with:  git commit --amend -s      (or -s on every new commit)"
+            echo "Set it once:  git config format.signoff true"
+            exit 1
+          fi
+
+          echo "Every commit is signed off."
