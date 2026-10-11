@@ -65,8 +65,11 @@ jobs:
             echo
             cat unsigned.txt
             echo
-            echo "Add it with:  git commit --amend -s      (or -s on every new commit)"
-            echo "Set it once:  git config format.signoff true"
+            echo "Add it to the last commit:  git commit --amend -s"
+            echo "Stop having to remember:    git config core.hooksPath .githooks"
+            echo
+            echo "format.signOff does NOT do this: git's documentation says it"
+            echo "enables -s for format-patch, and it has no effect on git commit."
             exit 1
           fi
 
