@@ -30,6 +30,18 @@ class FakeRecordingStore implements RecordingStore {
 
   @override
   Future<void> remove(String handle) async => held.remove(handle);
+
+  /// What was kept from the server, by remote identifier.
+  final Map<String, RecordingBytes> keptCopies = {};
+
+  @override
+  Future<void> keep(String remoteId, RecordingBytes recording) async {
+    if (!canKeep(recording.mediaType)) return;
+    keptCopies[remoteId] = recording;
+  }
+
+  @override
+  Future<RecordingBytes?> kept(String remoteId) async => keptCopies[remoteId];
 }
 
 /// Answers /ingest and /ingest/audio the way the Go side does, and keeps

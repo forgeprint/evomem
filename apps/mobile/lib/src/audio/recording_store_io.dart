@@ -149,4 +149,67 @@ class FileRecordingStore implements RecordingStore {
     final file = File(handle);
     if (file.existsSync()) await file.delete();
   }
+
+  @override
+  Future<void> keep(String remoteId, RecordingBytes recording) async {
+    final name = _keptName(remoteId);
+    if (name == null || !canKeep(recording.mediaType)) return;
+
+    final directory = await _recordings();
+    await directory.create(recursive: true);
+    final file = File(
+      p.join(directory.path, '$name${playbackExtension(recording.mediaType)}'),
+    );
+    try {
+      await file.writeAsBytes(recording.bytes, flush: true);
+    } on Object {
+      // A full disk is not a reason to fail the playback that is already
+      // holding the bytes. The next play asks the server again.
+      if (file.existsSync()) {
+        try {
+          await file.delete();
+        } on Object {
+          // Nothing left to try; a half-written file is found by its
+          // extension next time and would play as truncated audio, so
+          // deleting it is the attempt worth making and not worth
+          // failing over.
+        }
+      }
+    }
+  }
+
+  @override
+  Future<RecordingBytes?> kept(String remoteId) async {
+    final name = _keptName(remoteId);
+    if (name == null) return null;
+
+    final directory = await _recordings();
+    if (!directory.existsSync()) return null;
+
+    for (final extension in keptExtensions) {
+      final file = File(p.join(directory.path, '$name$extension'));
+      if (!file.existsSync()) continue;
+      final mediaType = keptMediaType(extension);
+      if (mediaType == null) continue;
+      return RecordingBytes(
+        Uint8List.fromList(await file.readAsBytes()),
+        mediaType,
+      );
+    }
+    return null;
+  }
+
+  /// The filename stem for [remoteId], or null when it will not be used as
+  /// one.
+  ///
+  /// The identifier comes from the server, so it is never pasted into a
+  /// path as it stands: `../../x` or a separator would write outside the
+  /// recordings directory. A ULID is Crockford base32, so the characters
+  /// allowed here cover every identifier this system mints and reject
+  /// everything that could traverse.
+  String? _keptName(String remoteId) {
+    if (remoteId.isEmpty || remoteId.length > 64) return null;
+    if (!RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(remoteId)) return null;
+    return 'kept-$remoteId';
+  }
 }

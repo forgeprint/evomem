@@ -3666,3 +3666,80 @@ Mesele yalnızca yineleme değil, **hangi kopyanın çalıştığı**:
 Düzeltilmedi, karar beklendi: kök `ci.yml`'i SHA'ya çevirmek + kök
 `.github/dependabot.yml` yazmak (pub için `/apps/mobile`, go modülü ve
 github-actions için `/`) + ölü iki dosyayı silmek.
+
+### DCO zorunlu, main korunuyor, ve çekilen kayıt cihazda kalıyor
+
+**Sign-off 17 commit boyunca atılmamış.** `6256741`'den (2026-10-10) beri
+hiçbiri imzalı değildi, `durum.md` ise imzaların atıldığını söylüyordu.
+Sebebi `format.signoff`'un yanlış okunması: git'in kendi dokümanı "lets you
+enable the -s/--signoff option of **format-patch**" diyor, `git commit`'e
+etkisi yok. Boş bir depoda da ölçtüm — ayarlıyken commit trailer'sız çıkıyor.
+İlk düzeltme denemem de bu hataya düştü ve mesajında yanlış sebebi yazdı; o
+commit geçmişte imzasız duruyor ve kanıt olarak öyle bırakıldı (yayınlanmış
+geçmiş hatayı saklamak için yeniden yazılmaz).
+
+Gerçek mekanizma: `.githooks/prepare-commit-msg` +
+`git config core.hooksPath .githooks` (klon başına bir kez, CLAUDE.md'de).
+`git interpret-trailers --if-exists doNothing` kullanıyor, yani trailer
+bloğunun içine düşüyor ve `-s` ile yapılmış mesajı ikiye katlamıyor.
+
+**`dco` workflow'u.** Üçüncü taraf eylem yok: runner'ın kendi `gh`'ı ve
+`GITHUB_TOKEN`'ı yeterli, böylece sabitlenecek sürüm de yok. Commitler
+checkout yerine API'den okunuyor (`commit.message`, `commit.author.*`,
+`parents` — GitHub referansı + canlı API, 2026-10-11). Kontrolün tamamı tek
+bir jq programı; trailer'ı **düz metin** olarak karşılaştırıyor çünkü bir
+isim, düzenli ifadenin sözdizimi sayacağı karakter taşıyabilir. Merge
+commit'i (birden çok ebeveyn) imza sorulmadan atlanıyor.
+
+**Kanıt, iki yönlü.** jq'yu bu deponun son 100 commit'ine karşı çalıştırdım:
+tam olarak 17 imzasızı adlandırdı, imzalı olanı hiç işaretlemedi
+(`git log --no-merges` ile birebir). Sonra PR #1'de imzasız bir commit'le
+**düştü** (4 saniyede, adıyla) ve PR #2'de imzalı commit'le **geçti** — yani
+runner'da `gh api`, verilen izinler ve check'in adının `dco` olduğu da
+doğrulandı.
+
+**`main` koruması:** zorunlu check `go`/`flutter`/`crosscheck`/`dco`, strict,
+doğrusal geçmiş, force-push ve silme kapalı, onay sayısı 0,
+`enforce_admins: false`. Onay 0 bilinçli: tek geliştiricili bir depoda GitHub
+kendi PR'ını onaylatmaz, 1 yazmak kullanıcıyı kendi deposunda kilitler.
+`enforce_admins: false` de bilinçli ve işlediği görüldü — kullanıcı PR #1'i
+`dco` düşmüşken merge etti, yani emniyet valfi çalışıyor. O boş deneme
+commit'i (`d6818681`, 0 dosya 0 satır) main'de duruyor.
+
+**DCO GitHub App zaten kuruluymuş** (`app=dco`). Kimse bilmiyordu; koruma onu
+zorunlu kılmadığı için hiçbir şeyi engellemiyordu. Karar: workflow kalır,
+uygulama kullanıcı tarafından kaldırılır (kurulum API'den kaldırılamıyor).
+
+**Bulut PostgreSQL maddesi düştü — Supabase gerekmiyor.** İstenen şey
+(telefon çevrimdışı tutar, internet varken sunucuyla sync olur) HTTP sync
+yolu ve zaten kurulu. `EVOMEM_POSTGRES_DSN`/ayna bir laptop'ın SQLite'ını
+uzak PostgreSQL'e itmesi için; kodun kendi yorumu aynayı sunucunun store'una
+çevirmeyi "kimsenin göremeyeceği bir yapılandırma hatası" diye adlandırıyor.
+Not: `openBackend()` her komutta `EVOMEM_STORE_DSN` okuyor, `evomem mcp`
+dahil — yani istenirse MCP doğrudan sunucunun PostgreSQL'ine bakabilir.
+
+**Çekilen kaydın sesi artık cihazda kalıyor** (ADR-0038). Önce yanlış
+teşhis koydum ("indirme yok"); indirme vardı
+(`play_recording_button.dart` `GET /notes/{id}/audio`'ya düşüyor, token
+header'da). Gerçek boşluk daha küçüktü: **indirilen baytlar
+saklanmıyordu**, yani başka cihazdan gelen notun sesi her çalışta ağ
+istiyordu ve çevrimdışı hiç çalmıyordu.
+
+Üç yer, bu sırayla: bu cihazın kaydı → daha önce indirilip saklanan kopya →
+sunucu. Kopya **remote_id'ye göre** anahtarlı ve nota yazılmıyor: `SyncService`
+`note.metadata`'yı olduğu gibi gönderiyor, yani oraya yazılan bir yol yukarı
+itilip kaydı gerçekten yapan cihazın yolunu ezerdi.
+
+Tür korunmak zorunda: deponun `read`'i sabit `recordingMediaType` döndürüyor,
+bu da yalnızca bu uygulamanın yazdığı dosya için doğru. Saklanan kopya,
+türünün uzantısıyla adlandırılıp geri okunurken uzantıdan türe çevriliyor; ve
+`playbackExtension` tanımadığı türe `.m4a` dediği için `canKeep` var —
+tanınmayan tür saklanmıyor. Aksi hâlde bir tarayıcı kaydı `audio/mp4`
+etiketiyle geri gelir, `playbackRefusal` susar ve iPhone anlamsız bir kodla
+düşer. remote_id sunucudan geldiği için yola hiç konmuyor:
+`[A-Za-z0-9_-]` dışı ya da 64 karakterden uzun olan reddediliyor.
+
+**Açık kalanlar** (ADR-0038'de yazılı): saklanan kopyayı hiçbir şey budamıyor;
+silinen notun saklanan sesi silinmiyor; sunucuda değişen ses yeniden
+çekilmiyor; tarayıcıda önbellek bellekte, yani bir oturum sürüyor; ve sync
+sırasında ses hâlâ indirilmiyor, ilk çalma ağ istiyor.

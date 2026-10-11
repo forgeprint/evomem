@@ -28,6 +28,15 @@ class BlobRecordingStore implements RecordingStore {
   /// otherwise.
   final Map<String, RecordingBytes> _held = {};
 
+  /// Copies fetched from the server, by remote identifier.
+  ///
+  /// In memory, so a reload loses them and the next play asks the server
+  /// again. ADR-0029 already says a browser keeps nothing across a reload;
+  /// this does not change that, it only saves asking twice in one session.
+  /// A browser cache that outlived a reload would mean IndexedDB, which is
+  /// a dependency and a quota to answer for.
+  final Map<String, RecordingBytes> _kept = {};
+
   @override
   Future<String> newTarget() async {
     // Ignored by the recorder. Returned anyway so the caller has one shape
@@ -59,6 +68,15 @@ class BlobRecordingStore implements RecordingStore {
 
   @override
   Future<RecordingBytes?> read(String handle) async => _held[handle];
+
+  @override
+  Future<void> keep(String remoteId, RecordingBytes recording) async {
+    if (remoteId.isEmpty || !canKeep(recording.mediaType)) return;
+    _kept[remoteId] = recording;
+  }
+
+  @override
+  Future<RecordingBytes?> kept(String remoteId) async => _kept[remoteId];
 
   @override
   Future<void> remove(String handle) async {
