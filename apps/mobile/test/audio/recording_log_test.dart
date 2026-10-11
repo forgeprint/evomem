@@ -133,6 +133,12 @@ class UnusableStore implements RecordingStore {
 
   @override
   Future<void> remove(String handle) async {}
+
+  @override
+  Future<void> keep(String remoteId, RecordingBytes recording) async {}
+
+  @override
+  Future<RecordingBytes?> kept(String remoteId) async => null;
 }
 
 void main() {

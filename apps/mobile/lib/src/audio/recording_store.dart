@@ -44,6 +44,23 @@ abstract interface class RecordingStore {
 
   /// Forgets a recording.
   Future<void> remove(String handle);
+
+  /// Keeps a copy of a recording that came from the server, under the
+  /// note's [remoteId].
+  ///
+  /// Keyed by the remote identifier and not written into the note, because
+  /// the note's metadata is pushed to the server as it stands: a local
+  /// handle put there would be sent up and would overwrite the path the
+  /// device that made the recording wrote. This cache is this device's
+  /// business and nothing syncs it.
+  ///
+  /// Silently keeps nothing when the type cannot be read back as itself;
+  /// see [canKeep]. Failing here would turn a cache miss into a playback
+  /// failure, and the bytes being played are already in hand.
+  Future<void> keep(String remoteId, RecordingBytes recording);
+
+  /// The copy kept for [remoteId], or null when there is none.
+  Future<RecordingBytes?> kept(String remoteId);
 }
 
 /// Plays back a recording this device still holds.
@@ -104,28 +121,74 @@ String? playbackRefusal(String mediaType, {required bool onApplePlatform}) {
   return null;
 }
 
-/// The filename extension to give [mediaType] when writing it out to play.
+/// The media types this system writes, and the extension each gets on disk.
 ///
 /// AVFoundation decides what a local file is from its extension, and gets it
 /// wrong — or refuses — without one: a valid AAC-LC m4a handed over with no
 /// extension failed with CoreMedia err=-12864 on an iOS 27 simulator
 /// (2026-10-10). So the extension is chosen here rather than left to chance.
 ///
-/// The types are the ones this system actually produces and stores: `shared/audio`
-/// maps what an upload may declare, a phone records m4a and a browser webm
-/// (ADR-0029, ADR-0016). Anything else falls back to the phone's own format,
-/// because a wrong extension is no worse than none and the common case is a
-/// recording this app made.
+/// These are the types that actually occur: `shared/audio` maps what an
+/// upload may declare, a phone records m4a and a browser webm (ADR-0029,
+/// ADR-0016).
+const _extensionFor = <String, String>{
+  'audio/mp4': '.m4a',
+  'audio/m4a': '.m4a',
+  'audio/x-m4a': '.m4a',
+  'audio/aac': '.aac',
+  'audio/mpeg': '.mp3',
+  'audio/mp3': '.mp3',
+  'audio/wav': '.wav',
+  'audio/x-wav': '.wav',
+  'audio/wave': '.wav',
+  'audio/ogg': '.ogg',
+  'audio/opus': '.ogg',
+  'audio/webm': '.webm',
+};
+
+/// What a file with each extension holds, for reading a kept copy back.
+///
+/// Not the exact string that was kept: `audio/x-m4a` comes back as
+/// `audio/mp4`. They are the same container, and the one rule that reads
+/// the type — [playbackRefusal] — only asks whether it is WebM. Keeping the
+/// original spelling would mean a sidecar file for no gain anyone could
+/// hear.
+const _typeFor = <String, String>{
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.webm': 'audio/webm',
+};
+
+String _bare(String mediaType) =>
+    mediaType.split(';').first.trim().toLowerCase();
+
+/// The filename extension to give [mediaType] when writing it out to play.
+///
+/// Anything unrecognised falls back to the phone's own format, because a
+/// wrong extension is no worse than none and the common case is a recording
+/// this app made. That fallback is why [canKeep] exists: a file kept under
+/// a guessed extension would be read back as something it is not.
 String playbackExtension(String mediaType) =>
-    switch (mediaType.split(';').first.trim().toLowerCase()) {
-      'audio/mp4' || 'audio/m4a' || 'audio/x-m4a' => '.m4a',
-      'audio/aac' => '.aac',
-      'audio/mpeg' || 'audio/mp3' => '.mp3',
-      'audio/wav' || 'audio/x-wav' || 'audio/wave' => '.wav',
-      'audio/ogg' || 'audio/opus' => '.ogg',
-      'audio/webm' => '.webm',
-      _ => '.m4a',
-    };
+    _extensionFor[_bare(mediaType)] ?? '.m4a';
+
+/// Whether a recording of [mediaType] can be kept and read back as itself.
+///
+/// False for a type this system does not write. [playbackExtension] guesses
+/// `.m4a` for those, so keeping one would hand back bytes labelled
+/// `audio/mp4` that are not — and on an Apple platform
+/// [playbackRefusal] would then stay silent about audio it cannot play.
+bool canKeep(String mediaType) => _extensionFor.containsKey(_bare(mediaType));
+
+/// What a kept file with [extension] holds, or null when nothing kept here
+/// has that extension.
+String? keptMediaType(String extension) => _typeFor[extension.toLowerCase()];
+
+/// The extensions a kept copy can have, for finding one without knowing
+/// what type it was.
+Iterable<String> get keptExtensions => _typeFor.keys;
 
 /// How this build plays a recording back. A test overrides it.
 final recordingPlayerProvider = Provider<RecordingPlayer>(

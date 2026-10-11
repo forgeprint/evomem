@@ -490,6 +490,22 @@ döküm, dağıtım ve gerçek dünya denemeleri.
   değil. stdout protokolün; sunucunun kendisi hakkında söylediği her şey
   stderr'e gider.
 
+- **Saklanan ses kopyasını hiçbir şey budamıyor.** Çekilen her kayıt çalındığı
+  anda cihazda ikinci bir kopya oluyor; silinen notun kopyası da silinmiyor
+  ve sunucuda değişen ses yeniden çekilmiyor. Tarayıcıda önbellek bellekte,
+  yani bir oturum sürüyor. Sync sırasında ses indirilmiyor: ilk çalma ağ
+  ister. → ADR-0038
+
+- **`main` korumalı.** Zorunlu check `go`/`flutter`/`crosscheck`/`dco`, strict,
+  doğrusal geçmiş, force-push ve silme kapalı. Doğrudan push edilemez, PR
+  gerekir; yönetici olarak atlayabilirsin (`enforce_admins: false`). Klon
+  başına bir kez: `git config core.hooksPath .githooks`, yoksa commitler
+  imzasız çıkar ve `dco` PR'ı reddeder.
+
+- **DCO GitHub App hâlâ kurulu.** `dco` workflow'uyla aynı şeyi iki kez
+  söylüyorlar; yalnızca `dco` zorunlu. Kaldırmak kullanıcıda: organizasyon
+  ayarları → GitHub Apps.
+
 - **`apps/mobile/.github/` hiç çalışmıyor.** GitHub `.github/`'ı yalnızca
   depo kökünde okur; oradaki `workflows/ci.yml` ve `dependabot.yml` ab8937f'ten
   beri ölü. Kötüsü: eylemleri commit SHA'sıyla sabitleyen kopya **o**, koşan

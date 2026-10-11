@@ -81,19 +81,23 @@ class _PlayRecordingButtonState extends ConsumerState<PlayRecordingButton> {
     }
   }
 
-  /// The bytes, from this device if it still has them and from the server
-  /// if it does not.
+  /// The bytes, from this device if it has them and from the server if it
+  /// does not — and kept afterwards, so it only has to be fetched once.
   ///
-  /// The device's copy is the only one before a sync, and after one the
-  /// server's outlives a reload — which is why the endpoint exists.
+  /// Three places, in this order. The recording this device made, which is
+  /// the only copy before a sync. The copy kept from an earlier fetch,
+  /// which is what makes a note that came from another device play with no
+  /// network. Then the server, whose copy outlives a reload — which is why
+  /// the endpoint exists.
   Future<RecordingBytes?> _find() async {
     final log = ref.read(logbookProvider.notifier);
+    final store = ref.read(recordingStoreProvider);
 
     final handle = _handle;
     if (handle != null) {
-      final local = await ref.read(recordingStoreProvider).read(handle);
+      final local = await store.read(handle);
       if (local != null) return local;
-      log.info('playback', 'no local bytes; asking the server');
+      log.info('playback', 'no local bytes; looking for a kept copy');
     }
 
     final remoteId = widget.note.remoteId;
@@ -101,6 +105,10 @@ class _PlayRecordingButtonState extends ConsumerState<PlayRecordingButton> {
       log.warn('playback', 'the recording is gone and was never synced');
       return null;
     }
+
+    final kept = await store.kept(remoteId);
+    if (kept != null) return kept;
+    log.info('playback', 'no kept copy; asking the server');
 
     final settings = await ref.read(serverSettingsProvider.future);
     if (settings.url.isEmpty || settings.token.isEmpty) {
@@ -128,10 +136,15 @@ class _PlayRecordingButtonState extends ConsumerState<PlayRecordingButton> {
         );
         return null;
       }
-      return RecordingBytes(
+      final recording = RecordingBytes(
         response.bodyBytes,
         response.headers['content-type'] ?? 'application/octet-stream',
       );
+      // Kept before it is played, so a note from another device plays
+      // offline from here on. The bytes are returned either way: keeping
+      // is a convenience and its failure is not this playback's problem.
+      await store.keep(remoteId, recording);
+      return recording;
     } on Object catch (e) {
       log.error('playback', 'could not reach the server for it', e);
       return null;
