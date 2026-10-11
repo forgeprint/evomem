@@ -27,9 +27,8 @@ void main() {
         // Either the shared widget or the hand-written IconButton the
         // older screens use; what matters is that the app bar has a
         // leading control and that it goes somewhere.
-        final appBarLeading = RegExp(
-          r'appBar: AppBar\([\s\S]{0,400}?leading: ',
-        ).hasMatch(source);
+        final appBarLeading = RegExp(r'appBar: AppBar\([\s\S]{0,400}?leading: ')
+            .hasMatch(source);
         expect(
           appBarLeading,
           isTrue,

@@ -23,7 +23,8 @@ void main() {
       expect(
         response.body,
         isNot('küme testi'),
-        reason: 'if this ever passes, the http package changed its default '
+        reason:
+            'if this ever passes, the http package changed its default '
             'and the whole guard can go',
       );
       expect(utf8Body(response), 'küme testi');
@@ -50,10 +51,11 @@ void main() {
 
     test('a malformed byte does not blank the whole reply', () {
       // One stray byte in the middle of otherwise fine text.
-      final response = http.Response.bytes(
-        [...utf8.encode('before '), 0xC3, ...utf8.encode(' after')],
-        200,
-      );
+      final response = http.Response.bytes([
+        ...utf8.encode('before '),
+        0xC3,
+        ...utf8.encode(' after'),
+      ], 200);
 
       final body = utf8Body(response);
       expect(body, contains('before'));

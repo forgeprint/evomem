@@ -151,10 +151,8 @@ void main() {
   });
 
   /// What is still in the recordings directory.
-  List<String> recordingsLeft() => recordings
-      .listSync()
-      .map((e) => e.path.split('/').last)
-      .toList();
+  List<String> recordingsLeft() =>
+      recordings.listSync().map((e) => e.path.split('/').last).toList();
 
   ProviderContainer containerWith(VoiceRecorder recorder) {
     final container = ProviderContainer(

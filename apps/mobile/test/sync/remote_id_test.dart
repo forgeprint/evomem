@@ -554,9 +554,6 @@ void main() {
     // (Other requests in this list are tombstones left by earlier tests in
     // this file, which share one database file.)
     expect(server.putBodies, hasLength(1));
-    expect(
-      server.paths,
-      contains('/notes/01M4JXXXXXXXXXXXXXXXXXXXXX'),
-    );
+    expect(server.paths, contains('/notes/01M4JXXXXXXXXXXXXXXXXXXXXX'));
   });
 }

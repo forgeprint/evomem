@@ -23,7 +23,8 @@ void main() {
       expect(
         refusal,
         contains('still plays in a browser'),
-        reason: 'a refusal that does not say where it does work is half an '
+        reason:
+            'a refusal that does not say where it does work is half an '
             'answer',
       );
     });

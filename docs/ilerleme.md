@@ -3614,3 +3614,13 @@ söyledi: *"VAD filter removed 00:10.055 of audio"*.
 **Açık kalan:** başarısızlık "bekliyor" işaretini koruyup sonsuza kadar
 yeniden deniyor (ADR-0016'nın geçici hatalar için seçimi). Sesi yok edilmiş
 iki not her çalıştırmada düşecek.
+
+### CI düştü: `dart format`
+
+Push sonrası CI'ın `flutter` işi düştü — testler değil, **biçimlendirme**.
+Bugün yazdığım yedi test dosyası `dart format`'tan geçmemişti. Go tarafında
+her turda `gofmt -l` çalıştırıyordum, Dart karşılığını hiç çalıştırmamışım;
+`flutter analyze` bunu yakalamıyor çünkü biçim bir analiz kuralı değil.
+Kapıya eklenmesi gereken komut:
+
+    cd apps/mobile && dart format --output=none --set-exit-if-changed .

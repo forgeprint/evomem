@@ -27,14 +27,19 @@ class FakePull {
 
       final page = switch (request.uri.path) {
         '/sync/notes' => _after(notes, since, sinceId, (n) => n['updated_at']!),
-        '/sync/deletions' =>
-          _after(deletions, since, sinceId, (d) => d['deleted_at']!),
+        '/sync/deletions' => _after(
+          deletions,
+          since,
+          sinceId,
+          (d) => d['deleted_at']!,
+        ),
         _ => <Map<String, String>>[],
       };
 
       final key = request.uri.path == '/sync/notes' ? 'notes' : 'deletions';
-      final timeField =
-          request.uri.path == '/sync/notes' ? 'updated_at' : 'deleted_at';
+      final timeField = request.uri.path == '/sync/notes'
+          ? 'updated_at'
+          : 'deleted_at';
 
       final body = <String, Object?>{
         key: page
@@ -60,10 +65,7 @@ class FakePull {
         // string — a client that stored one would start from the beginning.
         'cursor': page.isEmpty
             ? {'since': since, 'since_id': sinceId}
-            : {
-                'since': page.last[timeField],
-                'since_id': page.last['id'],
-              },
+            : {'since': page.last[timeField], 'since_id': page.last['id']},
       };
 
       request.response.headers.contentType = ContentType.json;
@@ -78,10 +80,11 @@ class FakePull {
     String sinceId,
     String Function(Map<String, String>) at,
   ) {
-    final sorted = [...rows]..sort((a, b) {
-      final byTime = at(a).compareTo(at(b));
-      return byTime != 0 ? byTime : a['id']!.compareTo(b['id']!);
-    });
+    final sorted = [...rows]
+      ..sort((a, b) {
+        final byTime = at(a).compareTo(at(b));
+        return byTime != 0 ? byTime : a['id']!.compareTo(b['id']!);
+      });
     if (since.isEmpty) return sorted;
     return sorted
         .where(
@@ -176,10 +179,7 @@ void main() {
 
     // Somebody deletes it on the server.
     server.notes.clear();
-    server.deletions.add({
-      'id': id,
-      'deleted_at': '2026-10-10T10:00:00.000Z',
-    });
+    server.deletions.add({'id': id, 'deleted_at': '2026-10-10T10:00:00.000Z'});
 
     final result = await pullWith(server);
 
@@ -207,10 +207,7 @@ void main() {
     await pullWith(server);
 
     server.notes.clear();
-    server.deletions.add({
-      'id': id,
-      'deleted_at': '2026-10-10T10:00:00.000Z',
-    });
+    server.deletions.add({'id': id, 'deleted_at': '2026-10-10T10:00:00.000Z'});
     await pullWith(server);
 
     expect(

@@ -38,6 +38,9 @@ This file defines the strict architectural constraints, coding standards, and bu
 * Fetch dependencies: `flutter pub get`
 * Run development build: `flutter run`
 * Execute mobile tests: `flutter test`
+* **Check formatting: `dart format --output=none --set-exit-if-changed .`** —
+  CI fails on this and `flutter analyze` does not catch it: format is not an
+  analysis rule. The Go side's equivalent is `gofmt -l`.
 * Trigger code generation (if drift/freezed is used): `dart run build_runner build --delete-conflicting-outputs`
 
 ## 4. Coding & Database Standards

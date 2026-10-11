@@ -193,20 +193,22 @@ void main() {
     );
   });
 
-  test('the chosen project is always offered, even if nothing remembers it',
-      () async {
-    final container = containerWith(FakeProjectMemory());
+  test(
+    'the chosen project is always offered, even if nothing remembers it',
+    () async {
+      final container = containerWith(FakeProjectMemory());
 
-    // Nothing has been remembered and no note is filed under it; it is
-    // still what the app is showing, so the picker has to say so.
-    container.read(currentProjectProvider.notifier).select('simdi');
-    await settle();
+      // Nothing has been remembered and no note is filed under it; it is
+      // still what the app is showing, so the picker has to say so.
+      container.read(currentProjectProvider.notifier).select('simdi');
+      await settle();
 
-    expect(
-      (await container.read(projectsProvider.future)).map((p) => p.projectId),
-      contains('simdi'),
-    );
-  });
+      expect(
+        (await container.read(projectsProvider.future)).map((p) => p.projectId),
+        contains('simdi'),
+      );
+    },
+  );
 
   test('a name is offered once, with its real count', () async {
     final memory = FakeProjectMemory();
