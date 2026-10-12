@@ -179,6 +179,18 @@ const (
 
 	// MetaTranscriptionAttemptedAt is when that attempt was made, RFC 3339.
 	MetaTranscriptionAttemptedAt = "transcription_attempted_at"
+
+	// MetaTranscriptionAbandoned marks a note that will not be transcribed,
+	// because the attempt failed for a reason that will not change on its
+	// own. MetaAwaitingTranscription is cleared, so no run picks it up
+	// again. MetaTranscriptionError says why. See ADR-0039.
+	MetaTranscriptionAbandoned = "transcription_abandoned"
+
+	// MetaNothingSaid marks a note whose recording was transcribed and had
+	// no speech in it. Not a failure: it is the answer. The note keeps the
+	// description it was created with, because an empty content is not a
+	// note. See ADR-0039.
+	MetaNothingSaid = "transcription_nothing_said"
 )
 
 // Tainted reports whether this note's content came from outside the project.
@@ -280,6 +292,62 @@ func (n *Note) ApplyTranscript(text, source string, at time.Time) {
 	delete(n.Metadata, MetaAwaitingTranscription)
 	delete(n.Metadata, MetaTranscriptionError)
 	delete(n.Metadata, MetaTranscriptionAttemptedAt)
+}
+
+// AbandonTranscription records that this note will not be transcribed.
+//
+// For a failure that will not change by being retried: the audio is not
+// anywhere this machine can reach it. The waiting mark is cleared, so the
+// queue empties instead of carrying the same note for ever, and the reason
+// stays on the note. `evomem transcribe -retry <id>` puts it back.
+//
+// The content is untouched: the description the note was created with is
+// still the best thing it has to say (ADR-0039).
+func (n *Note) AbandonTranscription(reason string, at time.Time) {
+	n.SetMeta(MetaTranscriptionError, reason)
+	n.SetMeta(MetaTranscriptionAttemptedAt, at.UTC().Format(time.RFC3339))
+	n.SetMeta(MetaTranscriptionAbandoned, true)
+	delete(n.Metadata, MetaAwaitingTranscription)
+}
+
+// MarkNothingSaid records that the recording was transcribed and held no
+// speech.
+//
+// This is a result, not an error, so no reason is written: there is nothing
+// wrong to report. The waiting mark is cleared because the question has been
+// answered and asking again spends an inference on the same silence.
+//
+// The content stays as it was. A note whose content became an empty string
+// would fail validation, and the description still says what the recording
+// is (ADR-0039).
+func (n *Note) MarkNothingSaid(source string, at time.Time) {
+	n.SetMeta(MetaNothingSaid, true)
+	n.SetMeta(MetaTranscriptionAttemptedAt, at.UTC().Format(time.RFC3339))
+	if source != "" {
+		n.SetMeta(MetaTranscriptionSource, source)
+	}
+	delete(n.Metadata, MetaAwaitingTranscription)
+	delete(n.Metadata, MetaTranscriptionError)
+}
+
+// RetryTranscription puts this note back in the queue.
+//
+// The escape hatch that makes giving up safe: a misconfigured service, or
+// one that was briefly answering nothing, would otherwise abandon notes with
+// no way back. Reports whether anything changed, so a command can say "that
+// note was not waiting on anything" rather than claiming to have done
+// something (ADR-0039).
+func (n *Note) RetryTranscription() bool {
+	_, abandoned := n.Metadata[MetaTranscriptionAbandoned]
+	_, silent := n.Metadata[MetaNothingSaid]
+	if !abandoned && !silent {
+		return false
+	}
+	delete(n.Metadata, MetaTranscriptionAbandoned)
+	delete(n.Metadata, MetaNothingSaid)
+	delete(n.Metadata, MetaTranscriptionError)
+	n.SetMeta(MetaAwaitingTranscription, true)
+	return true
 }
 
 // MarkTranscriptionFailed records why there is still no transcript.

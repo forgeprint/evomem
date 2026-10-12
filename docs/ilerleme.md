@@ -3805,3 +3805,67 @@ düzeltme geçmişi iyileştirmek yerine uzatır. Yayınlanmış geçmiş zaten 
 saklamak için yeniden yazılmıyor; bu da aynı kuralın öteki ucu.
 
 Artık `Status: proposed` olan ADR yok.
+
+### Faz C: kuyruk boşalıyor, dil sabitlenmiyor
+
+Transkripsiyonu **okumak yerine koşturmak** üç notu ortaya çıkardı; ikisi
+"sesi yok", biri "metin gelmedi". İkinci kusur birincisinden kötüydü:
+ADR-0037 boş transkripti zaten *doğru cevap* diye yazmıştı (whisper'ın kendi
+logu: "VAD filter removed 00:10.055 of audio"), yani o not doğru
+cevaplandığı için sonsuza kadar yeniden deneniyordu.
+
+**Üç son var artık, iki değil.** Düştü (yeniden denenir, işaret kalır) ·
+vazgeçildi (ses hiçbir yerde, işaret temizlenir, sebep notta kalır) · içinde
+konuşma yok (servis cevapladı, işaret temizlenir, **hata yazılmaz** çünkü
+bir şey ters gitmedi). Üçünde de içerik korunuyor; notun yaratıldığı
+açıklama hâlâ söyleyebileceği en iyi şey, ve boş içerik doğrulamadan
+geçmiyor. `ErrNoSpeech` bu yüzden var: servis sınırında hâlâ bir hata olmak
+zorunda ama **adlı** bir hata, ki koşu cevabı arızadan ayırabilsin.
+
+**Vazgeçme bir gün bekliyor, ve asıl keyfî kısım bu.** `ErrNoRecording`
+güvenilir biçimde kalıcı değil ve bunu **mevcut bir test yakaladı**:
+kayıt yapmanın olağan yolu iki istek — `/ingest` notu yaratıyor, yükleme
+arkasından geliyor (ADR-0018) — ve arada notun sesi gerçekten hiçbir yerde.
+`ErrNoRecording`'i görür görmez vazgeçen bir koşu, sesi saniyeler ötede olan
+notu terk ederdi; `TestRunKeepsANoteWhoseUploadIsMissing` tam bunu söylemek
+için varmış. `AbandonAfter = 24h`, notun `created_at`'inden sayılıyor.
+Seçilmiş bir sayı, türetilmiş değil — ve ADR-0039'da ölçüm değil hüküm olan
+tek parça diye adlandırıldı.
+
+**`evomem transcribe -retry <id>`**, vazgeçmeyi güvenli kılan şey. Geri
+dönüş olmasa, bir öğleden sonra yanlış yapılandırılmış bir servis
+dokunduğu her notu kalıcı ve sessizce terk ederdi. Tek kimlik, bilerek:
+hepsini geri koyan bir bayrak, bozuk bir partiyi geri alabildiği kolaylıkla
+bir günlük doğru cevabı da geri alırdı.
+
+**Dil artık whisper'ın işi** — kayıtlı bir kararın tersine çevrilmesi, o
+yüzden anahtarlanmadan önce ölçüldü. ADR-0016'nın gerekçesi "dili tahmin
+eden model kimsenin söylemediği şeyin kendinden emin çevirisini döndürür"
+idi. `small` ile, Yelda (tr) ve Albert (en) sesleriyle, bu sistemin
+kodladığı biçimde:
+
+| ses | servis `tr` sabitli | servis `auto` |
+| - | - | - |
+| Türkçe konuşma | doğru | **bayt bayt aynı, doğru** |
+| İngilizce konuşma | `"Bu sefer, bu sefer, …"` tavana kadar | doğru İngilizce |
+| 1 kHz ton | — | boş |
+
+Korkulan arıza gerçek ama **sabitlemeye** ait, tespite değil. ADR-0016'nın
+itirazı genel olarak çürütülmedi, yalnızca `small` için.
+
+**Ölçerken çıkan iki şey.** (1) İstekteki `language` parametresinin bu
+serviste **hiçbir etkisi yok**; aynı ses `language=tr` ile ve onsuz bayt bayt
+aynı dönüyor, dili servisin `WHISPER_LANGUAGE`'ı belirliyor. O yüzden
+`EVOMEM_TRANSCRIPTION_LANGUAGE` compose'dan kaldırıldı ve nedeni yanına
+yazıldı — orada durması, bu yığının sahip olmadığı bir kontrolü iddia
+etmekti. (2) Boş `WHISPER_LANGUAGE` → `auto`, imajın kendi `run.sh`'inden,
+satır 100. Ve compose'da `${WHISPER_LANGUAGE:-}` yazmak gerekiyor,
+`${...:-tr}` değil: `:-` boş değeri de varsayılana düşürdüğü için boş ortam
+değişkeni geçmek dili `tr` bırakıyordu — bunu görmek bir yeniden başlatmaya
+mal oldu.
+
+**Kanıt:** üç yeni test, iki dal devre dışıyken düşüyor, geri koyunca
+geçiyor. Olağan bir hata hâlâ bekliyor ve `abandoned` işaretlenmiyor, yani
+kalıcı durum ayrıştırıldı, her şeyden vazgeçilmedi. Yaşlandırma yardımcısı
+deponun `created_at`'i koruduğunu doğruluyor — `Create` verilen değeri
+tutuyor, `Update` o kolonu hiç yazmıyor ve bu da öyle anlaşıldı.

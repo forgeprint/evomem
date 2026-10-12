@@ -154,13 +154,23 @@ func (s *Service) Transcribe(ctx context.Context, filename string, audio io.Read
 	}
 	text := strings.TrimSpace(reply.Text)
 	if text == "" {
-		// Silence, or a model that heard nothing. Not an error the
-		// service reported, but no transcript either, and a note whose
-		// content became an empty string would fail validation.
-		return "", errors.New("transcribe: the service returned no text")
+		// Silence, or a model that heard nothing. Still an error here,
+		// because a note whose content became an empty string would
+		// fail validation — but a named one, because it is an answer
+		// and not a failure, and the caller has to be able to tell.
+		return "", ErrNoSpeech
 	}
 	return text, nil
 }
+
+// ErrNoSpeech is returned when the service answered and the transcript was
+// empty.
+//
+// Not a failure: it is what a recording with nothing said in it should come
+// back as, and whisper's own log says so — "VAD filter removed 00:10.055 of
+// audio" (ADR-0037). Named so a run can record it on the note as the answer
+// it is, instead of leaving the note waiting and asking again for ever.
+var ErrNoSpeech = errors.New("transcribe: the service returned no text")
 
 func (s *Service) buildForm(filename string, audio io.Reader) (io.Reader, string, error) {
 	var buf strings.Builder

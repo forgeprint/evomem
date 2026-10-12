@@ -3,10 +3,12 @@ package transcribe
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
 
+	"github.com/forgeprint/evomem/shared/audio"
 	"github.com/forgeprint/evomem/shared/database"
 	"github.com/forgeprint/evomem/shared/models"
 )
@@ -15,6 +17,22 @@ import (
 // timer, so there is no reason for one to take an hour; what it does not
 // reach, the next one does.
 const DefaultBatch = 20
+
+// AbandonAfter is how long a note with no reachable recording keeps being
+// retried before the run gives up on it.
+//
+// Not zero, and this is the reason: the ordinary way to make a recording is
+// two requests — `/ingest` creates the note, the upload follows (ADR-0018).
+// Between them the note is waiting and its audio genuinely is nowhere, so a
+// run that gave up the moment it saw ErrNoRecording would abandon notes
+// whose audio was about to arrive. The phone also creates the note first and
+// uploads during the same sync.
+//
+// A chosen duration, not a derived one: a day is far longer than any upload
+// that is still coming and far shorter than the days the two notes on this
+// machine spent failing on every run. ADR-0039 names it as the arbitrary
+// part of this decision.
+const AbandonAfter = 24 * time.Hour
 
 // A Fetcher produces the audio behind one note.
 //
@@ -50,6 +68,14 @@ type Result struct {
 	// Skipped is how many could not be attempted at all, because no
 	// fetcher knows how to reach their audio.
 	Skipped int
+
+	// Abandoned is how many stopped waiting because their audio is not
+	// anywhere this machine can reach, which retrying does not change.
+	Abandoned int
+
+	// Silent is how many were transcribed and held no speech. Not
+	// failures: that is the answer.
+	Silent int
 }
 
 // Run transcribes what is waiting.
@@ -97,10 +123,27 @@ func Run(
 			continue
 		}
 
-		audio, filename, err := fetcher.Fetch(ctx, ref)
+		recording, filename, err := fetcher.Fetch(ctx, ref)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return result, ctxErr
+			}
+			// There is no recording here, and once the note is
+			// old enough there never will be: nothing on this
+			// disk is named after it and nothing is going to
+			// write it. Retrying asks the same question for
+			// ever, so the note stops waiting and says why.
+			//
+			// AbandonAfter is why this is not immediate: a note
+			// created seconds ago is still inside the window
+			// between `/ingest` and its upload (ADR-0039).
+			if errors.Is(err, audio.ErrNoRecording) &&
+				time.Since(note.CreatedAt) > AbandonAfter {
+				result.Abandoned++
+				if err := abandon(ctx, db, note, err.Error(), opts, log); err != nil {
+					return result, err
+				}
+				continue
 			}
 			result.Failed++
 			if err := fail(ctx, db, note, err.Error(), opts, log); err != nil {
@@ -109,10 +152,20 @@ func Run(
 			continue
 		}
 
-		text, err := svc.Transcribe(ctx, filename, bytes.NewReader(audio))
+		text, err := svc.Transcribe(ctx, filename, bytes.NewReader(recording))
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return result, ctxErr
+			}
+			// The service answered and there was nothing said. An
+			// answer, not a failure — and asking again spends an
+			// inference on the same silence (ADR-0039).
+			if errors.Is(err, ErrNoSpeech) {
+				result.Silent++
+				if err := nothingSaid(ctx, db, note, svc.Endpoint(), opts, log); err != nil {
+					return result, err
+				}
+				continue
 			}
 			result.Failed++
 			if err := fail(ctx, db, note, err.Error(), opts, log); err != nil {
@@ -163,6 +216,47 @@ func reach(n *models.Note, fetchers map[models.SourceType]Fetcher) (Fetcher, str
 	// ErrNoRecording, so it is recorded on the note rather than skipped.
 	f, ok := fetchers[models.SourceAudio]
 	return f, n.ID, "recordings on this disk", ok
+}
+
+// abandon records that this note will not be transcribed, and stops it
+// waiting.
+func abandon(
+	ctx context.Context,
+	db *database.DB,
+	note *models.Note,
+	reason string,
+	opts Options,
+	log io.Writer,
+) error {
+	fmt.Fprintf(log, "%s  given up on: %s\n", note.ID, reason)
+	if opts.DryRun {
+		return nil
+	}
+	note.AbandonTranscription(reason, time.Now())
+	if err := db.Update(ctx, note); err != nil {
+		return fmt.Errorf("recording that %s was given up on: %w", note.ID, err)
+	}
+	return nil
+}
+
+// nothingSaid records that the recording held no speech.
+func nothingSaid(
+	ctx context.Context,
+	db *database.DB,
+	note *models.Note,
+	source string,
+	opts Options,
+	log io.Writer,
+) error {
+	fmt.Fprintf(log, "%s  nothing said in it\n", note.ID)
+	if opts.DryRun {
+		return nil
+	}
+	note.MarkNothingSaid(source, time.Now())
+	if err := db.Update(ctx, note); err != nil {
+		return fmt.Errorf("recording that nothing was said in %s: %w", note.ID, err)
+	}
+	return nil
 }
 
 // fail records on the note why there is still no transcript.

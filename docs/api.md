@@ -414,7 +414,11 @@ nobody said.
 
 ```sh
 export EVOMEM_TRANSCRIPTION_URL=http://127.0.0.1:8001
-export EVOMEM_TRANSCRIPTION_LANGUAGE=tr
+# Deliberately not set in compose.yaml: hwdsl2/whisper-server ignores the
+# request's language and decides from its own WHISPER_LANGUAGE, which is
+# empty there so it detects per recording (ADR-0039). Another server that
+# honours the parameter would use this.
+# export EVOMEM_TRANSCRIPTION_LANGUAGE=tr
 export EVOMEM_TELEGRAM_BOT_TOKEN=...   # to download what Telegram holds
 
 evomem transcribe -dry-run   # what it would pick up
