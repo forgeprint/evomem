@@ -506,13 +506,6 @@ döküm, dağıtım ve gerçek dünya denemeleri.
   söylüyorlar; yalnızca `dco` zorunlu. Kaldırmak kullanıcıda: organizasyon
   ayarları → GitHub Apps.
 
-- **`apps/mobile/.github/` hiç çalışmıyor.** GitHub `.github/`'ı yalnızca
-  depo kökünde okur; oradaki `workflows/ci.yml` ve `dependabot.yml` ab8937f'ten
-  beri ölü. Kötüsü: eylemleri commit SHA'sıyla sabitleyen kopya **o**, koşan
-  kök `ci.yml` ise oynatılabilir etiket kullanıyor (`@v7`, `@v2`) — `release.yml`
-  ise doğru yapıyor. Kökte dependabot yapılandırması da yok. Düzeltme kullanıcı
-  kararını bekliyor.
-
 ## Yeni oturuma nasıl başlanır
 
 1. Bu dosyayı oku.

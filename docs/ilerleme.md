@@ -3743,3 +3743,33 @@ düşer. remote_id sunucudan geldiği için yola hiç konmuyor:
 silinen notun saklanan sesi silinmiyor; sunucuda değişen ses yeniden
 çekilmiyor; tarayıcıda önbellek bellekte, yani bir oturum sürüyor; ve sync
 sırasında ses hâlâ indirilmiyor, ilk çalma ağ istiyor.
+
+### Faz A: sabitleme tamamlandı, ve sabitlemeyi izleyen şey kuruldu
+
+Grafiğin bulduğu kusurun düzeltmesi. Koşan kök `ci.yml` eylemleri
+oynatılabilir etiketle çağırıyordu (`@v7`, `@v2`), `release.yml` ise commit
+SHA'sıyla — yani aynı deponun iki yarısı iki farklı standartta koşuyordu. Üç
+eylemin de etiketi API'den SHA'ya çözüldü (ezbere yazılmadı) ve çıkan
+değerler, ölü `apps/mobile/.github/workflows/ci.yml`'in taşıdıklarıyla
+birebir aynı: o dosya doğruydu, yalnızca hiç koşmuyordu.
+
+    actions/checkout         v7.0.1   3d3c42e5aac5ba805825da76410c181273ba90b1
+    actions/setup-go         v7.0.0   b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+    subosito/flutter-action  v2.23.0  1a449444c387b1966244ae4d4f8c696479add0b2
+
+**Kökte `dependabot.yml`.** Sabitlemenin öteki yarısı: hiçbir şey kendiliğinden
+oynamıyorsa, güncellemeleri — güvenlik yamaları dahil — CI'dan geçmek zorunda
+PR'lar olarak öneren bir şey olmalı; yoksa sabitleme sessizce "hiç
+güncellenmedi"ye dönüşür. Üç ekosistem: `gomod` kökte (vendor'lı olduğu için
+kabul edilen güncelleme elle `go mod vendor` istiyor, bu yoruma yazıldı), `pub`
+`/apps/mobile`'da, `github-actions` kökte. Ekosistem adları ve
+`github-actions` için `/` değeri GitHub'ın kendi referansından alındı
+(2026-10-11), ezbere yazılmadı.
+
+**Ölü iki dosya silindi:** `apps/mobile/.github/workflows/ci.yml` ve
+`apps/mobile/.github/dependabot.yml`. GitHub `.github/`'ı yalnızca depo
+kökünde okur, yani ab8937f'ten beri bir kez bile koşmamışlardı.
+
+Üç YAML dosyası da yerelde ayrıştırılarak doğrulandı (`ruby -ryaml`); bu
+makinede `yaml` python modülü yok ama Ruby'nin psych'i var, yani workflow'lar
+artık push etmeden önce doğrulanabiliyor.

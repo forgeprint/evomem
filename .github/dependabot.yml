@@ -1,0 +1,36 @@
+# The other half of pinning every version.
+#
+# Nothing in this repository moves on its own: actions are pinned by commit,
+# the Flutter SDK by version, the Go toolchain by version. That is only safe
+# while something proposes the updates, including the security ones, as pull
+# requests CI has to pass. Without this file the pinning quietly becomes
+# "never updated".
+#
+# This is at the repository root because that is the only place GitHub reads
+# it. A copy under apps/mobile/ was committed in ab8937f and never ran once.
+#
+# Ecosystem identifiers and the `/` for github-actions are from GitHub's own
+# reference, read 2026-10-11:
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+version: 2
+updates:
+  # The Go module, at the root. Vendored (ADR-0002), so an accepted update
+  # needs `go mod vendor` before it builds — the pull request says what
+  # changed and the vendor directory is updated by hand.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+
+  # The Flutter app. Its pubspec is not at the root.
+  - package-ecosystem: pub
+    directory: /apps/mobile
+    schedule:
+      interval: weekly
+
+  # The actions in .github/workflows. GitHub's reference says to use `/` for
+  # this ecosystem; it then looks in /.github/workflows itself.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
