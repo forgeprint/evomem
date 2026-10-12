@@ -43,12 +43,27 @@ jobs:
           set -euo pipefail
 
           # A merge commit has more than one parent and is not written by a
-          # person, so it is not asked for a sign-off. The whole check is done
-          # in jq, which compares the trailer as a literal string: a name can
-          # contain characters a regular expression would read as syntax.
+          # person, so it is not asked for a sign-off. Neither is a commit
+          # whose GitHub author is a bot: dependabot cannot sign off, and
+          # without this every dependency update — security fixes included —
+          # is blocked until somebody with admin rights overrides the check,
+          # which turns both gates off at once. That is how this was found.
+          #
+          # `.author.type`, the GitHub account GitHub resolved, rather than
+          # the name in the commit, which anybody can write. It is not
+          # airtight: accounts are matched by email, so a commit sent with
+          # the bot's noreply address may resolve to it. The DCO is an
+          # attestation and not an access control — a person can write
+          # somebody else's name in the trailer too — so matching the
+          # account is proportionate and the limit is said out loud here.
+          #
+          # The whole check is done in jq, which compares the trailer as a
+          # literal string: a name can contain characters a regular
+          # expression would read as syntax.
           gh api --paginate "repos/$REPO/pulls/$PR/commits?per_page=100" --jq '
             .[]
             | select((.parents | length) < 2)
+            | select((.author.type // "") != "Bot")
             | . as $c
             | ($c.commit.author.name // "")  as $n
             | ($c.commit.author.email // "") as $e

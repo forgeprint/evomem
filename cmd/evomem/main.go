@@ -57,7 +57,7 @@ usage:
   evomem pull
   evomem restore [-confirm]
   evomem sync-status
-  evomem transcribe [-batch <n>] [-dry-run] [-timeout <d>]
+  evomem transcribe [-batch <n>] [-dry-run] [-timeout <d>] [-retry <id>]
   evomem audio  [-convert]
   evomem archive [-months <n>] [-project <id>] [-vacuum] [-dry-run]
 

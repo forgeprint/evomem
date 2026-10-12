@@ -66,11 +66,15 @@ services:
       # here it is the `whisper` service below. No token: it is not published
       # to the host and only this network can reach it.
       EVOMEM_TRANSCRIPTION_URL: ${EVOMEM_TRANSCRIPTION_URL:-http://whisper:9000}
-      # Set, not guessed. ADR-0016: a model left to work out the language of
-      # short Turkish audio returns a confident translation of something
-      # nobody said. The cost is that an English voice note is read as
-      # Turkish; change this when that becomes the common case.
-      EVOMEM_TRANSCRIPTION_LANGUAGE: ${EVOMEM_TRANSCRIPTION_LANGUAGE:-tr}
+      # Deliberately unset, because with this service it does nothing.
+      #
+      # evomem sends `language` with the request and hwdsl2/whisper-server
+      # ignores it: the same audio comes back byte-identical with and
+      # without it, while the service's own WHISPER_LANGUAGE decides
+      # (measured 2026-10-12, ADR-0039). Setting it here would claim a
+      # control this stack does not have. The language is set on the
+      # `whisper` service below, and another implementation of the same API
+      # may well honour this instead.
     volumes:
       # The recordings. The notes are in PostgreSQL now; what still belongs
       # beside the process is the audio a note stands for (ADR-0018).
@@ -103,7 +107,19 @@ services:
       # at a speed that tells on a CPU. Downloaded on first start and
       # cached in the volume.
       WHISPER_MODEL: ${WHISPER_MODEL:-small}
-      WHISPER_LANGUAGE: ${WHISPER_LANGUAGE:-tr}
+      # The language whisper decides for itself, unless somebody names one.
+      #
+      # `${VAR:-}` and not `${VAR:-tr}`: the image's own run.sh turns an
+      # empty value into `auto` (line 100, read from the running container
+      # on 2026-10-12). Set WHISPER_LANGUAGE in .env to pin it to one
+      # language again.
+      #
+      # This reverses the part of ADR-0016 that set the language rather than
+      # letting it be guessed, and ADR-0039 records why, with measurements:
+      # `small` reads this project's Turkish test sentence identically
+      # whether the language is given or not, and a Turkish-pinned service
+      # turns English speech into Turkish nonsense.
+      WHISPER_LANGUAGE: ${WHISPER_LANGUAGE:-}
       WHISPER_THREADS: ${WHISPER_THREADS:-4}
     volumes:
       # The model, so it is fetched once rather than on every start.

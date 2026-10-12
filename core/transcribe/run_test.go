@@ -3,11 +3,13 @@ package transcribe
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/forgeprint/evomem/shared/audio"
 	"github.com/forgeprint/evomem/shared/database"
@@ -69,6 +71,40 @@ func serviceReturning(t *testing.T, text string) *Service {
 }
 
 func quote(s string) string { return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"` }
+
+// agedVoiceNote is a voice note that has been waiting long enough that an
+// upload is no longer on its way.
+//
+// AbandonAfter exists for the window between `/ingest` and the upload that
+// follows it, so a test about giving up has to be outside that window or it
+// is testing the window instead. Back-dated before Create, because Create
+// keeps a created_at it is given and Update does not write that column at
+// all — which an earlier version of this helper found out by asserting it.
+func agedVoiceNote(t *testing.T, db *database.DB, fileID string) *models.Note {
+	t.Helper()
+	n := &models.Note{
+		ProjectID:  "evomem",
+		Content:    "Voice message, 0:14",
+		SourceType: models.SourceTelegram,
+		CreatedAt:  time.Now().Add(-2 * AbandonAfter),
+	}
+	n.MarkTainted("telegram")
+	n.SetMeta(models.MetaAwaitingTranscription, true)
+	if fileID != "" {
+		n.SetMeta("telegram_file_id", fileID)
+	}
+	if err := db.Create(context.Background(), n); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := db.Get(context.Background(), n.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(stored.CreatedAt) <= AbandonAfter {
+		t.Fatalf("the store did not keep the back-dated created_at: %s", stored.CreatedAt)
+	}
+	return stored
+}
 
 func TestRunWritesTheTranscriptAndClearsTheMark(t *testing.T) {
 	db := openStore(t)
@@ -309,5 +345,189 @@ func TestARecordingUploadedAgainstAnyNoteIsTranscribed(t *testing.T) {
 		if err := db.Delete(ctx, n.ID); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+// The failure ADR-0016 chose to retry for ever, which ADR-0039 separates
+// out: the recording is not on this disk and nothing is going to write it,
+// so asking again asks the same question until somebody notices. Two notes
+// on this machine had been failing on every run for days.
+func TestARecordingThatIsNowhereIsGivenUpOn(t *testing.T) {
+	db := openStore(t)
+	note := agedVoiceNote(t, db, "")
+	ctx := context.Background()
+
+	result, err := Run(ctx, db, serviceReturning(t, "unused"),
+		map[models.SourceType]Fetcher{
+			models.SourceAudio: fakeFetcher{
+				err: fmt.Errorf("%w: %s", audio.ErrNoRecording, note.ID),
+			},
+		}, Options{}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Abandoned != 1 || result.Failed != 0 {
+		t.Fatalf("result = %+v", result)
+	}
+
+	stored, err := db.Get(ctx, note.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The queue empties. This is the whole point: a note nothing can
+	// transcribe must stop being asked about.
+	if stored.AwaitingTranscription() {
+		t.Error("a note whose audio is nowhere is still waiting")
+	}
+	if v, _ := stored.Metadata[models.MetaTranscriptionAbandoned].(bool); !v {
+		t.Error("it was not marked as given up on")
+	}
+	// Why, on the note, so the reason outlives any log.
+	if reason, _ := stored.MetaString(models.MetaTranscriptionError); !strings.Contains(reason, "no recording") {
+		t.Errorf("reason = %q", reason)
+	}
+	// The description is still the best thing the note has to say.
+	if stored.Content != "Voice message, 0:14" {
+		t.Errorf("content = %q", stored.Content)
+	}
+}
+
+// An ordinary failure is still retried: this separates the permanent case
+// out, it does not give up on everything.
+func TestAnOrdinaryFailureStillKeepsWaiting(t *testing.T) {
+	db := openStore(t)
+	note := voiceNote(t, db, "AwACAgQ")
+	ctx := context.Background()
+
+	if _, err := Run(ctx, db, serviceReturning(t, "unused"),
+		map[models.SourceType]Fetcher{
+			models.SourceTelegram: fakeFetcher{err: errors.New("dial tcp: connection refused")},
+		}, Options{}, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+
+	stored, err := db.Get(ctx, note.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stored.AwaitingTranscription() {
+		t.Error("a transient failure stopped the note waiting")
+	}
+	if _, ok := stored.Metadata[models.MetaTranscriptionAbandoned]; ok {
+		t.Error("a transient failure was treated as permanent")
+	}
+}
+
+// Silence is an answer. ADR-0037 verified that a recording with no speech in
+// it comes back empty and that this is correct — whisper's own log said "VAD
+// filter removed 00:10.055 of audio". Treating it as a failure left the note
+// waiting and spent an inference on the same silence on every run.
+func TestARecordingWithNothingSaidInItStopsWaiting(t *testing.T) {
+	db := openStore(t)
+	note := voiceNote(t, db, "AwACAgQ")
+	ctx := context.Background()
+
+	result, err := Run(ctx, db, serviceReturning(t, "   "),
+		map[models.SourceType]Fetcher{
+			models.SourceTelegram: fakeFetcher{audio: "tone", name: "a.m4a"},
+		}, Options{}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Silent != 1 || result.Failed != 0 || result.Transcribed != 0 {
+		t.Fatalf("result = %+v", result)
+	}
+
+	stored, err := db.Get(ctx, note.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.AwaitingTranscription() {
+		t.Error("a note with nothing said in it is still waiting")
+	}
+	if v, _ := stored.Metadata[models.MetaNothingSaid].(bool); !v {
+		t.Error("it was not marked as holding no speech")
+	}
+	// No reason is written, because nothing went wrong.
+	if reason, ok := stored.MetaString(models.MetaTranscriptionError); ok {
+		t.Errorf("an answer was recorded as an error: %q", reason)
+	}
+	// Which service said so, so a bad batch can be traced.
+	if _, ok := stored.MetaString(models.MetaTranscriptionSource); !ok {
+		t.Error("the service that answered was not recorded")
+	}
+	// An empty content is not a note.
+	if stored.Content != "Voice message, 0:14" {
+		t.Errorf("content = %q", stored.Content)
+	}
+}
+
+// What makes giving up safe. Without this, a service that was misconfigured
+// for an afternoon would have abandoned every note it touched, permanently
+// and silently.
+func TestANoteGivenUpOnCanBePutBack(t *testing.T) {
+	db := openStore(t)
+	note := agedVoiceNote(t, db, "")
+	ctx := context.Background()
+
+	if _, err := Run(ctx, db, serviceReturning(t, "unused"),
+		map[models.SourceType]Fetcher{
+			models.SourceAudio: fakeFetcher{err: audio.ErrNoRecording},
+		}, Options{}, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+
+	stored, err := db.Get(ctx, note.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stored.RetryTranscription() {
+		t.Fatal("a note given up on said there was nothing to put back")
+	}
+	if err := db.Update(ctx, stored); err != nil {
+		t.Fatal(err)
+	}
+
+	// Waiting again, and the previous verdict is gone rather than sitting
+	// beside the new attempt.
+	again, err := db.Get(ctx, note.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !again.AwaitingTranscription() {
+		t.Error("it is not waiting again")
+	}
+	for _, key := range []string{
+		models.MetaTranscriptionAbandoned,
+		models.MetaNothingSaid,
+		models.MetaTranscriptionError,
+	} {
+		if _, ok := again.Metadata[key]; ok {
+			t.Errorf("%s survived the retry", key)
+		}
+	}
+
+	// And it is transcribed on the next run, which is the proof the retry
+	// is worth having.
+	result, err := Run(ctx, db, serviceReturning(t, "Bu bir deneme."),
+		map[models.SourceType]Fetcher{
+			models.SourceAudio: fakeFetcher{audio: "ok", name: "a.m4a"},
+		}, Options{}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Transcribed != 1 {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
+// A note that was never given up on is not quietly re-queued: the command
+// has to be able to say it did nothing.
+func TestPuttingBackANoteThatWasNotGivenUpOnDoesNothing(t *testing.T) {
+	db := openStore(t)
+	note := voiceNote(t, db, "AwACAgQ")
+
+	if note.RetryTranscription() {
+		t.Error("a note still waiting claimed to have been put back")
 	}
 }

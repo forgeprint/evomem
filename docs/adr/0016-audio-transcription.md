@@ -1,6 +1,6 @@
 # ADR-0016: Transcription is an optional HTTP service evomem does not own
 
-**Status:** accepted · **Date:** 2026-10-08 · Supersedes the proposed draft
+**Status:** accepted · **Date:** 2026-10-08 · Supersedes the proposed draft · **Amended by:** ADR-0037, ADR-0039
 of the same number.
 
 ## Context

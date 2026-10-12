@@ -1,6 +1,6 @@
 # ADR-0037: speech to text on this machine
 
-**Status:** accepted · **Date:** 2026-10-11 · **Amends:** ADR-0016
+**Status:** accepted · **Date:** 2026-10-11 · **Amends:** ADR-0016 · **Amended by:** ADR-0039
 
 ## Context
 
@@ -94,12 +94,13 @@ written here; otherwise the local store is asked and answers
 - **It is CPU inference.** 1.5 seconds for a six-second clip on this machine.
   A long recording is minutes, and `evomem transcribe` is a command somebody
   runs, so nothing warns them.
-- **`tr` is hard-coded in compose.** A bilingual memory gets one of its
-  languages transcribed badly until somebody changes it.
-- **A failure keeps the waiting mark and retries for ever.** ADR-0016 chose
-  that for transient failures, and "the recording does not exist" is not
-  transient: two notes here will fail on every run until somebody clears
-  them. Unchanged by this record and still open.
+- ~~**`tr` is hard-coded in compose.**~~ Reversed by ADR-0039 after
+  measurement: pinning is what mangles the other language, and detection
+  returned the same bytes on Turkish. The language is `auto`.
+- ~~**A failure keeps the waiting mark and retries for ever.**~~ Settled by
+  ADR-0039: a recording that is nowhere is given up on after a day, an empty
+  transcript is recorded as the answer it is, and
+  `evomem transcribe -retry <id>` is the way back.
 - **The model is fetched from HuggingFace on first start**, so the first run
   of `docker compose up` needs the network even though nothing afterwards
   does. `WHISPER_LOCAL_ONLY` exists for an air-gapped setup and is not set.

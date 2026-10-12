@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/forgeprint/evomem/core/transcribe"
+	"github.com/forgeprint/evomem/shared/database"
 	"github.com/forgeprint/evomem/shared/models"
 )
 
@@ -24,6 +25,7 @@ func cmdTranscribe(args []string, out io.Writer) error {
 	batch := fs.Int("batch", transcribe.DefaultBatch, "how many recordings at most")
 	dryRun := fs.Bool("dry-run", false, "say what would be transcribed, change nothing")
 	timeout := fs.Duration("timeout", transcribe.DefaultTimeout, "how long one recording may take")
+	retry := fs.String("retry", "", "put one note back in the queue and do nothing else")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -35,6 +37,10 @@ func cmdTranscribe(args []string, out io.Writer) error {
 	defer db.Close()
 
 	ctx := context.Background()
+
+	if *retry != "" {
+		return retryTranscription(ctx, db, *retry, out)
+	}
 
 	waiting, err := db.AwaitingTranscriptionCount(ctx)
 	if err != nil {
@@ -104,13 +110,42 @@ func cmdTranscribe(args []string, out io.Writer) error {
 		return err
 	}
 
-	fmt.Fprintf(out, "\n%d considered, %d transcribed, %d failed, %d skipped in %s\n",
-		result.Considered, result.Transcribed, result.Failed, result.Skipped,
+	fmt.Fprintf(out,
+		"\n%d considered, %d transcribed, %d silent, %d given up on, %d failed, %d skipped in %s\n",
+		result.Considered, result.Transcribed, result.Silent, result.Abandoned,
+		result.Failed, result.Skipped,
 		time.Since(started).Round(time.Millisecond))
 	if result.Failed > 0 {
 		fmt.Fprintln(out, "\nA failure stays marked as waiting and says why on the note;")
 		fmt.Fprintln(out, "the next run tries it again.")
 	}
+	if result.Silent > 0 || result.Abandoned > 0 {
+		fmt.Fprintln(out, "\nSilent and given-up notes have stopped waiting, so no run")
+		fmt.Fprintln(out, "picks them up again. `evomem transcribe -retry <id>` puts one back.")
+	}
+	return nil
+}
+
+// retryTranscription puts one note back in the queue.
+//
+// What makes giving up safe: a service that was misconfigured, or briefly
+// answering nothing, would otherwise have abandoned notes with no way back
+// (ADR-0039). One identifier at a time and on purpose — a flag that put
+// everything back would undo a day of correct answers as easily as a bad
+// batch.
+func retryTranscription(ctx context.Context, db *database.DB, id string, out io.Writer) error {
+	note, err := db.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !note.RetryTranscription() {
+		fmt.Fprintf(out, "%s was not given up on and is not marked silent; nothing to put back\n", id)
+		return nil
+	}
+	if err := db.Update(ctx, note); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s is waiting to be transcribed again\n", id)
 	return nil
 }
 
