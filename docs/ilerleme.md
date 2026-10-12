@@ -3743,3 +3743,65 @@ düşer. remote_id sunucudan geldiği için yola hiç konmuyor:
 silinen notun saklanan sesi silinmiyor; sunucuda değişen ses yeniden
 çekilmiyor; tarayıcıda önbellek bellekte, yani bir oturum sürüyor; ve sync
 sırasında ses hâlâ indirilmiyor, ilk çalma ağ istiyor.
+
+### Faz A: sabitleme tamamlandı, ve sabitlemeyi izleyen şey kuruldu
+
+Grafiğin bulduğu kusurun düzeltmesi. Koşan kök `ci.yml` eylemleri
+oynatılabilir etiketle çağırıyordu (`@v7`, `@v2`), `release.yml` ise commit
+SHA'sıyla — yani aynı deponun iki yarısı iki farklı standartta koşuyordu. Üç
+eylemin de etiketi API'den SHA'ya çözüldü (ezbere yazılmadı) ve çıkan
+değerler, ölü `apps/mobile/.github/workflows/ci.yml`'in taşıdıklarıyla
+birebir aynı: o dosya doğruydu, yalnızca hiç koşmuyordu.
+
+    actions/checkout         v7.0.1   3d3c42e5aac5ba805825da76410c181273ba90b1
+    actions/setup-go         v7.0.0   b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+    subosito/flutter-action  v2.23.0  1a449444c387b1966244ae4d4f8c696479add0b2
+
+**Kökte `dependabot.yml`.** Sabitlemenin öteki yarısı: hiçbir şey kendiliğinden
+oynamıyorsa, güncellemeleri — güvenlik yamaları dahil — CI'dan geçmek zorunda
+PR'lar olarak öneren bir şey olmalı; yoksa sabitleme sessizce "hiç
+güncellenmedi"ye dönüşür. Üç ekosistem: `gomod` kökte (vendor'lı olduğu için
+kabul edilen güncelleme elle `go mod vendor` istiyor, bu yoruma yazıldı), `pub`
+`/apps/mobile`'da, `github-actions` kökte. Ekosistem adları ve
+`github-actions` için `/` değeri GitHub'ın kendi referansından alındı
+(2026-10-11), ezbere yazılmadı.
+
+**Ölü iki dosya silindi:** `apps/mobile/.github/workflows/ci.yml` ve
+`apps/mobile/.github/dependabot.yml`. GitHub `.github/`'ı yalnızca depo
+kökünde okur, yani ab8937f'ten beri bir kez bile koşmamışlardı.
+
+Üç YAML dosyası da yerelde ayrıştırılarak doğrulandı (`ruby -ryaml`); bu
+makinede `yaml` python modülü yok ama Ruby'nin psych'i var, yani workflow'lar
+artık push etmeden önce doğrulanabiliyor.
+
+### Faz B: `proposed` kalan iki kayıt kapatıldı
+
+ADR-0014 ve ADR-0015 günlerdir çalışan şeyleri anlatırken "proposed"
+duruyordu. Çalışan bir şeyin kaydı önerme olarak kalırsa karar olmaktan çıkıp
+kod hakkında bir tahmine dönüşür. İkisi de koda karşı doğrulandı, sonra
+`accepted` yapıldı — ve kodun kayıttan ayrıldığı yerler saklanmak yerine
+yazıldı:
+
+**ADR-0015 (pull/restore).** Üç sapma: bayrak `-confirm` (Go'nun `flag`
+paketi), pull'un **kendi** watermark'ı var (paylaşılan imleç push'un pull'un
+yerini oynatmasına yol açıyordu → ADR-0032), ve upsert düz `ON CONFLICT`
+değil "absorb" (eski bir ayna yeni yerel notu eziyordu; silmeler yokluktan
+çıkarılmıyor, tombstone olarak geliyor → ADR-0032, ADR-0033). Başlığa
+**Amended by** satırı eklendi.
+
+**ADR-0014 (Telegram proje yönlendirme).** Karar verildiği gibi çıkmış:
+önce chat eşlemesi, sonra baştaki `#projectname`, sonra varsayılan; `/project`
+yapılmamış. Tek hareket eden şey yapılandırmanın yeri —
+`EVOMEM_TELEGRAM_CHAT_PROJECTS` ortam değişkeni, ayar satırı değil. ADR-0010
+bir giriş yolunu yapılandıran her şeyden bunu istiyor; panel de yönlendirme
+editörü değil bağlantılar kazandı (ADR-0026). Yani kaydın "Settings UI needs
+chat_id ↔ project mapping editor" sonucu **olmadı ve planlanmıyor**, bu da
+oraya yazıldı.
+
+**main'deki boş deneme commit'i (`d6818681`) olduğu gibi bırakıldı.**
+`git show --stat` hiç dosya göstermiyor: commit boş, ağaçta hiçbir şey
+değiştirmemiş. Boş bir commit'i revert etmek bir boş commit daha ekler, yani
+düzeltme geçmişi iyileştirmek yerine uzatır. Yayınlanmış geçmiş zaten hatayı
+saklamak için yeniden yazılmıyor; bu da aynı kuralın öteki ucu.
+
+Artık `Status: proposed` olan ADR yok.

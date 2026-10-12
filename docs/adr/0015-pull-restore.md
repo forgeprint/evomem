@@ -1,6 +1,6 @@
 # ADR-0015: Pull/Restore from mirror
 
-**Status:** proposed · **Date:** 2026-10-08
+**Status:** accepted · **Date:** 2026-10-08 · **Amended by:** ADR-0032, ADR-0033
 
 ## Context
 
@@ -37,3 +37,29 @@ Implement **pull + restore** as separate commands, not automatic bidirectional s
 - Mirror schema unchanged (already supports)
 - Pull uses same `sync_state` cursor mechanism
 - Restore truncates local tables, re-initializes cursor
+
+## Accepted, and where the build went past this record
+
+Marked accepted on 2026-10-12, late: `evomem pull` and
+`evomem restore -confirm` have both been shipped and used for days while
+this said "proposed". A record left proposed after the thing is running
+stops being a decision and becomes a guess about the code.
+
+Three details differ from what is written above, each on purpose and each
+recorded where it was decided:
+
+- **The flag is `-confirm`, not `--confirm`.** Go's `flag` package, which
+  this project uses rather than a CLI framework; both spellings are
+  accepted by it and the help text says one.
+
+- **Pull has its own watermark, not "the same `sync_state` cursor".**
+  Sharing one cursor between the two directions made a push move the pull's
+  position, so a pull could skip notes it had never seen. → ADR-0032
+
+- **Pull upserts by "absorb", not plain `ON CONFLICT`.** A blind upsert let
+  an out-of-date mirror overwrite a newer local note, so an absorb skips a
+  row that is not newer than what is here. Deletions arrive as tombstones
+  rather than being inferred from absence. → ADR-0032, ADR-0033
+
+"Local is authority; pull only adds missing" survives as the intent, with
+"newer wins per note" as the rule that implements it.
