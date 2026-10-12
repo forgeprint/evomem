@@ -3773,3 +3773,35 @@ kökünde okur, yani ab8937f'ten beri bir kez bile koşmamışlardı.
 Üç YAML dosyası da yerelde ayrıştırılarak doğrulandı (`ruby -ryaml`); bu
 makinede `yaml` python modülü yok ama Ruby'nin psych'i var, yani workflow'lar
 artık push etmeden önce doğrulanabiliyor.
+
+### Faz B: `proposed` kalan iki kayıt kapatıldı
+
+ADR-0014 ve ADR-0015 günlerdir çalışan şeyleri anlatırken "proposed"
+duruyordu. Çalışan bir şeyin kaydı önerme olarak kalırsa karar olmaktan çıkıp
+kod hakkında bir tahmine dönüşür. İkisi de koda karşı doğrulandı, sonra
+`accepted` yapıldı — ve kodun kayıttan ayrıldığı yerler saklanmak yerine
+yazıldı:
+
+**ADR-0015 (pull/restore).** Üç sapma: bayrak `-confirm` (Go'nun `flag`
+paketi), pull'un **kendi** watermark'ı var (paylaşılan imleç push'un pull'un
+yerini oynatmasına yol açıyordu → ADR-0032), ve upsert düz `ON CONFLICT`
+değil "absorb" (eski bir ayna yeni yerel notu eziyordu; silmeler yokluktan
+çıkarılmıyor, tombstone olarak geliyor → ADR-0032, ADR-0033). Başlığa
+**Amended by** satırı eklendi.
+
+**ADR-0014 (Telegram proje yönlendirme).** Karar verildiği gibi çıkmış:
+önce chat eşlemesi, sonra baştaki `#projectname`, sonra varsayılan; `/project`
+yapılmamış. Tek hareket eden şey yapılandırmanın yeri —
+`EVOMEM_TELEGRAM_CHAT_PROJECTS` ortam değişkeni, ayar satırı değil. ADR-0010
+bir giriş yolunu yapılandıran her şeyden bunu istiyor; panel de yönlendirme
+editörü değil bağlantılar kazandı (ADR-0026). Yani kaydın "Settings UI needs
+chat_id ↔ project mapping editor" sonucu **olmadı ve planlanmıyor**, bu da
+oraya yazıldı.
+
+**main'deki boş deneme commit'i (`d6818681`) olduğu gibi bırakıldı.**
+`git show --stat` hiç dosya göstermiyor: commit boş, ağaçta hiçbir şey
+değiştirmemiş. Boş bir commit'i revert etmek bir boş commit daha ekler, yani
+düzeltme geçmişi iyileştirmek yerine uzatır. Yayınlanmış geçmiş zaten hatayı
+saklamak için yeniden yazılmıyor; bu da aynı kuralın öteki ucu.
+
+Artık `Status: proposed` olan ADR yok.
