@@ -20,7 +20,7 @@ dependencies:
   path: 1.9.1
   path_provider: 2.1.6
   record: 7.1.2
-  sqflite: 2.4.4+1
+  sqflite: 2.4.5
   sqflite_common_ffi_web: 1.2.0
   # Already in the build as a transitive dependency of record_web and
   # sqflite_common_ffi_web, so declaring it adds nothing to the bundle. It is
