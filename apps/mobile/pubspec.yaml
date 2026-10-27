@@ -27,7 +27,7 @@ dependencies:
   # here because the web build asks the browser why the microphone is not
   # available, and there is no other way to ask. Pinned exactly, like the
   # rest.
-  web: 1.1.1
+  web: 1.1.2
 
 dev_dependencies:
   flutter_test:
